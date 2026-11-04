@@ -1,5 +1,5 @@
-//! The bug report sheet and the report labels, from Encore's desktop (`pages/bug_reports.rs` and
-//! `pages/bug_report.rs`).
+//! The bug report sheet and the report labels of a desktop app (the reports list and one report's
+//! thread).
 //!
 //! - The words of a report: [`KINDS`], [`STATUSES`], [`kind_label`], [`kind_badge`], [`status_label`],
 //!   [`status_badge`], [`status_table`], [`count_words`] and [`meta_line`].
@@ -44,7 +44,7 @@ pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
 
 /// The files *Add images* takes, picked or dropped (images, .txt and .log files, several at once).
 pub const ATTACH_FILES: drop_zone::Accept = drop_zone::Accept::many(&["png", "jpg", "jpeg", "webp", "gif", "txt", "log"]);
-/// The name of the file dialog's filter for [`ATTACH_FILES`] (Encore: `rfd`'s `add_filter`).
+/// The name of the file dialog's filter for [`ATTACH_FILES`] (for example `rfd`'s `add_filter`).
 pub const FILE_FILTER: &str = "Images and text files";
 /// The multipart field name of each attached file.
 pub const FILE_FIELD: &str = "file";
@@ -117,7 +117,7 @@ pub fn meta_line(r: &Value) -> String {
     s
 }
 
-/// A JSON field as text: a string, a number or a bool; "" otherwise (Encore's `fmt::s`).
+/// A JSON field as text: a string, a number or a bool; "" otherwise.
 fn json_s(v: &Value, key: &str) -> String {
     match v.get(key) {
         Some(Value::String(x)) => x.clone(),
@@ -127,7 +127,7 @@ fn json_s(v: &Value, key: &str) -> String {
     }
 }
 
-/// JavaScript truthiness of a field (Encore's `fmt::truthy`).
+/// JavaScript truthiness of a field.
 fn truthy(v: &Value, key: &str) -> bool {
     match v.get(key) {
         None | Some(Value::Null) => false,
@@ -139,7 +139,7 @@ fn truthy(v: &Value, key: &str) -> bool {
     }
 }
 
-/// `18 Oct 2026` for a unix timestamp in seconds (Encore's `fmt::date`, in UTC).
+/// `18 Oct 2026` for a unix timestamp in seconds (in UTC).
 fn date(ts: f64) -> String {
     let days = (ts / 86_400.0).floor() as i64;
     let (y, m, d) = civil_from_days(days);
@@ -271,7 +271,7 @@ pub fn with_sizes(paths: impl IntoIterator<Item = PathBuf>) -> Vec<Picked> {
 pub struct NewReport {
     /// The kind key, one of [`PICK_KINDS`] (`bug` at first).
     pub kind: String,
-    /// The page the person came from (`#/library/album/…`), sent along; "" for none.
+    /// The page the person came from (`#/home/…`), sent along; "" for none.
     pub page: String,
     /// The title as typed.
     pub title: String,
@@ -340,7 +340,7 @@ pub struct Report {
 }
 
 impl Report {
-    /// The text fields of the form, by name, in Encore's order: `kind`, `title`, `body`, `page`,
+    /// The text fields of the form, by name, in this order: `kind`, `title`, `body`, `page`,
     /// `app_version`, `device`.
     pub fn fields(&self) -> [(&'static str, &str); 6] {
         [
@@ -611,8 +611,9 @@ mod tests {
 
     #[test]
     fn the_meta_line_lists_what_is_known() {
-        let r = json!({ "username": "ann", "created_at": 1_792_311_210.0, "page": "#/library", "app_version": "0.27.0", "device": "Encore desktop" });
-        assert_eq!(meta_line(&r), "by ann · 18 Oct 2026 · page #/library · app 0.27.0 · Encore desktop");
+        let r =
+            json!({ "username": "ann", "created_at": 1_792_311_210.0, "page": "#/home", "app_version": "1.2.0", "device": "Demo desktop" });
+        assert_eq!(meta_line(&r), "by ann · 18 Oct 2026 · page #/home · app 1.2.0 · Demo desktop");
         let r = json!({ "username": "ann", "created_at": 1_792_311_210.0, "page": "", "app_version": "" });
         assert_eq!(meta_line(&r), "by ann · 18 Oct 2026");
         assert_eq!(status_label("fixed"), "Fixed");
@@ -629,8 +630,8 @@ mod tests {
     }
 
     #[test]
-    fn the_device_line_reads_like_encore() {
-        assert_eq!(device_line("Encore-Desktop/0.27 (Linux)", 1279.6, 800.2), "Encore-Desktop/0.27 (Linux) · 1280x800");
+    fn the_device_line_is_the_agent_and_the_window_size() {
+        assert_eq!(device_line("Demo-Desktop/1.2 (Linux)", 1279.6, 800.2), "Demo-Desktop/1.2 (Linux) · 1280x800");
     }
 
     fn picked(names: &[&str], size: u64) -> Vec<Picked> {
@@ -676,7 +677,7 @@ mod tests {
         );
         let dir = std::env::temp_dir().join(format!("kit-iced-bug-report-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let log = dir.join("encore.log");
+        let log = dir.join("demo.log");
         std::fs::write(&log, "line").unwrap();
         assert!(p.dropped(drop_zone::Event::Dropped(log.clone())).is_empty());
         assert_eq!(p.files, std::slice::from_ref(&log));
@@ -707,18 +708,18 @@ mod tests {
 
     #[test]
     fn send_asks_the_app_to_send_the_report_once() {
-        let mut d = NewReport { page: "#/library".into(), ..NewReport::default() };
+        let mut d = NewReport { page: "#/home".into(), ..NewReport::default() };
         new_update(&mut d, NewMsg::Kind("howto".into()), "", "");
         typed(&mut d, "  Crash on start ", " It closes. ");
         new_update(&mut d, NewMsg::Picked(picked(&["shot.png"], 10)), "", "");
-        let out = new_update(&mut d, NewMsg::Send, "0.27.0", "Encore · 1280x800");
+        let out = new_update(&mut d, NewMsg::Send, "1.2.0", "Demo · 1280x800");
         let report = Report {
             kind: "howto".into(),
             title: "Crash on start".into(),
             body: "It closes.".into(),
-            page: "#/library".into(),
-            app_version: "0.27.0".into(),
-            device: "Encore · 1280x800".into(),
+            page: "#/home".into(),
+            app_version: "1.2.0".into(),
+            device: "Demo · 1280x800".into(),
             files: vec!["/a/shot.png".into()],
         };
         assert_eq!(out, [NewOut::Send(report.clone())]);
@@ -728,16 +729,16 @@ mod tests {
                 ("kind", "howto"),
                 ("title", "Crash on start"),
                 ("body", "It closes."),
-                ("page", "#/library"),
-                ("app_version", "0.27.0"),
-                ("device", "Encore · 1280x800")
+                ("page", "#/home"),
+                ("app_version", "1.2.0"),
+                ("device", "Demo · 1280x800")
             ]
         );
         assert!(d.sending);
-        assert!(new_update(&mut d, NewMsg::Send, "0.27.0", "").is_empty(), "no second send while one is on its way");
+        assert!(new_update(&mut d, NewMsg::Send, "1.2.0", "").is_empty(), "no second send while one is on its way");
         assert_eq!(new_update(&mut d, NewMsg::Sent(Err("Too many reports".into())), "", ""), [NewOut::Error("Too many reports".into())]);
         assert!(!d.sending);
-        new_update(&mut d, NewMsg::Send, "0.27.0", "");
+        new_update(&mut d, NewMsg::Send, "1.2.0", "");
         assert_eq!(new_update(&mut d, NewMsg::Sent(Ok(41)), "", ""), [NewOut::Done("Report sent. Thanks.".into()), NewOut::Show(41)]);
         assert!(!d.sending);
     }
@@ -791,11 +792,11 @@ mod tests {
 
     #[test]
     fn the_dialog_has_its_title_field_and_send() {
-        let d = NewReport { title: "Crash on start".into(), page: "#/library".into(), ..NewReport::default() };
-        let mut ui = iced_test::simulator(new_dialog(&d, "0.27.0", Page::New, Page::Close));
+        let d = NewReport { title: "Crash on start".into(), page: "#/home".into(), ..NewReport::default() };
+        let mut ui = iced_test::simulator(new_dialog(&d, "1.2.0", Page::New, Page::Close));
         assert!(ui.find("Crash on start").is_ok(), "the title field holds the title");
         assert!(ui.find("New report").is_ok());
-        assert!(ui.find("Sent along: the page you came from (#/library), the app version (0.27.0) and this computer.").is_ok());
+        assert!(ui.find("Sent along: the page you came from (#/home), the app version (1.2.0) and this computer.").is_ok());
         ui.click("Send").expect("Send is there");
         assert!(ui.into_messages().any(|m| matches!(m, Page::New(NewMsg::Send))));
 

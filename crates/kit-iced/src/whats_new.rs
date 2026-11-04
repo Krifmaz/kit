@@ -1,6 +1,5 @@
 //! What's new: the popup on the first start after the server was updated, and the changelog page
-//! (Settings → What's new). Behaviour reference: Encore's web-rs/src/whats_new.rs and its desktop
-//! app's `whats_new.rs` and `pages/settings/whats_new.rs`; the API is contracts/changelog.md.
+//! (Settings → What's new); the API is contracts/changelog.md.
 //!
 //! The flow, with the requests made by the app:
 //! 1. After the session is known the app asks `GET /api/changelog/new` and hands the answer to
@@ -36,7 +35,7 @@ pub const NO_NOTES: &str = kit_rules::changelog::NO_RELEASE_NOTES;
 
 pub use kit_rules::changelog::saved_words;
 
-/// The help line under the changelog page's title: `app` is the app's name ("Encore").
+/// The help line under the changelog page's title: `app` is the app's name ("Demo").
 pub fn runs_words(app: &str, version: &str) -> String {
     kit_rules::changelog::settings_intro(app, version)
 }
@@ -307,13 +306,13 @@ mod tests {
         assert_eq!(c.update(ChangelogMsg::Popup(false)), Some(false));
         c.save_failed();
         assert!(c.popup());
-        let _ = changelog(&c, "Encore");
+        let _ = changelog(&c, "Demo");
     }
 
     #[test]
-    fn the_words_are_encores() {
+    fn the_words_name_the_app() {
         assert_eq!(saved_words(true), "What's new will show after updates");
         assert_eq!(saved_words(false), "What's new won't show after updates – it stays in Settings");
-        assert_eq!(runs_words("Encore", "0.40.1"), "This is Encore 0.40.1. After an update, a short list of what changed shows once.");
+        assert_eq!(runs_words("Demo", "0.40.1"), "This is Demo 0.40.1. After an update, a short list of what changed shows once.");
     }
 }

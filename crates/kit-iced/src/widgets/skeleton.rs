@@ -23,7 +23,7 @@ pub fn skeleton_rows<'a, M: 'a>(n: usize) -> El<'a, M> {
     c.width(Length::Fill).into()
 }
 
-/// `n` album tiles of `width`.
+/// `n` tiles of `width` (a grid of cards).
 pub fn skeleton_tiles<'a, M: 'a>(n: usize, width: f32) -> El<'a, M> {
     let mut r = row![].spacing(16);
     for _ in 0..n {
