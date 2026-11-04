@@ -16,6 +16,13 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
 
+### Changed
+- Shared workflows are app-neutral: no app names, file names or app-specific defaults. `kit-desktop.yml` runs the
+  app's own `package` command (with `$V`, `$RELEASE`, `$FEATURES`, `$ARGS`, `$OUT`) instead of a fixed script and
+  its flags, takes `linux-args`/`windows-args`/`macos-args`, and defaults to `ubuntu-latest`/`macos-latest`, no
+  extra Mac arguments and no NSIS; `kit-release.yml`'s `only: android` is now `keep-previous` (a partial release
+  keeps the previous release's other files).
+
 ### Added
 - `template/`: the new-app starter (`cargo generate krifmaz/kit template`): an Axum server with every kit server
   crate wired in (health, What's new, notices with a data folder notice, bug reports and crash logs, diagnostics,
