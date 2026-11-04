@@ -13,7 +13,8 @@ Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
   key), where the What's new popup switch lives, for apps without a preferences route of their own. The template
   uses it instead of its own copy.
 - kit-leptos: `HttpBackend::with_headers(|method, path| …)` adds an app's own headers to every call (a CSRF token,
-  `If-Match`); a failed answer's sentence also comes from a `message` or `error` text when there is no `detail`.
+  `If-Match`); a failed answer's sentence also comes from a `message` or `error` text when there is no `detail`;
+  `api::patch` sends `PATCH`.
 
 ## v0.1.2 — 2026-11-04
 

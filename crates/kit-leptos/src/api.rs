@@ -48,7 +48,7 @@ pub const NOT_CONNECTED: &str = "Not connected to the server";
 
 /// The server the components talk to. Paths are relative to `/api` (`/changelog/new`).
 pub trait Backend {
-    /// A JSON call: `method` (`GET`, `POST`, `PUT`, `DELETE`) on `path` with an optional JSON `body`.
+    /// A JSON call: `method` (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) on `path` with an optional JSON `body`.
     fn call(&self, method: &str, path: &str, body: Option<Value>) -> ApiFuture;
     /// A multipart form (a file upload) posted to `path`.
     fn post_form(&self, path: &str, form: web_sys::FormData) -> ApiFuture;
@@ -86,6 +86,11 @@ pub async fn post_empty(path: &str) -> ApiResult {
 /// `PUT /api<path>` with a JSON body.
 pub async fn put(path: &str, body: Value) -> ApiResult {
     backend().call("PUT", path, Some(body)).await
+}
+
+/// `PATCH /api<path>` with a JSON body.
+pub async fn patch(path: &str, body: Value) -> ApiResult {
+    backend().call("PATCH", path, Some(body)).await
 }
 
 /// `DELETE /api<path>`.
