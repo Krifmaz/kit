@@ -5,7 +5,7 @@
 
 use crate::uploads::FileLimits;
 
-/// Every kind, as the server stores it and as the user reads it (`crash` is a crash log the phone app sends).
+/// Every kind, as the server stores it and as the user reads it (`crash` is a crash log a native app sends).
 pub const KINDS: [(&str, &str); 4] = [("bug", "Bug"), ("not_bug", "Not a bug"), ("howto", "How do I…"), ("crash", "Crash log")];
 /// The kinds a new report can pick (a crash log comes from the app).
 pub const PICK_KINDS: [(&str, &str); 3] = [("bug", "Bug"), ("not_bug", "Not a bug"), ("howto", "How do I…")];
