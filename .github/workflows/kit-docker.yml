@@ -1,0 +1,97 @@
+name: kit-docker
+
+# An app's Docker image, taken from Encore's release.yml `docker` job: built with buildx for amd64 and arm64 and
+# pushed to GHCR as ghcr.io/<owner>/<image>:<version> and :latest (the release's version, so an app's in-app
+# updater can pull :<version> of every release). With push: false it only proves the image builds (pull requests).
+#
+#   docker:
+#     needs: prepare
+#     uses: Krifmaz/kit/.github/workflows/kit-docker.yml@v0.1.0
+#     with:
+#       image: notes
+#       version: ${{ needs.prepare.outputs.version }}
+#       build-args: |
+#         NOTES_VERSION=${{ needs.prepare.outputs.version }}
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "The image's name under ghcr.io/<owner>/"
+        type: string
+        required: true
+      version:
+        description: "Tag the image :<version> and :latest (empty: no version tags; with push: false nothing is tagged)"
+        type: string
+        required: false
+        default: ""
+      push:
+        description: "Push to GHCR (false: only build, as a pull request check)"
+        type: boolean
+        required: false
+        default: true
+      platforms:
+        type: string
+        required: false
+        default: linux/amd64,linux/arm64
+      context:
+        type: string
+        required: false
+        default: .
+      file:
+        description: "The Dockerfile (empty: <context>/Dockerfile)"
+        type: string
+        required: false
+        default: ""
+      build-args:
+        description: "Build arguments, one NAME=value per line"
+        type: string
+        required: false
+        default: ""
+      extra-tags:
+        description: "More tags (bare names, one per line), e.g. edge"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILD_RECORD_UPLOAD: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: inputs.push
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tags
+        id: tags
+        env:
+          IMAGE: ${{ inputs.image }}
+          V: ${{ inputs.version }}
+          EXTRA: ${{ inputs.extra-tags }}
+        run: |
+          I="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$IMAGE"
+          T=""
+          # every release moves :latest
+          if [ -n "$V" ]; then T="$I:$V,$I:latest"; fi
+          for t in $EXTRA; do T="${T:+$T,}$I:$t"; done
+          echo "tags=$T" >> "$GITHUB_OUTPUT"
+          echo "Tags: ${T:-none}"
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.file }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.push }}
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: ${{ inputs.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
