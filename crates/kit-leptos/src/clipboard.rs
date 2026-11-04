@@ -1,0 +1,68 @@
+//! Copy to the clipboard, with Encore's fallback for a server reached over plain http.
+//!
+//! From Encore's `web-rs/src/ui.rs` (`copy_text`, `copy_then`, `copy_done`, `copy_by_selection`): the clipboard
+//! API where the page may use it (https or localhost); otherwise – a server on the home network reached over
+//! plain http has no `navigator.clipboard` – the text is selected in a hidden box and copied the old way. The
+//! toast says which way it went ([`COPIED`], or [`COPY_FAILED`]).
+
+use crate::toasts::show;
+use kit_rules::toasts::{copy_toast, COPIED};
+use wasm_bindgen::JsCast;
+
+pub use kit_rules::toasts::COPY_FAILED;
+
+/// Copies `t` and says so ("Copied to clipboard").
+pub fn copy_text(t: &str) {
+    copy_then(t, COPIED);
+}
+
+/// [`copy_text`] with `copied` as the toast when it worked (a share link says what the link does instead).
+pub fn copy_then(t: &str, copied: &str) {
+    let Some(w) = crate::rt::window() else { return };
+    let has_api = js_sys::Reflect::get(&w.navigator(), &"clipboard".into()).map(|c| !c.is_undefined() && !c.is_null()).unwrap_or(false);
+    if !has_api {
+        // no await before this: the browser still counts the click that asked for it
+        done(copy_by_selection(t), copied);
+        return;
+    }
+    let (t, copied) = (t.to_string(), copied.to_string());
+    crate::rt::spawn(async move {
+        let clip = w.navigator().clipboard();
+        let ok = wasm_bindgen_futures::JsFuture::from(clip.write_text(&t)).await.is_ok() || copy_by_selection(&t);
+        done(ok, &copied);
+    });
+}
+
+fn done(ok: bool, copied: &str) {
+    let (msg, kind) = copy_toast(ok, copied);
+    show(msg, kind);
+}
+
+/// The old way: the text in an off-screen box, selected, `document.execCommand('copy')`. Inside an open dialog,
+/// so focus stays where the user is.
+pub fn copy_by_selection(t: &str) -> bool {
+    let Some(doc) = crate::rt::document() else { return false };
+    let Ok(area) = doc.create_element("textarea").map(|e| e.unchecked_into::<web_sys::HtmlTextAreaElement>()) else { return false };
+    area.set_value(t);
+    let _ = area.set_attribute("readonly", "");
+    let _ = area.set_attribute("style", "position:fixed;top:-1000px;left:0;width:1px;height:1px;opacity:0");
+    let host: web_sys::Element = match crate::rt::qs("#modal-root .modal-bg:last-child .modal") {
+        Some(m) => m,
+        None => match doc.body() {
+            Some(b) => b.into(),
+            None => return false,
+        },
+    };
+    let _ = host.append_child(&area);
+    area.select();
+    // iOS selects a read-only box only with a range
+    let _ = area.set_selection_range(0, t.encode_utf16().count() as u32);
+    let ok = js_sys::Reflect::get(&doc, &"execCommand".into())
+        .ok()
+        .and_then(|f| f.dyn_into::<js_sys::Function>().ok())
+        .and_then(|f| f.call1(&doc, &"copy".into()).ok())
+        .and_then(|r| r.as_bool())
+        .unwrap_or(false);
+    area.remove();
+    ok
+}

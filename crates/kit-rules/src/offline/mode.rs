@@ -47,6 +47,16 @@ pub const ANDROID_BANNER: &str = "Offline – showing what this phone saved. Dow
 pub const ANDROID_BANNER_TITLE: &str = "Offline";
 /// Android's banner, second line. From `OfflineMode.BANNER_LINE`.
 pub const ANDROID_BANNER_LINE: &str = "Downloaded songs play · tap for details";
+/// The web's connection banner (`#conn-banner`) while the browser is offline. From `web-rs/src/app.rs` `init`
+/// (`conn_banner(true, …)` on `offline`).
+pub const NOT_CONNECTED: &str = "Not connected – check your internet or server";
+
+/// The web's connection banner while `app`'s server does not answer ("The Encore server isn't answering").
+/// From `web-rs/src/app.rs` `init` (`conn_banner(true, …)` on `encore:server-down`).
+pub fn server_down(app: &str) -> String {
+    format!("The {app} server isn't answering")
+}
+
 /// The web's banner text: [`BANNER`], or [`BANNER_ENDED`] once the grace has ended. From `mode.rs` `banner`.
 pub fn banner(grace_ended: bool) -> &'static str {
     if grace_ended {
@@ -329,6 +339,12 @@ mod tests {
         assert_eq!(route_path(true, "/downloads"), "/downloads");
         assert_eq!(banner(false), BANNER);
         assert_eq!(banner(true), BANNER_ENDED);
+    }
+
+    #[test]
+    fn the_connection_banner_says_what_is_down() {
+        assert_eq!(NOT_CONNECTED, "Not connected – check your internet or server");
+        assert_eq!(server_down("Encore"), "The Encore server isn't answering");
     }
 
     #[test]
