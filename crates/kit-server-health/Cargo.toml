@@ -1,0 +1,19 @@
+[package]
+name = "kit-server-health"
+description = "GET /api/health: the server's version and the build of the web app it serves, so clients notice updates and restarts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true

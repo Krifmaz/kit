@@ -1,0 +1,92 @@
+name: android-publish
+
+# Publishes kit-compose to GitHub Packages (maven.pkg.github.com/Krifmaz/kit) as dev.krifmaz.kit:kit-compose:<version>
+# for every v* release. The release workflow creates releases with GITHUB_TOKEN, which starts no `release` event,
+# so this also runs after each release workflow run and publishes the v* tag that run put on its commit (none: no
+# release was made, nothing to publish). A manual run publishes a given tag.
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag to publish (vMAJOR.MINOR.PATCH)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: android-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Which tag
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --tags --force
+          case "$EVENT" in
+            release) T="$RELEASE_TAG" ;;
+            workflow_dispatch) T="$INPUT_TAG" ;;
+            *) T=$(git tag --points-at "$RUN_SHA" 'v*' | sort -V | tail -1) ;;
+          esac
+          if [ -z "$T" ]; then echo "No release tag on this commit: nothing to publish." | tee -a "$GITHUB_STEP_SUMMARY"; echo "version=" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "$T" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::not a release tag: $T"; exit 1; }
+          # a release made by a person starts both the release event and (via the release workflow) this: publish once
+          if gh api "/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/dev.krifmaz.kit.kit-compose/versions" --paginate -q '.[].name' 2>/dev/null | grep -qx "${T#v}"; then
+            echo "kit-compose ${T#v} is already published." | tee -a "$GITHUB_STEP_SUMMARY"; echo "version=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "tag=$T" >> "$GITHUB_OUTPUT"
+          echo "version=${T#v}" >> "$GITHUB_OUTPUT"
+      - name: Check out the tag
+        if: steps.tag.outputs.version != ''
+        env:
+          T: ${{ steps.tag.outputs.tag }}
+        run: git checkout --quiet "refs/tags/$T"
+      - uses: actions/setup-java@v4
+        if: steps.tag.outputs.version != ''
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+        if: steps.tag.outputs.version != ''
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - name: Gradle version
+        if: steps.tag.outputs.version != ''
+        id: gradle
+        run: |
+          G=$(sed -n 's/^distributionUrl=.*gradle-\([0-9][0-9.]*\)-\(bin\|all\)\.zip.*/\1/p' android/gradle/wrapper/gradle-wrapper.properties)
+          echo "version=$G" >> "$GITHUB_OUTPUT"
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.tag.outputs.version != ''
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: Publish
+        if: steps.tag.outputs.version != ''
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.tag.outputs.version }}
+        run: |
+          gradle -p android --no-daemon --stacktrace -PkitVersion="$V" :kit-compose:testDebugUnitTest \
+            :kit-compose:publishReleasePublicationToGitHubPackagesRepository
+          echo "Published dev.krifmaz.kit:kit-compose:$V" | tee -a "$GITHUB_STEP_SUMMARY"

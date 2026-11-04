@@ -8,12 +8,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its
-  tags; toasts fade with Encore's inline styles; `modal::close_all` drops the dialogs a router wipes; the notice
+  tags; toasts fade with Encore's inline styles; a modal stays open until it is closed even when its caller drops
+  the handle (`details::init` dialogs showed nothing); `modal::close_all` drops the dialogs a router wipes; the notice
   banner leaves no placeholder in `#server-notice`; the settings card takes an app's HTML before and after its
   fields and a `FieldBlock` (Encore's VPN block); `DiagHooks` gains `check_detail`, `copy`, `loaded` and
   `quiet_errors` for Encore's own Diagnostics parts.
+- `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
+  (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
 
 ### Added
+- kit-iced: `Icon::Video` (Encore desktop's "Save video to this device" button).
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
   theme and Flutter ThemeData; tests prove the output equals Encore's current CSS, Compose and desktop themes.
@@ -31,6 +35,19 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
   notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
   with Encore's words as constants and Encore's tests ported.
+- `android/kit-compose` (`dev.krifmaz.kit:kit-compose`): Encore's Android look and ease-of-use features as a
+  Compose library: `KitTheme` from the generated tokens, widgets, toasts, details with Copy, What's new popup and
+  changelog screen, in-app updater, bug reports and crash logs, offline banner/reasons/outbox, schema settings
+  form, diagnostics screen, Encore's Coil setup and JankStats/StrictMode in debug; a demo app, Baseline Profile and
+  Macrobenchmark modules; ktlint and unit tests in CI (`android.yml`), published to GitHub Packages for every
+  release (`android-publish.yml`).
+- `crates/kit-iced`: Encore's desktop components on Iced 0.14 and kit-rules, styled from the generated Iced
+  tokens: `theme` (every palette, `theme::encore()`, every widget style), `widgets` (text styles, buttons, cards,
+  fields, modal, badges, skeletons, tabs, icons, text area), `toast` (desktop toast rules), `details`,
+  `whats_new` (popup and changelog page), `update` (release checks, SHA256SUMS, the Updates block), `notice`,
+  `drop_zone`, `settings` (the settings pieces), `form` (the settings form from a const table or the server's
+  schema), `bug_report` (labels, file picker, New report dialog, reply box), `diagnostics` and `offline`.
+  Components hold no network code: their updates return what the app must request.
 - `crates/kit-leptos`: Encore's web components as Leptos 0.8 components on kit-rules, drawing Encore's HTML
   node for node: toasts (with the global `toast`/`toast_action`), copy to clipboard, modals and the confirm
   dialog, the details dialog, What's new (popup and changelog page), the self-update reload (health polling and
@@ -40,3 +57,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   Encore's HTML in the browser; CI builds kit-leptos and the demo for wasm32 (check, clippy, build).
 - kit-rules: `bugs` (bug report kinds, statuses, the sheet's words and checks), `diagnostics` (the page's
   words, groups and copied report), `dialogs` (`CANCEL`), and `offline::mode::NOT_CONNECTED` / `server_down`.
+- `kit-server-core`: what the server crates share: the `{"detail": …}` error answer, the `Host` trait (the app's
+  database and sign-in check) with `SignedIn` / `Admin` extractors, the JSON-row `Db` trait, version compare,
+  `SqliteDb` and a `TestHost` for tests.
+- `kit-server-health`: `GET /api/health` with the version and the web build hash read from the script's name.
+- `kit-server-changelog`: What's new: release notes embedded from `docs/releases` at build time, the popup
+  (newest unseen releases, per-account seen, popup switch, hotfixes never re-trigger it) and the full list.
+- `kit-server-settings`: an app's server settings from one settings.toml (Encore's form). It checks the file with Encore's refusal reasons and generates `Keys`/`TABLE`/`SCHEMA`/typed accessors in the app's build script, keeps the values (environment, then saved, then default, with `_meta` sources), answers the settings schema exactly as `contracts/settings-schema.md`, and serves GET/PUT `/api/admin/settings` and the saved-secret route through a small `SettingsHost` trait.
+- `kit-server-diagnostics`: a registry of checks (name, kind, ok, detail, request, status, fix and the app's own fields) run all at once for `GET /api/system/diagnostics`, the settings cards' Test buttons for `POST /api/system/test/{service}`, and room for the app's own sections in the answer.
+- `kit-server-notices`: plain-language banners: register notices (id, severity, sentence, Check again toasts), check them again on a timer and on demand, serve them at `GET /api/notices` / `POST /api/notices/check` or inside the app's own answer.
+- `kit-server-updates`: an app's GitHub releases as an update feed (full release vs hotfix, each device's file, the APK version from its name, release-download URLs only, SHA256SUMS checks, notes cut at 4000) and the server's own `GET`/`POST /api/system/update` and `POST /api/system/restart`.
+- `kit-server-bugreports`: Encore's bug reports (threads, statuses, unread counts, screenshot and log
+  uploads, zip / plain text export) and app crash reports (`/api/diagnostics/client-crash`), behind a
+  `BugReportsHost` trait for the app's folder, rate limiter, log, notifications, mail and enrichment.
