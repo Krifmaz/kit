@@ -11,6 +11,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `contracts/`: the shared APIs (health, changelog, notices, bug reports, diagnostics, settings schema,
   update feed) as prose and OpenAPI, matching Encore's current API.
 - CI (fmt, clippy, tests, generated files up to date) and the release workflow.
+- `crates/kit-rules`: the client-side decisions Encore writes once per client, as plain Rust (no UI, builds
+  for wasm32): toasts (web, desktop and Android presets), the details dialog, What's new (notes parsing,
+  grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
+  notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
+  with Encore's words as constants and Encore's tests ported.
 - `android/kit-compose` (`dev.krifmaz.kit:kit-compose`): Encore's Android look and ease-of-use features as a
   Compose library: `KitTheme` from the generated tokens, widgets, toasts, details with Copy, What's new popup and
   changelog screen, in-app updater, bug reports and crash logs, offline banner/reasons/outbox, schema settings
