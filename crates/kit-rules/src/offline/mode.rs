@@ -1,92 +1,156 @@
-//! Offline mode: when it opens, what it says, how it tries again, and the 30 days of grace.
+//! Offline mode: when it opens, what it says, how it tries again, and the days of grace.
 //!
-//! From Encore's `web-rs/src/offline/mod.rs` (the grace, the remembered user, a sign-out the server has not
-//! confirmed) and `web-rs/src/offline/mode.rs` (`decide`, `settle`, `route_path`, `retry`, the banner, the
-//! words), with Android's `features/offline/OfflineMode.kt` (its banner words, `noticeUnreachable`).
+//! An app that keeps things on the device (files, a cache, pages) can keep working while its server can't be
+//! reached: offline mode opens when the server gives no answer, someone was signed in on this device lately
+//! (within [`GRACE_DAYS`] of the last contact) and something was saved here to show. In offline mode only the
+//! pages the app names work ([`route_path`]); the rest of the app says [`DISABLED_TITLE`]. The banner says so
+//! with Retry; changes made meanwhile wait in the [outbox](super::outbox) and go once the server is back
+//! ([`back_online_text`]).
+//!
+//! Everything kept in the browser is under the app's id ([`me_key`], [`signout_pending_key`]). The words are
+//! [`OfflineWords`].
 
 use serde_json::{json, Value};
 
-/// How long after the last contact with the server the downloaded songs still play, in days. From
-/// `web-rs/src/offline/mod.rs` `GRACE_DAYS`.
+/// How long after the last contact with the server offline mode still opens, in days.
 pub const GRACE_DAYS: i64 = 30;
 /// One day in seconds.
 const DAY: f64 = 86_400.0;
-/// How often offline mode tries to reach the server again. From `mode.rs` `RETRY_MS` and `OfflineMode.RETRY_MS`.
+/// How often offline mode tries to reach the server again.
 pub const RETRY_MS: u64 = 30_000;
 /// How long a check gets to answer (a server whose address drops packets would otherwise keep the page waiting
-/// for the connect timeout). From `mode.rs` `WAIT_MS` and `OfflineMode.WAIT_SECONDS`.
+/// for the connect timeout).
 pub const WAIT_MS: u64 = 8_000;
-/// While the server answers, the remembered user (the grace) is refreshed at most this often. From `mode.rs`
-/// `REMEMBER_EVERY_MS`.
+/// While the server answers, the remembered user (the grace) is refreshed at most this often.
 pub const REMEMBER_EVERY_MS: u64 = 3_600_000;
-/// After "Back online" the page reloads this long later. From `mode.rs` `retry` (`sleep(1500)`).
+/// After "Back online" the page reloads this long later.
 pub const BACK_ONLINE_RELOAD_MS: u64 = 1500;
-/// A failed call asks for a check at most this often (Android). From `OfflineMode.NOTICE_GAP_MS`.
+/// A failed call asks for a check at most this often (Android).
 pub const NOTICE_GAP_MS: u64 = 10_000;
-/// A network change is checked this long after it (Android). From `OfflineMode.start` (`recheck(a, 1500L)`).
+/// A network change is checked this long after it (Android).
 pub const NETWORK_CHANGE_CHECK_MS: u64 = 1500;
 
-/// The one page offline mode shows on the web. From `mode.rs` `PAGE`.
-pub const PAGE: &str = "/downloads";
-/// The web's banner. From `mode.rs` `BANNER`.
-pub const BANNER: &str = "Offline – the server can't be reached. Downloaded songs play.";
-/// The web's banner once the grace has ended. From `mode.rs` `BANNER_ENDED`.
-pub const BANNER_ENDED: &str = "Offline – sign in again when the server is back to keep playing downloaded songs";
-/// The title of an entry switched off in offline mode. From `mode.rs` `DISABLED_TITLE`.
+/// The web's banner.
+pub const BANNER: &str = "Offline – the server can't be reached. What this device saved still works.";
+/// The web's banner once the grace has ended.
+pub const BANNER_ENDED: &str = "Offline – sign in again when the server is back to keep using what this device saved";
+/// The title of an entry switched off in offline mode.
 pub const DISABLED_TITLE: &str = "Not available offline";
-/// The toast after a Retry the server still didn't answer. From `mode.rs` `STILL_OFFLINE` and
-/// `OfflineMode.STILL_OFFLINE`.
+/// The toast after a Retry the server still didn't answer.
 pub const STILL_OFFLINE: &str = "The server still can't be reached";
-/// The banner's button. From `mode.rs` `banner`.
+/// The banner's button.
 pub const RETRY: &str = "Retry";
-/// The banner's button while it tries. From `mode.rs` `retry_button`.
+/// The banner's button while it tries.
 pub const TRYING: &str = "Trying…";
-/// Android's full message (the offline sheet). From `OfflineMode.BANNER`.
-pub const ANDROID_BANNER: &str = "Offline – showing what this phone saved. Downloaded songs play.";
-/// Android's banner, first line. From `OfflineMode.BANNER_TITLE`.
+/// Android's full message (the offline sheet).
+pub const ANDROID_BANNER: &str = "Offline – showing what this device saved.";
+/// Android's banner, first line.
 pub const ANDROID_BANNER_TITLE: &str = "Offline";
-/// Android's banner, second line. From `OfflineMode.BANNER_LINE`.
-pub const ANDROID_BANNER_LINE: &str = "Downloaded songs play · tap for details";
-/// The web's connection banner (`#conn-banner`) while the browser is offline. From `web-rs/src/app.rs` `init`
-/// (`conn_banner(true, …)` on `offline`).
+/// Android's banner, second line.
+pub const ANDROID_BANNER_LINE: &str = "What this device saved still works · tap for details";
+/// The web's connection banner (`#conn-banner`) while the browser is offline.
 pub const NOT_CONNECTED: &str = "Not connected – check your internet or server";
+/// The connection banner while the app's server does not answer, `{app}` filled in ([`server_down`]).
+pub const SERVER_DOWN: &str = "The {app} server isn't answering";
+/// The toast once the server answers again ([`back_online_text`]).
+pub const BACK_ONLINE: &str = "Back online";
+/// The toast once the server answers again and the outbox went: `{sent}` is [`counts_text`]'s.
+pub const BACK_ONLINE_SENT: &str = "Back online – {sent} sent";
 
-/// The web's connection banner while `app`'s server does not answer ("The Encore server isn't answering").
-/// From `web-rs/src/app.rs` `init` (`conn_banner(true, …)` on `encore:server-down`).
-pub fn server_down(app: &str) -> String {
-    format!("The {app} server isn't answering")
+/// Offline mode's words. [`OfflineWords::DEFAULT`] holds the kit's; an app passes its own to change any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OfflineWords {
+    /// The banner ([`BANNER`]).
+    pub banner: &'static str,
+    /// The banner once the grace has ended ([`BANNER_ENDED`]).
+    pub banner_ended: &'static str,
+    /// The title of an entry switched off in offline mode ([`DISABLED_TITLE`]).
+    pub disabled: &'static str,
+    /// The toast after a Retry the server still didn't answer ([`STILL_OFFLINE`]).
+    pub still_offline: &'static str,
+    /// The banner's button ([`RETRY`]).
+    pub retry: &'static str,
+    /// The banner's button while it tries ([`TRYING`]).
+    pub trying: &'static str,
+    /// The connection banner while the browser is offline ([`NOT_CONNECTED`]).
+    pub not_connected: &'static str,
+    /// The connection banner while the server does not answer, with `{app}` ([`SERVER_DOWN`]).
+    pub server_down: &'static str,
+    /// The toast once the server answers again ([`BACK_ONLINE`]).
+    pub back_online: &'static str,
+    /// The same once the outbox went, with `{sent}` ([`BACK_ONLINE_SENT`]).
+    pub back_online_sent: &'static str,
 }
 
-/// The web's banner text: [`BANNER`], or [`BANNER_ENDED`] once the grace has ended. From `mode.rs` `banner`.
-pub fn banner(grace_ended: bool) -> &'static str {
-    if grace_ended {
-        BANNER_ENDED
-    } else {
-        BANNER
+impl OfflineWords {
+    /// The kit's words.
+    pub const DEFAULT: OfflineWords = OfflineWords {
+        banner: BANNER,
+        banner_ended: BANNER_ENDED,
+        disabled: DISABLED_TITLE,
+        still_offline: STILL_OFFLINE,
+        retry: RETRY,
+        trying: TRYING,
+        not_connected: NOT_CONNECTED,
+        server_down: SERVER_DOWN,
+        back_online: BACK_ONLINE,
+        back_online_sent: BACK_ONLINE_SENT,
+    };
+
+    /// The banner's text: [`OfflineWords::banner`], or [`OfflineWords::banner_ended`] once the grace has ended.
+    pub fn banner(&self, grace_ended: bool) -> &'static str {
+        if grace_ended {
+            self.banner_ended
+        } else {
+            self.banner
+        }
+    }
+
+    /// The connection banner while `app`'s server does not answer.
+    pub fn server_down(&self, app: &str) -> String {
+        crate::app::fill(self.server_down, &[("app", app)])
+    }
+
+    /// The toast once the server answers again, saying what the outbox sent (`counts` as [`counts_text`]
+    /// takes them).
+    pub fn back_online(&self, counts: &[Count]) -> String {
+        let sent = counts_text(counts);
+        if sent.is_empty() {
+            self.back_online.to_string()
+        } else {
+            crate::app::fill(self.back_online_sent, &[("sent", &sent)])
+        }
     }
 }
 
-/// localStorage: the remembered user (`<app>.offline.me`). From `web-rs/src/offline/mod.rs` `ME_KEY`.
-pub fn me_key(app: &str) -> String {
-    format!("{}.offline.me", app.to_ascii_lowercase())
+impl Default for OfflineWords {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
-/// localStorage: the liked track ids as this device last knew them (`<app>.offline.likes`). From
-/// `web-rs/src/offline/mod.rs` `LIKES_KEY`.
-pub fn likes_key(app: &str) -> String {
-    format!("{}.offline.likes", app.to_ascii_lowercase())
+/// The web's connection banner while `app`'s server does not answer ("The Kit Demo server isn't answering").
+pub fn server_down(app: &str) -> String {
+    OfflineWords::DEFAULT.server_down(app)
 }
 
-/// localStorage: "1" while a sign-out has not reached the server (`<app>.signout_pending`). From
-/// `web-rs/src/offline/mod.rs` `SIGNOUT_PENDING_KEY`.
-pub fn signout_pending_key(app: &str) -> String {
-    format!("{}.signout_pending", app.to_ascii_lowercase())
+/// The web's banner text: [`BANNER`], or [`BANNER_ENDED`] once the grace has ended.
+pub fn banner(grace_ended: bool) -> &'static str {
+    OfflineWords::DEFAULT.banner(grace_ended)
+}
+
+/// localStorage: the remembered user (`<app id>.offline.me`).
+pub fn me_key(app_id: &str) -> String {
+    crate::app::key(&app_id.to_ascii_lowercase(), "offline.me")
+}
+
+/// localStorage: "1" while a sign-out has not reached the server (`<app id>.signout_pending`).
+pub fn signout_pending_key(app_id: &str) -> String {
+    crate::app::key(&app_id.to_ascii_lowercase(), "signout_pending")
 }
 
 /// Whole days of grace left (rounded up): [`GRACE_DAYS`] right after a contact, 0 once it has ended. A clock
 /// that went back counts as no time passed. Times in unix seconds, as the stored document keeps them.
-///
-/// From `web-rs/src/offline/mod.rs` `grace_left`.
 pub fn grace_left(cached_at_s: f64, now_s: f64) -> i64 {
     let passed = (now_s - cached_at_s).max(0.0);
     let left = GRACE_DAYS as f64 * DAY - passed;
@@ -97,9 +161,8 @@ pub fn grace_left(cached_at_s: f64, now_s: f64) -> i64 {
     }
 }
 
-/// What is kept of the `/auth/me` answer: all of it but the email address, which offline mode never shows.
-///
-/// From `web-rs/src/offline/mod.rs` `me_to_keep`.
+/// What is kept of the signed-in user's answer: all of it but the email address, which offline mode never
+/// shows.
 pub fn me_to_keep(me: &Value) -> Value {
     let mut u = me.clone();
     if let Some(o) = u.as_object_mut() {
@@ -109,15 +172,11 @@ pub fn me_to_keep(me: &Value) -> Value {
 }
 
 /// The stored document: `{user, cached_at}` (unix seconds, whole).
-///
-/// From `web-rs/src/offline/mod.rs` `me_doc`.
 pub fn me_doc(me: &Value, now_s: f64) -> Value {
     json!({ "user": me_to_keep(me), "cached_at": now_s.floor() })
 }
 
 /// The user and when it was remembered, from the stored document (None without a user object or a time).
-///
-/// From `web-rs/src/offline/mod.rs` `parse_me`.
 pub fn parse_me(text: &str) -> Option<(Value, f64)> {
     let v: Value = serde_json::from_str(text).ok()?;
     let user = v.get("user")?;
@@ -128,12 +187,10 @@ pub fn parse_me(text: &str) -> Option<(Value, f64)> {
     Some((user.clone(), at))
 }
 
-/// Whether `/auth/me` failing with `status` opens offline mode, and with which user: the one remembered within
-/// the grace (`cached`), else the last one remembered (`last`; the grace has ended → true). None: the app
-/// behaves as before (the sign-in page). It needs no answer from the server, a remembered user and `saved`
-/// songs on this device.
-///
-/// From `web-rs/src/offline/mode.rs` `decide`.
+/// Whether the signed-in user's call failing with `status` opens offline mode, and with which user: the one
+/// remembered within the grace (`cached`), else the last one remembered (`last`; the grace has ended → true).
+/// None: the app behaves as before (the sign-in page). It needs no answer from the server, a remembered user and
+/// `saved` things on this device to show.
 pub fn decide<U>(status: u16, cached: Option<U>, last: Option<U>, saved: usize) -> Option<(U, bool)> {
     if !super::reason::unreachable(status) || saved == 0 {
         return None;
@@ -145,22 +202,18 @@ pub fn decide<U>(status: u16, cached: Option<U>, last: Option<U>, saved: usize) 
     }
 }
 
-/// `POST /auth/logout` answered `status` (0: no answer): whether the session may still be valid. Only an answer
+/// The sign-out call answered `status` (0: no answer): whether the session may still be valid. Only an answer
 /// that it ended, or that there was none (401), settles it.
-///
-/// From `web-rs/src/offline/mod.rs` `session_may_live`.
 pub fn session_may_live(status: u16) -> bool {
     !((200..300).contains(&status) || status == 401)
 }
 
-/// What boot does about a pending sign-out, from the status of the `/auth/me` answer (200: signed in).
-///
-/// From `web-rs/src/offline/mod.rs` `AtBoot`.
+/// What boot does about a pending sign-out, from the status of the signed-in user's call (200: signed in).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AtBoot {
     /// No sign-out pending: as usual.
     AsUsual,
-    /// The session still works: end it now (`POST /auth/logout`), then open signed out; it stays pending while
+    /// The session still works: end it now (the sign-out call), then open signed out; it stays pending while
     /// [`session_may_live`] says so.
     SignOut,
     /// The server says there is no session: nothing left to end (no longer pending).
@@ -170,8 +223,6 @@ pub enum AtBoot {
 }
 
 /// What boot does about a pending sign-out.
-///
-/// From `web-rs/src/offline/mod.rs` `at_boot` (used by `mode.rs` `settle`).
 pub fn at_boot(pending: bool, me_status: u16) -> AtBoot {
     match (pending, me_status) {
         (false, _) => AtBoot::AsUsual,
@@ -181,19 +232,18 @@ pub fn at_boot(pending: bool, me_status: u16) -> AtBoot {
     }
 }
 
-/// The path to show for `path`: in offline mode everything but [`PAGE`] becomes [`PAGE`] (the web replaces the
-/// address, so Back doesn't land on a page that can't open).
-///
-/// From `web-rs/src/offline/mode.rs` `route_path` / `allowed`.
-pub fn route_path(active: bool, path: &str) -> &str {
-    if !active || path == PAGE {
+/// The path to show for `path`: in offline mode a path that is not one of the app's offline pages (`allowed`)
+/// becomes `home`, the app's first offline page (the web replaces the address, so Back doesn't land on a page
+/// that can't open). Outside offline mode every path stays.
+pub fn route_path<'a>(active: bool, path: &'a str, allowed: &[&str], home: &'a str) -> &'a str {
+    if !active || path == home || allowed.contains(&path) {
         path
     } else {
-        PAGE
+        home
     }
 }
 
-/// What a retry's `/auth/me` answer means (status 200 for an answer).
+/// What a retry's answer means (status 200 for an answer).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RetryOutcome {
     /// The server answers: send the outbox, say [`back_online_text`], reload after [`BACK_ONLINE_RELOAD_MS`].
@@ -205,8 +255,6 @@ pub enum RetryOutcome {
 }
 
 /// What a retry's answer means.
-///
-/// From `web-rs/src/offline/mode.rs` `retry`.
 pub fn after_retry(status: u16) -> RetryOutcome {
     match status {
         200..=299 => RetryOutcome::BackOnline,
@@ -218,8 +266,6 @@ pub fn after_retry(status: u16) -> RetryOutcome {
 /// A call just failed to reach the server at `now_ms` (Android): whether to check the server now. Never while
 /// offline mode is on (its own retries run), at most once per [`NOTICE_GAP_MS`]; `last_ms` is the last time it
 /// said yes and is moved on a yes.
-///
-/// From `OfflineMode.noticeUnreachable`.
 pub fn notice_unreachable(active: bool, last_ms: &mut u64, now_ms: u64) -> bool {
     if active || now_ms.saturating_sub(*last_ms) < NOTICE_GAP_MS {
         return false;
@@ -228,36 +274,39 @@ pub fn notice_unreachable(active: bool, last_ms: &mut u64, now_ms: u64) -> bool 
     true
 }
 
-/// "3 plays and 1 like", "1 play", "2 likes" ("" for none).
-///
-/// From `web-rs/src/offline/mode.rs` `counts_text` and `Outbox.countsText`.
-pub fn counts_text(plays: usize, likes: usize) -> String {
-    let one = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
-    match (plays, likes) {
-        (0, 0) => String::new(),
-        (p, 0) => one(p, "play"),
-        (0, l) => one(l, "like"),
-        (p, l) => format!("{} and {}", one(p, "play"), one(l, "like")),
+/// How many of one kind of thing, with its words for one and for many (`Count { n: 3, one: "change", many:
+/// "changes" }`). The outbox counts its waiting actions this way ([`super::outbox::Outbox::counts`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Count<'a> {
+    /// How many.
+    pub n: usize,
+    /// The word for one ("change").
+    pub one: &'a str,
+    /// The word for several ("changes").
+    pub many: &'a str,
+}
+
+/// "3 changes and 1 upload", "1 change", "2 uploads, 1 note and 4 changes" ("" for none): each count that is
+/// not 0, in the order given.
+pub fn counts_text(counts: &[Count]) -> String {
+    let parts: Vec<String> =
+        counts.iter().filter(|c| c.n > 0).map(|c| format!("{} {}", c.n, if c.n == 1 { c.one } else { c.many })).collect();
+    match parts.as_slice() {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
 }
 
-/// The toast once the server answers again: "Back online – 3 plays sent".
-///
-/// From `web-rs/src/offline/mode.rs` `back_online_text` and `Outbox.backOnlineText`.
-pub fn back_online_text(plays: usize, likes: usize) -> String {
-    let sent = counts_text(plays, likes);
-    if sent.is_empty() {
-        "Back online".into()
-    } else {
-        format!("Back online – {sent} sent")
-    }
+/// The toast once the server answers again: "Back online – 3 changes sent".
+pub fn back_online_text(counts: &[Count]) -> String {
+    OfflineWords::DEFAULT.back_online(counts)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Ported from `web-rs/src/offline/mod.rs` `the_grace_lasts_thirty_days_from_the_last_contact`.
     #[test]
     fn the_grace_lasts_thirty_days_from_the_last_contact() {
         let t0 = 1_760_000_000.0;
@@ -271,7 +320,6 @@ mod tests {
         assert_eq!(grace_left(t0, t0 - 5.0 * DAY), 30, "a clock that went back");
     }
 
-    /// Ported from `web-rs/src/offline/mod.rs` `a_pending_sign_out_is_settled_only_by_the_server`.
     #[test]
     fn a_pending_sign_out_is_settled_only_by_the_server() {
         assert_eq!(at_boot(false, 200), AtBoot::AsUsual);
@@ -289,10 +337,9 @@ mod tests {
         assert!(session_may_live(403));
     }
 
-    /// Ported from `web-rs/src/offline/mod.rs` `the_remembered_user_round_trips_without_the_email`.
     #[test]
     fn the_remembered_user_round_trips_without_the_email() {
-        let me = json!({ "id": 3, "username": "ana", "email": "ana@example.org", "is_admin": false, "prefs": { "translate_mode": "" } });
+        let me = json!({ "id": 3, "username": "ana", "email": "ana@example.org", "is_admin": false, "prefs": { "lang": "" } });
         let doc = me_doc(&me, 1_760_000_000.7);
         assert_eq!(doc["cached_at"], json!(1_760_000_000.0));
         let (user, at) = parse_me(&doc.to_string()).unwrap();
@@ -302,41 +349,51 @@ mod tests {
         assert_eq!(parse_me("not json"), None);
         assert_eq!(parse_me(r#"{"user":null,"cached_at":5}"#), None);
         assert_eq!(parse_me(r#"{"user":{"id":1}}"#), None, "no time, no grace");
-        assert_eq!(me_key("Encore"), "encore.offline.me");
-        assert_eq!(likes_key("Encore"), "encore.offline.likes");
-        assert_eq!(signout_pending_key("Encore"), "encore.signout_pending");
     }
 
-    /// Ported from `web-rs/src/offline/mode.rs` `offline_mode_needs_no_answer_a_remembered_user_and_downloads`.
     #[test]
-    fn offline_mode_needs_no_answer_a_remembered_user_and_downloads() {
+    fn every_key_is_under_the_apps_id() {
+        assert_eq!(me_key("kit-demo"), "kit-demo.offline.me");
+        assert_eq!(signout_pending_key("Photovault"), "photovault.signout_pending");
+    }
+
+    #[test]
+    fn offline_mode_needs_no_answer_a_remembered_user_and_something_saved() {
         let ana = || Some(json!({ "id": 1, "username": "ana" }));
         assert_eq!(decide(0, ana(), ana(), 3), Some((json!({ "id": 1, "username": "ana" }), false)));
         assert_eq!(decide(502, ana(), ana(), 3).map(|x| x.1), Some(false), "a proxy saying the server is down");
         assert_eq!(decide(0, None, ana(), 3).map(|x| x.1), Some(true), "the grace has ended: sign in again");
         assert_eq!(decide::<Value>(0, None, None, 3), None, "nobody remembered");
-        assert_eq!(decide(0, ana(), ana(), 0), None, "nothing downloaded");
+        assert_eq!(decide(0, ana(), ana(), 0), None, "nothing saved on this device");
         assert_eq!(decide(401, ana(), ana(), 3), None, "the server answered: signed out");
         assert_eq!(decide(500, ana(), ana(), 3), None);
     }
 
-    /// Ported from `web-rs/src/offline/mode.rs` `the_counts_read_as_words` and `OutboxTest.backOnlineSaysWhatWasSent`.
     #[test]
     fn the_counts_read_as_words() {
-        assert_eq!(counts_text(0, 0), "");
-        assert_eq!(counts_text(1, 0), "1 play");
-        assert_eq!(counts_text(3, 1), "3 plays and 1 like");
-        assert_eq!(counts_text(0, 2), "2 likes");
-        assert_eq!(back_online_text(0, 0), "Back online");
-        assert_eq!(back_online_text(3, 0), "Back online – 3 plays sent");
-        assert_eq!(back_online_text(3, 1), "Back online – 3 plays and 1 like sent");
+        let c = |n, one, many| Count { n, one, many };
+        assert_eq!(counts_text(&[]), "");
+        assert_eq!(counts_text(&[c(0, "change", "changes"), c(0, "upload", "uploads")]), "");
+        assert_eq!(counts_text(&[c(1, "change", "changes")]), "1 change");
+        assert_eq!(counts_text(&[c(3, "change", "changes"), c(1, "upload", "uploads")]), "3 changes and 1 upload");
+        assert_eq!(counts_text(&[c(0, "change", "changes"), c(2, "upload", "uploads")]), "2 uploads");
+        assert_eq!(
+            counts_text(&[c(2, "upload", "uploads"), c(1, "note", "notes"), c(4, "change", "changes")]),
+            "2 uploads, 1 note and 4 changes"
+        );
+        assert_eq!(back_online_text(&[]), "Back online");
+        assert_eq!(back_online_text(&[c(3, "change", "changes")]), "Back online – 3 changes sent");
+        assert_eq!(back_online_text(&[c(3, "change", "changes"), c(1, "upload", "uploads")]), "Back online – 3 changes and 1 upload sent");
     }
 
     #[test]
-    fn offline_mode_shows_only_the_downloads_page() {
-        assert_eq!(route_path(false, "/library"), "/library");
-        assert_eq!(route_path(true, "/library"), "/downloads");
-        assert_eq!(route_path(true, "/downloads"), "/downloads");
+    fn offline_mode_shows_only_the_apps_offline_pages() {
+        let allowed = ["/saved", "/settings"];
+        assert_eq!(route_path(false, "/projects", &allowed, "/saved"), "/projects");
+        assert_eq!(route_path(true, "/projects", &allowed, "/saved"), "/saved");
+        assert_eq!(route_path(true, "/saved", &allowed, "/saved"), "/saved");
+        assert_eq!(route_path(true, "/settings", &allowed, "/saved"), "/settings");
+        assert_eq!(route_path(true, "/x", &[], "/"), "/", "an app with one offline page");
         assert_eq!(banner(false), BANNER);
         assert_eq!(banner(true), BANNER_ENDED);
     }
@@ -344,7 +401,11 @@ mod tests {
     #[test]
     fn the_connection_banner_says_what_is_down() {
         assert_eq!(NOT_CONNECTED, "Not connected – check your internet or server");
-        assert_eq!(server_down("Encore"), "The Encore server isn't answering");
+        assert_eq!(server_down("Kit Demo"), "The Kit Demo server isn't answering");
+        let mine = OfflineWords { server_down: "{app} antwortet nicht", banner: "Offline", ..OfflineWords::DEFAULT };
+        assert_eq!(mine.server_down("Filebrary"), "Filebrary antwortet nicht");
+        assert_eq!(mine.banner(false), "Offline");
+        assert_eq!(OfflineWords::default(), OfflineWords::DEFAULT);
     }
 
     #[test]

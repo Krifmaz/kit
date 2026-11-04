@@ -1,32 +1,23 @@
 //! Uploads: which files an upload takes, checked the same way for the file picker and drag & drop, and the
 //! words for those it refuses.
 //!
-//! From Encore's `web-rs/src/dropzone.rs` (`accepts`, `accept_hint`, `choose`, `refused_message`, the drop's
-//! words), the desktop's `clients/desktop/src/widgets/drop_zone.rs` (`Accept`, `DropZone`, `SAME_DROP`) and
-//! the bug report's limits in `web-rs/src/pages/bugreports.rs` (`MAX_FILES`, `MAX_BYTES`, `add`) and Android's
-//! `features/bugs/BugRules.kt` / `BugAttachments.kt`.
-//!
 //! The web reads an input's `accept` attribute (`.zip,application/zip`, `image/*`); the desktop's file dialogs
 //! know only endings ([`Accept`]). Both refuse with the same words.
 
-/// The class every drop zone on screen carries while files are dragged over the window. From `dropzone.rs`
-/// `READY_CLASS`.
+/// The class every drop zone on screen carries while files are dragged over the window.
 pub const READY_CLASS: &str = "drop-ready";
-/// The class of the zone under the pointer while files are dragged over it. From `dropzone.rs` `OVER_CLASS`.
+/// The class of the zone under the pointer while files are dragged over it.
 pub const OVER_CLASS: &str = "drop-over";
-/// The toast for a drop on an upload that can't be used right now. From `dropzone.rs` `init`.
+/// The toast for a drop on an upload that can't be used right now.
 pub const NOT_POSSIBLE: &str = "Uploading isn't possible right now";
-/// The toast when an upload of one file got several. From `dropzone.rs` `refused_message` and the desktop's
-/// `DropZone::handle_at`.
+/// The toast when an upload of one file got several.
 pub const ONLY_ONE: &str = "Only one file can be uploaded here: the first was used";
 /// Files dropped within this long of the one before belong to the same drop (the desktop gets one event per
-/// file). From the desktop's `drop_zone.rs` `SAME_DROP`.
+/// file).
 pub const SAME_DROP_MS: u64 = 800;
 
 /// The words for one refused file: "notes.txt can't be uploaded here (it takes .zip)" (without the brackets
 /// when `hint` is empty).
-///
-/// From `dropzone.rs` `refused_message` and the desktop's `DropZone::handle_at`.
 pub fn refused_one(name: &str, hint: &str) -> String {
     if hint.is_empty() {
         format!("{name} can't be uploaded here")
@@ -39,8 +30,6 @@ pub fn refused_one(name: &str, hint: &str) -> String {
 /// browser's file chooser reads it: a comma separated list of `.ext` (the name's ending, any case), `type/*`
 /// (any subtype) and `type/subtype` (exactly). An empty `accept` takes every file; a file without a type (`""`)
 /// only passes on its name.
-///
-/// From `dropzone.rs` `accepts`.
 pub fn accepts(accept: &str, name: &str, mime: &str) -> bool {
     let tokens: Vec<String> = accept.split(',').map(|t| t.trim().to_ascii_lowercase()).filter(|t| !t.is_empty()).collect();
     if tokens.is_empty() {
@@ -60,8 +49,6 @@ pub fn accepts(accept: &str, name: &str, mime: &str) -> bool {
 
 /// The extensions an `accept` names, for the words about a refused file (".zip, .db"; "" when it names only
 /// types such as `image/*`).
-///
-/// From `dropzone.rs` `accept_hint`.
 pub fn accept_hint(accept: &str) -> String {
     let exts: Vec<&str> = accept.split(',').map(str::trim).filter(|t| t.starts_with('.')).collect();
     exts.join(", ")
@@ -69,8 +56,6 @@ pub fn accept_hint(accept: &str) -> String {
 
 /// Splits a drop by an input's rule: (the files to hand over, the names of those refused). Without `multiple`
 /// only the first acceptable file is kept and every other one counts as refused.
-///
-/// From `dropzone.rs` `choose`.
 pub fn choose<T>(
     files: Vec<T>,
     accept: &str,
@@ -91,8 +76,6 @@ pub fn choose<T>(
 
 /// The toast after a drop where some files were refused ("" when none were). Its kind on the web: `err` when
 /// nothing was kept, else a plain toast ([`refused_kind`]).
-///
-/// From `dropzone.rs` `refused_message`.
 pub fn refused_message(refused: &[String], accept: &str, multiple: bool, kept: usize) -> String {
     if refused.is_empty() {
         return String::new();
@@ -108,8 +91,6 @@ pub fn refused_message(refused: &[String], accept: &str, multiple: bool, kept: u
 }
 
 /// The kind of [`refused_message`]'s toast: an error when nothing was kept, else plain.
-///
-/// From `dropzone.rs` `drop_on`.
 pub fn refused_kind(kept: usize) -> crate::toasts::ToastKind {
     if kept == 0 {
         crate::toasts::ToastKind::Err
@@ -131,8 +112,6 @@ fn extension(name: &str) -> Option<&str> {
 
 /// Which files an upload takes when the file dialog knows only endings (the desktop): the endings (lower case,
 /// without the dot; empty takes any file) and whether one drop may hand over several files.
-///
-/// From the desktop's `widgets/drop_zone.rs` `Accept`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Accept {
     /// The file endings taken, e.g. `["zip"]`; empty takes any file.
@@ -178,8 +157,6 @@ impl Accept {
 }
 
 /// What to do with one dropped file.
-///
-/// From the desktop's `widgets/drop_zone.rs` `Outcome`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome<P> {
     /// Nothing (only the highlight changed).
@@ -192,8 +169,6 @@ pub enum Outcome<P> {
 
 /// A drop place that gets one event per file (the desktop's window): whether files are held over it, and how
 /// many files the current drop already handed over (an upload of one file takes only the first).
-///
-/// From the desktop's `widgets/drop_zone.rs` `DropZone`.
 #[derive(Debug, Default, Clone)]
 pub struct DropZone {
     /// Files are held over the window: draw the highlight.
@@ -247,8 +222,7 @@ pub struct FileLimits {
 }
 
 impl FileLimits {
-    /// The bug report's: 6 files, 8 MiB each. From `web-rs/src/pages/bugreports.rs` `MAX_FILES` / `MAX_BYTES`,
-    /// `BugRules.MAX_FILES` / `MAX_FILE_BYTES` and `contracts/bug-reports.md`.
+    /// The bug report's: 6 files, 8 MiB each.
     pub const BUG_REPORT: FileLimits = FileLimits { max_files: 6, max_bytes: 8 * 1024 * 1024 };
 
     /// The size in the words, in whole MB ("8 MB" for 8 MiB).
@@ -256,19 +230,17 @@ impl FileLimits {
         self.max_bytes / (1024 * 1024)
     }
 
-    /// The toast when there are already `max_files`: "At most 6 files per report". From `bugreports.rs` `add`.
+    /// The toast when there are already `max_files`: "At most 6 files per report".
     pub fn too_many(&self) -> String {
         format!("At most {} files per report", self.max_files)
     }
 
-    /// The toast for a file over the size: "photo.png is over 8 MB". From `bugreports.rs` `add` and
-    /// `BugAttachments.kt`.
+    /// The toast for a file over the size: "photo.png is over 8 MB".
     pub fn too_big(&self, name: &str) -> String {
         format!("{name} is over {} MB", self.mb())
     }
 
-    /// The line under the picker: "Up to 6 files, 8 MB each.". From `bugreports.rs` (the form) and
-    /// `NewBugReportSheet.kt`.
+    /// The line under the picker: "Up to 6 files, 8 MB each.".
     pub fn summary(&self) -> String {
         format!("Up to {} files, {} MB each.", self.max_files, self.mb())
     }
@@ -276,8 +248,6 @@ impl FileLimits {
     /// Adds picked or dropped files (`(name, size)` each) to the `have` already there: the indexes of those
     /// taken, and the toasts (errors) for the rest. Once full it says [`FileLimits::too_many`] and stops; a file
     /// over the size is left out with [`FileLimits::too_big`].
-    ///
-    /// From `web-rs/src/pages/bugreports.rs` `add`.
     pub fn add(&self, have: usize, files: &[(&str, u64)]) -> (Vec<usize>, Vec<String>) {
         let (mut taken, mut said) = (vec![], vec![]);
         for (i, (name, size)) in files.iter().enumerate() {
@@ -299,20 +269,20 @@ impl FileLimits {
 mod tests {
     use super::*;
 
-    // ---- the web (web-rs/src/dropzone.rs tests) --------------------------------------------------------------
+    // ---- the web (an input's accept) ------------------------------------------------------------------------
 
     #[test]
     fn empty_accept_takes_anything() {
-        assert!(accepts("", "song.flac", "audio/flac"));
+        assert!(accepts("", "photo.heic", "image/heic"));
         assert!(accepts(" , ", "x", ""));
     }
 
     #[test]
     fn extensions_match_the_end_of_the_name_in_any_case() {
         assert!(accepts(".zip,application/zip", "Plugin.ZIP", ""));
-        assert!(accepts(".db,.sqlite,.sqlite3", "encore-2026.sqlite3", "application/octet-stream"));
-        assert!(!accepts(".db", "encore.db.bak", ""));
-        assert!(accepts(".apk,.apkm", "AppleMusic.apkm", ""));
+        assert!(accepts(".db,.sqlite,.sqlite3", "app-2026.sqlite3", "application/octet-stream"));
+        assert!(!accepts(".db", "app.db.bak", ""));
+        assert!(accepts(".apk,.apkm", "Viewer.apkm", ""));
     }
 
     #[test]
@@ -357,7 +327,7 @@ mod tests {
         assert_eq!(refused_kind(1), crate::toasts::ToastKind::Plain);
     }
 
-    // ---- the desktop (clients/desktop/src/widgets/drop_zone.rs tests) -------------------------------------------
+    // ---- the desktop (file endings only) ----------------------------------------------------------------------
 
     const ZIP: Accept = Accept::one(&["zip"]);
     const PICS: Accept = Accept::many(&["png", "jpg", "txt", "log"]);

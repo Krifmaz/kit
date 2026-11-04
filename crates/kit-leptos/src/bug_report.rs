@@ -1,11 +1,8 @@
 //! The New report sheet: kind, title, description and files (picked or dropped), sent to the server with the
-//! page, the app version and the browser.
+//! page, the app version and the browser (`contracts/bug-reports.md`).
 //!
-//! From Encore's `web-rs/src/pages/bugreports.rs` (`new_report_modal`, `Picker`, `post_form`, `device`) and
-//! `contracts/bug-reports.md` (`POST /api/bug-reports`, multipart `kind`, `title`, `body`, `page`,
-//! `app_version`, `device`, `file`…). The words and checks are kit-rules' [`kit_rules::bugs`]; the file limits
-//! are [`FileLimits::BUG_REPORT`] (6 files, 8 MB each). The sheet is a drop place for its own file input
-//! (`data-dropzone="br-files"`, see [`crate::dropzone`]).
+//! The words are the configured [`BugWords`]; the report goes to the configured
+//! [`bug_reports`](crate::config::Paths::bug_reports) path, and `<app id>:bugs-changed` tells the app's pages.
 
 use crate::api;
 use crate::html::esc;
@@ -13,11 +10,7 @@ use crate::html::html;
 use crate::icons::icon;
 use crate::modal::{self, Modal, ModalOpts};
 use crate::toasts::toast;
-use kit_rules::bugs::{
-    device, files_line, missing, sent_along, ACCEPT, ADD_IMAGES, DESCRIPTION, DESCRIPTION_PLACEHOLDER, NEED_TITLE, NEW_REPORT, PICK_KINDS,
-    REMOVE, SEND, SENDING, SENT, TEXT_MAX, TITLE, TITLE_MAX, TITLE_PLACEHOLDER,
-};
-use kit_rules::dialogs::CANCEL;
+use kit_rules::bugs::{device, BugWords, ACCEPT, TEXT_MAX, TITLE_MAX};
 use kit_rules::uploads::FileLimits;
 use leptos::prelude::*;
 use std::rc::Rc;
@@ -27,23 +20,35 @@ use web_sys::File;
 /// What goes with a report, and what happens once it went.
 #[derive(Clone)]
 pub struct SheetOpts {
-    /// The app's name: the event `<app>:bugs-changed` after sending.
+    /// The app's id: the event `<id>:bugs-changed` after sending.
     pub app: String,
-    /// The page the user came from (`#/library`), "" for none.
+    /// The page the user came from (`#/projects`), "" for none.
     pub page: String,
     /// The app's version, "" when unknown.
     pub version: String,
     /// The path the report is posted to (`/bug-reports`).
     pub path: String,
-    /// Runs with the new report's id once it went (Encore opens it).
+    /// Runs with the new report's id once it went (the app may open it).
     pub on_sent: Option<Rc<dyn Fn(i64)>>,
 }
 
 impl SheetOpts {
-    /// Encore's: `POST /api/bug-reports`.
+    /// A report from `page` of the app `app` (its id or name: the event is `<app in lower case>:bugs-changed`) at
+    /// `version`, posted to the configured path.
     pub fn new(app: &str, page: &str, version: &str) -> Self {
-        SheetOpts { app: app.to_string(), page: page.to_string(), version: version.to_string(), path: "/bug-reports".into(), on_sent: None }
+        let path = crate::config::get().paths.bug_reports.clone();
+        SheetOpts { app: app.to_string(), page: page.to_string(), version: version.to_string(), path, on_sent: None }
     }
+
+    /// A report from `page` of the configured app, with its id and version.
+    pub fn from_config(page: &str) -> Self {
+        let c = crate::config::get();
+        SheetOpts::new(&c.app.id, page, &c.app.version)
+    }
+}
+
+fn words() -> BugWords {
+    crate::config::get().words.bugs
 }
 
 /// A picked file as its thumbnail shows it.
@@ -78,7 +83,7 @@ impl Sheet {
     /// A sheet with nothing picked (under the current reactive owner).
     pub fn new() -> Self {
         Sheet {
-            kind: RwSignal::new(PICK_KINDS[0].0.to_string()),
+            kind: RwSignal::new(words().kinds[0].0.to_string()),
             thumbs: RwSignal::new(Vec::new()),
             files: StoredValue::new_local(Vec::new()),
             sending: RwSignal::new(false),
@@ -105,8 +110,7 @@ impl Sheet {
         self.thumbs.set(thumbs);
     }
 
-    /// Adds picked or dropped files under the limits, saying what was left out. From `bugreports.rs`
-    /// `Picker::add`.
+    /// Adds picked or dropped files under the limits, saying what was left out.
     pub fn add(&self, list: web_sys::FileList) {
         let files: Vec<File> = (0..list.length()).filter_map(|i| list.get(i)).collect();
         let named: Vec<(String, u64)> = files.iter().map(|f| (f.name(), f.size() as u64)).collect();
@@ -137,9 +141,11 @@ impl Default for Sheet {
     }
 }
 
-/// The sheet's body. From `bugreports.rs` `new_report_modal`.
+/// The sheet's body.
 pub fn sheet_body(s: Sheet, page: &str, version: &str) -> impl IntoView {
-    let seg: Vec<_> = PICK_KINDS
+    let w = words();
+    let seg: Vec<_> = w
+        .kinds
         .iter()
         .map(|(k, l)| {
             let k = *k;
@@ -158,7 +164,7 @@ pub fn sheet_body(s: Sheet, page: &str, version: &str) -> impl IntoView {
                 };
                 view! {
                     <div class="bug-thumb" data-file=i title=t.name.clone()>{inner}
-                        <button {..()} type="button" class="bug-thumb-x" data-rm=i aria-label=format!("{REMOVE} {}", t.name)
+                        <button {..()} type="button" class="bug-thumb-x" data-rm=i aria-label=format!("{} {}", w.remove, t.name)
                             on:click=move |e| { e.prevent_default(); s.remove(i); }>"×"</button>
                     </div>
                 }
@@ -168,30 +174,32 @@ pub fn sheet_body(s: Sheet, page: &str, version: &str) -> impl IntoView {
     view! {
         <div {..()} class="stack" style="gap:12px" data-dropzone="br-files">
             <div class="seg" id="br-kind">{seg}</div>
-            <label class="field"><span>{TITLE}</span><input class="input" id="br-title" maxlength=TITLE_MAX placeholder=TITLE_PLACEHOLDER node_ref=s.title/></label>
-            <label class="field"><span>{DESCRIPTION}</span><textarea class="input" id="br-body" rows="6" maxlength=TEXT_MAX placeholder=DESCRIPTION_PLACEHOLDER node_ref=s.body></textarea></label>
+            <label class="field"><span>{w.title}</span><input class="input" id="br-title" maxlength=TITLE_MAX placeholder=w.title_placeholder node_ref=s.title/></label>
+            <label class="field"><span>{w.description}</span><textarea class="input" id="br-body" rows="6" maxlength=TEXT_MAX placeholder=w.description_placeholder node_ref=s.body></textarea></label>
             <div {..()} class="row wrap" style="gap:10px">
                 <button {..()} type="button" class="btn sm" id="br-add" on:click=move |e| { e.prevent_default(); if let Some(i) = s.input.get_untracked() { i.click(); } }
-                    {..html(format!("{}{ADD_IMAGES}", icon("plus")))}>{""}</button>
+                    {..html(format!("{}{}", icon("plus"), w.add_images))}>{""}</button>
                 <input type="file" id="br-files" multiple accept=ACCEPT hidden node_ref=s.input
                     on:change=move |e| {
                         let Some(i) = e.target().and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok()) else { return };
                         if let Some(list) = i.files() { s.add(list); }
                         i.set_value("");
                     }/>
-                <span class="small muted">{files_line(&FileLimits::BUG_REPORT)}</span>
+                <span class="small muted">{w.files_line(&FileLimits::BUG_REPORT)}</span>
             </div>
             <div class="bug-thumbs" id="br-thumbs">{thumbs}</div>
-            <div class="small muted" id="br-meta">{sent_along(page, version)}</div>
+            <div class="small muted" id="br-meta">{w.sent_along(page, version)}</div>
         </div>
     }
 }
 
-/// The sheet's buttons: Cancel and Send ("Sending…" while it goes). From `bugreports.rs` `new_report_modal`.
+/// The sheet's buttons: Cancel and Send ("Sending…" while it goes).
 pub fn sheet_footer(s: Sheet, on_send: impl Fn() + 'static) -> impl IntoView {
+    let w = words();
+    let cancel = crate::config::get().words.dialogs.cancel;
     view! {
-        <button class="btn" data-close>{CANCEL}</button>
-        <button class="btn primary" id="br-send" disabled=move || s.sending.get() on:click=move |_| on_send()>{move || if s.sending.get() { SENDING } else { SEND }}</button>
+        <button class="btn" data-close>{cancel}</button>
+        <button class="btn primary" id="br-send" disabled=move || s.sending.get() on:click=move |_| on_send()>{move || if s.sending.get() { w.sending } else { w.send }}</button>
     }
 }
 
@@ -201,19 +209,20 @@ fn focus(el: Option<web_sys::HtmlElement>) {
     }
 }
 
-/// Opens the New report sheet. From `bugreports.rs` `new_report_modal`.
+/// Opens the New report sheet.
 pub fn open(o: SheetOpts) -> Modal {
     let owner = Owner::new();
     let s = owner.with(Sheet::new);
     let (page, version) = (o.page.clone(), o.version.clone());
     let handle: Rc<std::cell::RefCell<Option<Modal>>> = Rc::default();
     let h = handle.clone();
+    let w = words();
     let send = move || {
         let title = s.title.get_untracked().map(|i| i.value()).unwrap_or_default().trim().to_string();
         let text = s.body.get_untracked().map(|t| t.value()).unwrap_or_default().trim().to_string();
-        if let Some(msg) = missing(&title, &text) {
+        if let Some(msg) = w.missing(&title, &text) {
             toast(msg, "err");
-            if msg == NEED_TITLE {
+            if msg == w.need_title {
                 focus(s.title.get_untracked().map(Into::into));
             } else {
                 focus(s.body.get_untracked().map(Into::into));
@@ -242,7 +251,7 @@ pub fn open(o: SheetOpts) -> Modal {
                     if let Some(m) = h.borrow().as_ref() {
                         m.close();
                     }
-                    toast(SENT, "ok");
+                    toast(w.sent, "ok");
                     crate::rt::dispatch(&format!("{}:bugs-changed", o.app.to_ascii_lowercase()));
                     if let Some(f) = &o.on_sent {
                         f(r.get("id").and_then(serde_json::Value::as_i64).unwrap_or(0));
@@ -256,7 +265,7 @@ pub fn open(o: SheetOpts) -> Modal {
         });
     };
     let m = modal::open(
-        ModalOpts::new(&esc(NEW_REPORT), "").body_view(move || sheet_body(s, &page, &version)).footer_view(move || sheet_footer(s, send)),
+        ModalOpts::new(&esc(w.new_report), "").body_view(move || sheet_body(s, &page, &version)).footer_view(move || sheet_footer(s, send)),
     );
     *handle.borrow_mut() = Some(m.clone());
     focus(s.title.get_untracked().map(Into::into));
@@ -278,37 +287,32 @@ mod tests {
     use super::*;
     use crate::testing::{assert_same_html, render};
 
-    /// Encore's `new_report_modal` body and footer (`bugreports.rs`).
-    fn encore_body(page: &str, version: &str) -> String {
-        let seg: String = PICK_KINDS
-            .iter()
-            .enumerate()
-            .map(|(i, (k, l))| format!(r#"<button type="button" data-v="{k}" class="{}">{l}</button>"#, if i == 0 { "on" } else { "" }))
-            .collect();
+    /// The kit's sheet body for `page` and `version` (both as the meta line says them, escaped).
+    fn body(meta: &str) -> String {
         format!(
             r#"<div class="stack" style="gap:12px" data-dropzone="br-files">
-      <div class="seg" id="br-kind">{seg}</div>
-      <label class="field"><span>Title</span><input class="input" id="br-title" maxlength="200" placeholder="A short name for it"></label>
-      <label class="field"><span>Description</span><textarea class="input" id="br-body" rows="6" maxlength="20000" placeholder="What happened, what you expected, how to repeat it"></textarea></label>
-      <div class="row wrap" style="gap:10px">
-        <button type="button" class="btn sm" id="br-add">{upload}Add images</button>
-        <input type="file" id="br-files" multiple accept="image/*,.txt,.log" hidden>
-        <span class="small muted">Up to {max} files, 8 MB each. Images, .txt and .log files (pick or drop them here).</span>
-      </div>
-      <div class="bug-thumbs" id="br-thumbs"></div>
-      <div class="small muted" id="br-meta">Sent along: {page}the app version ({version}) and your browser.</div>
-    </div>"#,
-            upload = icon("plus"),
-            max = 6,
-            page = if page.is_empty() { String::new() } else { format!("the page you came from ({}), ", esc(page)) },
-            version = esc(if version.is_empty() { "unknown" } else { version })
+              <div class="seg" id="br-kind"><button type="button" data-v="bug" class="on">Bug</button><button type="button" data-v="not_bug" class="">Not a bug</button><button type="button" data-v="howto" class="">How do I…</button></div>
+              <label class="field"><span>Title</span><input class="input" id="br-title" maxlength="200" placeholder="A short name for it"></label>
+              <label class="field"><span>Description</span><textarea class="input" id="br-body" rows="6" maxlength="20000" placeholder="What happened, what you expected, how to repeat it"></textarea></label>
+              <div class="row wrap" style="gap:10px">
+                <button type="button" class="btn sm" id="br-add">{plus}Add images</button>
+                <input type="file" id="br-files" multiple accept="image/*,.txt,.log" hidden>
+                <span class="small muted">Up to 6 files, 8 MB each. Images, .txt and .log files (pick or drop them here).</span>
+              </div>
+              <div class="bug-thumbs" id="br-thumbs"></div>
+              <div class="small muted" id="br-meta">{meta}</div>
+            </div>"#,
+            plus = icon("plus")
         )
     }
 
     #[test]
-    fn the_sheet_is_encores() {
-        assert_same_html(&render(|| sheet_body(Sheet::new(), "#/library?q=<x>", "0.36.4")), &encore_body("#/library?q=<x>", "0.36.4"));
-        assert_same_html(&render(|| sheet_body(Sheet::new(), "", "")), &encore_body("", ""));
+    fn the_sheet_asks_for_kind_title_text_and_files() {
+        assert_same_html(
+            &render(|| sheet_body(Sheet::new(), "#/projects?q=<x>", "1.4.0")),
+            &body("Sent along: the page you came from (#/projects?q=&lt;x&gt;), the app version (1.4.0) and your browser."),
+        );
+        assert_same_html(&render(|| sheet_body(Sheet::new(), "", "")), &body("Sent along: the app version (unknown) and your browser."));
         assert_same_html(
             &render(|| sheet_footer(Sheet::new(), || {})),
             r#"<button class="btn" data-close>Cancel</button><button class="btn primary" id="br-send">Send</button>"#,
@@ -316,17 +320,29 @@ mod tests {
     }
 
     #[test]
-    fn thumbnails_are_encores() {
+    fn each_file_has_a_thumbnail_and_remove() {
         let html = render(|| {
             let s = Sheet::new();
             s.thumbs
                 .set(vec![Thumb { name: "shot.png".into(), url: Some("blob:x".into()) }, Thumb { name: "server.log".into(), url: None }]);
             sheet_body(s, "", "")
         });
-        // bugreports.rs `Picker::draw`
         let want = r#"<div class="bug-thumbs" id="br-thumbs"><div class="bug-thumb" data-file="0" title="shot.png"><img src="blob:x" alt="shot.png"><button type="button" class="bug-thumb-x" data-rm="0" aria-label="Remove shot.png">×</button></div><div class="bug-thumb" data-file="1" title="server.log"><span class="small ellipsis" title="server.log">server.log</span><button type="button" class="bug-thumb-x" data-rm="1" aria-label="Remove server.log">×</button></div></div>"#;
         let start = html[..html.find(r#"id="br-thumbs""#).unwrap()].rfind("<div").unwrap();
         let end = html[..html.find(r#"id="br-meta""#).unwrap()].rfind("<div").unwrap();
         assert_same_html(&html[start..end], want);
+    }
+
+    #[test]
+    fn the_sheet_goes_where_the_app_says_in_its_words() {
+        let mut cfg = crate::config::AppConfig::new(kit_rules::app::App::named("Kit Demo").with_version("1.4.0"));
+        cfg.paths.bug_reports = "/feedback".into();
+        cfg.words.bugs.new_report = "Feedback";
+        cfg.words.bugs.title = "Betreff";
+        crate::config::set(cfg);
+        let o = SheetOpts::from_config("#/");
+        assert_eq!((o.app.as_str(), o.version.as_str(), o.path.as_str()), ("kit-demo", "1.4.0", "/feedback"));
+        assert!(render(|| sheet_body(Sheet::new(), "", "")).contains("<span>Betreff</span>"));
+        crate::config::set(crate::config::AppConfig::default());
     }
 }

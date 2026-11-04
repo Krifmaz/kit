@@ -314,9 +314,6 @@ mod tests {
     fn the_words_are_encores() {
         assert_eq!(saved_words(true), "What's new will show after updates");
         assert_eq!(saved_words(false), "What's new won't show after updates – it stays in Settings");
-        assert_eq!(
-            runs_words("Encore", "0.40.1"),
-            "This server runs Encore 0.40.1. After an update, a short list of what changed shows once on the website and in the desktop app."
-        );
+        assert_eq!(runs_words("Encore", "0.40.1"), "This is Encore 0.40.1. After an update, a short list of what changed shows once.");
     }
 }

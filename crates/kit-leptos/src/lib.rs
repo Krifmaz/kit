@@ -1,33 +1,40 @@
 //! # kit-leptos
 //!
-//! Encore's web components as Leptos components (client-side rendering, WebAssembly), on top of kit-rules. Each
-//! one draws exactly the HTML and CSS classes Encore's hand-written `web-rs` draws, so Encore's stylesheet is
-//! reused unchanged and Encore looks the same when it switches; every decision comes from kit-rules and every
-//! word is a kit-rules constant.
+//! The kit's web components as Leptos components (client-side rendering, WebAssembly), on top of kit-rules:
+//! every decision comes from kit-rules, every word is a kit-rules default an app may change, and every server
+//! path is configured per app ([`config`]). The markup uses the class names of the kit's own stylesheet
+//! ([`CSS`], `style/kit.css`), which is built only on the design tokens (`design/out/tokens.css`), so each of the
+//! themes (`encore`, `dark`, `oled`, `light`) draws every component.
 //!
-//! | Module | Component | From Encore |
-//! | --- | --- | --- |
-//! | [`toasts`] | `#toasts`, toasts, error toasts with Copy and Close, Undo toasts, the update toast | `ui.rs`, `update.rs` |
-//! | [`clipboard`] | copy with the plain-http fallback | `ui.rs` |
-//! | [`modal`] | modals and the confirm dialog | `ui.rs` |
-//! | [`details`] | the whole text of an error with Copy | `details.rs` |
-//! | [`whats_new`] | the What's new popup and Settings → What's new | `whats_new.rs` |
-//! | [`update`] | reloading into a new build (health polling, the service worker) | `update.rs`, `sw.rs` |
-//! | [`notice`] | the notice banner with Check again | `notice.rs` |
-//! | [`dropzone`] | drag and drop onto every upload | `dropzone.rs` |
-//! | [`schema_form`] | the settings cards drawn from the schema | `settings/schema_form.rs`, `fields.rs`, `groups.rs` |
-//! | [`bug_report`] | the New report sheet | `pages/bugreports.rs` |
-//! | [`diagnostics`] | the Diagnostics page | `settings/diagnostics.rs` |
-//! | [`offline`] | the offline and connection banners | `offline/mode.rs`, `app.rs` |
+//! | Module | Component |
+//! | --- | --- |
+//! | [`config`] | the app's id, name, version, logo, paths, routes and words |
+//! | [`toasts`] | `#toasts`: toasts, errors with Copy and Close, Undo toasts, the update toast |
+//! | [`clipboard`] | copy, with the plain-http fallback |
+//! | [`modal`] | modals, the confirm dialog ([`modal::confirm`], [`modal::ConfirmDialog`]) |
+//! | [`details`] | the whole text of an error with Copy |
+//! | [`whats_new`] | the What's new popup and the changelog page |
+//! | [`update`] | reloading into a new build (health polling, the service worker) |
+//! | [`notice`] | the notice banners with Check again |
+//! | [`dropzone`] | drag and drop onto every upload |
+//! | [`schema_form`] | the settings cards drawn from the server's schema |
+//! | [`bug_report`] | the New report sheet |
+//! | [`diagnostics`] | the Diagnostics page |
+//! | [`offline`] | the offline and connection banners |
 //!
-//! The global functions ([`toasts::toast`], [`toasts::toast_action`], [`modal::open`],
-//! [`modal::confirm_dialog`], [`details::show`], [`clipboard::copy_text`]) work from any code, Leptos or
-//! hand-written, so Encore's pages keep calling them while they move over one by one. Server calls go through
-//! [`api`], whose backend an app can replace ([`api::set_backend`]).
+//! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
+//! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`details::show`], [`clipboard::copy_text`])
+//! work from any code, Leptos or hand-written. Server calls go through [`api`], whose backend an app can replace
+//! ([`api::set_backend`]).
+
+/// The kit's stylesheet (`style/kit.css`): every component's classes, on the variables of `tokens.css`. Load
+/// `tokens.css` first, then this (trunk: `<link data-trunk rel="css" href="…/kit.css">`).
+pub const CSS: &str = include_str!("../style/kit.css");
 
 pub mod api;
 pub mod bug_report;
 pub mod clipboard;
+pub mod config;
 pub mod details;
 pub mod diagnostics;
 pub mod dropzone;
@@ -49,7 +56,10 @@ pub(crate) mod testing;
 /// What a Leptos app usually imports.
 pub mod prelude {
     pub use crate::clipboard::copy_text;
+    pub use crate::config::AppConfig;
     pub use crate::details::show as show_details;
-    pub use crate::modal::{confirm_dialog, open as open_modal, ModalOpts, ModalRoot};
+    pub use crate::modal::{confirm, confirm_dialog, open as open_modal, ConfirmDialog, ModalOpts, ModalRoot};
     pub use crate::toasts::{toast, toast_action, Toasts};
+    pub use kit_rules::app::App;
+    pub use kit_rules::dialogs::Confirm;
 }

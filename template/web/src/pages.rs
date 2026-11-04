@@ -28,6 +28,7 @@ pub fn data_notice() -> NoticeSource {
             checking: "Still checking the data folder",
             fixed: "The data folder can be written",
         },
+        words_for: Vec::new(),
         after_check: None,
     }
 }

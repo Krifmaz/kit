@@ -7,8 +7,10 @@
   <!-- the app's name: the web app reads it from here (toasts, What's new, the X-Requested-With header) -->
   <meta name="application-name" content="{{app_title}}">
   <title>{{app_title}}</title>
-  <!-- the kit's colour tokens (the kit's design/out/tokens.css), then Encore's rules (static/css/app.css) -->
+  <!-- the kit's colour tokens (design/out/tokens.css), the kit's components (crates/kit-leptos/style/kit.css),
+       then the app's own rules (static/css/app.css) -->
   <link data-trunk rel="css" href="static/css/tokens.css">
+  <link data-trunk rel="css" href="static/css/kit.css">
   <link data-trunk rel="css" href="static/css/app.css">
   <link data-trunk rel="rust" data-wasm-opt="z" data-bin="{{project-name}}-web">
 </head>
