@@ -31,7 +31,7 @@ class OfflineReasonTest {
 
     @Test
     fun eachFailureHasItsOwnWords() {
-        assertTrue(of(error = UnknownHostException("music.example.com")).contains("DNS"))
+        assertTrue(of(error = UnknownHostException("app.example.com")).contains("DNS"))
         // both kinds of timeout: the socket's, and OkHttp's whole-call one
         assertEquals("The server didn't answer within 8 s.", of(error = SocketTimeoutException()))
         assertEquals("The server didn't answer within 8 s.", of(error = InterruptedIOException("timeout")))

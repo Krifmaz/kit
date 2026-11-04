@@ -1,4 +1,4 @@
-# Every version is pinned, equal to Encore's clients/android/gradle/libs.versions.toml. Bump deliberately.
+# Every version is pinned. Bump deliberately: an app that includes this build gets these versions.
 [versions]
 agp = "9.4.0"
 kotlin = "2.4.21"                 # also in the root build.gradle.kts buildscript classpath

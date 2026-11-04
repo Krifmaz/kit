@@ -84,9 +84,9 @@ import kotlinx.coroutines.flow.update
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Toasts like the web's `toast(msg, type)` (web-rs/src/ui.rs): panels with a coloured left border at the bottom of
- * the screen (at the top over the full player, see [ToastHost]). Shared seam: any part calls [show] from any thread; [ToastHost] draws them, in a small window of their
- * own above every sheet, dialog and the full player (see there).
+ * Toasts like the web's `toast(msg, type)`: panels with a coloured left border at the bottom of
+ * the screen (or at the top over a full-screen view, see [ToastHost]). Shared seam: any part calls [show] from any thread; [ToastHost] draws them, in a small window of their
+ * own above every sheet and dialog (see there).
  *
  * `kind` is the web's type: "info" (the default, accent border), "ok" (green), "err" (red), "warn" (amber). A toast
  * goes after about four seconds; an error stays until its Close and has **Copy** (the whole message, for a bug
@@ -121,11 +121,10 @@ object Toasts {
 }
 
 /**
- * Draws [Toasts]; put it once in the root. They sit [bottomPadding] above the bottom of the screen (above the mini
- * player and the tabs), or, when [topPadding] is given, at the top: that far below the status bar. The full player
- * (phone and TV) has its seek bar and buttons at the bottom, so while it is open the root passes its header's height
- * here and the toasts drop in over the cover instead (the owner, Oct 26: a "Got it – you won't hear this song…" toast
- * sat over the seek bar and the times).
+ * Draws [Toasts]; put it once in the root. They sit [bottomPadding] above the bottom of the screen (above a bottom
+ * bar and the tabs), or, when [topPadding] is given, at the top: that far below the status bar. A screen with its own
+ * controls at the bottom (a full-screen viewer, an editor's toolbar) passes its header's height here so the toasts
+ * drop in at the top instead of over its controls.
  *
  * A ModalBottomSheet, a Dialog and an AlertDialog are windows of their own above the activity's window, so toasts
  * drawn in the activity's content were hidden behind them. The toasts get a small window instead, added to the
@@ -290,7 +289,7 @@ private class ToastWindow(private val activity: Activity, private val host: View
 
     /**
      * Where the toasts sit: at the [top] or the bottom of the screen, [px] from that edge. The space between the edge
-     * and the toasts (the status bar and a header, or the mini player and the tabs) is outside the window, so touches
+     * and the toasts (the status bar and a header, or a bottom bar and the tabs) is outside the window, so touches
      * there reach the app. The stack's order and slide follow the edge ([ToastStack]), so a change of edge draws the
      * window's content again.
      */

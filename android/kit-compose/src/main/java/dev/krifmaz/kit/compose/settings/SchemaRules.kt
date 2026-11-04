@@ -1,5 +1,6 @@
 package dev.krifmaz.kit.compose.settings
 
+import dev.krifmaz.kit.compose.KitRoutes
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -10,18 +11,14 @@ import java.math.BigDecimal
 /**
  * What the schema-drawn cards need without Android: the `when` rules, the text a field starts with, the number
  * parsing, the note under a field, the cards a server has, and what Save sends (only the keys that changed, in the
- * web's body shape). The web's renderer is web-rs/src/settings/schema_form.rs and fields.rs; the server's side is
- * server/crates/config (settings.toml, when.rs, `Config::schema`) and PUT /api/settings.
+ * body shape of contracts/settings-schema.md).
  *
- * `values` is the answer of GET (or PUT) /api/settings; `drafts` holds what the person typed and has not
+ * `values` is the answer of GET (or PUT) [KitRoutes.settings]; `drafts` holds what the person typed and has not
  * saved yet, as text per key ([textFor] says how each type is written).
  */
 object SchemaRules {
-    /** What GET /api/settings sends for a saved secret ("•••• (saved)"). */
+    /** What GET <settings> sends for a saved secret ("•••• (saved)"). */
     const val MASK = "••••"
-
-    /** The secret that is never shown again, not even to the owner (the server refuses it too). */
-    const val WIREGUARD_KEY = "vpn_wireguard_config"
 
     /** Whether [v] is the server's mask for a saved secret. */
     fun isMasked(v: String): Boolean = v.startsWith(MASK)
@@ -33,7 +30,7 @@ object SchemaRules {
         fun shows(current: String): Boolean = (current == value) == equal
     }
 
-    /** Reads `key=value` or `key!=value` (fields.rs `When::parse`); null for anything else (the field is always shown). */
+    /** Reads `key=value` or `key!=value`; null for anything else (the field is always shown). */
     fun parseWhen(rule: String?): When? {
         if (rule.isNullOrBlank()) return null
         val ne = rule.indexOf("!=")
@@ -65,7 +62,7 @@ object SchemaRules {
     // ---- values as text --------------------------------------------------------------------------------------
 
     /**
-     * A value as the web reads it into a form (json.rs `js_string`): text as it is, a whole number without ".0",
+     * A value as the web reads it into a form: text as it is, a whole number without ".0",
      * true/false, "" for null or a missing key.
      */
     fun textOf(v: JsonElement?): String = when (v) {
@@ -201,7 +198,7 @@ object SchemaRules {
     /** A secret with a saved value (the server says "•••• (saved)"). */
     fun isSaved(field: SchemaField, values: JsonObject): Boolean = truthy(values[field.key])
 
-    /** The note under a field (schema_form.rs `source_note`); the words are drawn by SchemaForm. */
+    /** The note under a field; the words are drawn by SchemaForm. */
     enum class Note {
         /** "🔒 Set by ENV in your compose/env – change it there (environment always wins)" */
         LOCKED,
@@ -227,7 +224,7 @@ object SchemaRules {
         else -> Note.NONE
     }
 
-    /** A password field's placeholder (schema_form.rs). */
+    /** A password field's placeholder. */
     fun passwordPlaceholder(field: SchemaField, values: JsonObject): String = when {
         isLocked(field, values) -> "set by environment"
         isSaved(field, values) -> "saved – paste a new value to replace"
@@ -239,10 +236,12 @@ object SchemaRules {
 
     /**
      * Show (and Copy) for a saved secret: when the server lets its owner see saved secrets ([canReveal]: the
-     * "reveal" feature of /api/auth/info, for the owner), the field has a value, and it is not the WireGuard config.
-     * The web shows them for values set by environment variables too (read-only, but viewable).
+     * server's reveal feature, for the owner), the field has a value, and its key is not one of [neverShown] (secrets
+     * the app never shows again, which its server refuses too). Values set by environment variables can be shown too
+     * (read-only, but viewable).
      */
-    fun canShow(field: SchemaField, values: JsonObject, canReveal: Boolean): Boolean = canReveal && field.isSecret && isSaved(field, values) && field.key != WIREGUARD_KEY
+    fun canShow(field: SchemaField, values: JsonObject, canReveal: Boolean, neverShown: Set<String> = emptySet()): Boolean =
+        canReveal && field.isSecret && isSaved(field, values) && field.key !in neverShown
 
     // ---- the cards a server has ------------------------------------------------------------------------------
 
@@ -254,19 +253,20 @@ object SchemaRules {
         section.groups.map { it to visibleFields(it, values) }.filter { it.second.isNotEmpty() }
 
     /**
-     * A card's fields in the order they are drawn: the `vpn_` fields (Soulseek's VPN) as a block of their own at the
-     * place of the first one, the others before and after it (schema_form.rs `fields_html`).
+     * A card's fields in the order they are drawn: the fields whose key starts with a block's prefix (a card's
+     * [FieldBlock]) as a block of their own at the place of the first one, the others before and after it.
      */
-    data class Layout(val before: List<SchemaField>, val vpn: List<SchemaField>, val after: List<SchemaField>)
+    data class Layout(val before: List<SchemaField>, val block: List<SchemaField>, val after: List<SchemaField>)
 
-    /** The fields of a card split around the VPN block: before it, in it (`vpn_` keys) and after it. */
-    fun layout(fields: List<SchemaField>): Layout {
-        val isVpn = { f: SchemaField -> f.key.startsWith("vpn_") }
-        val at = fields.indexOfFirst(isVpn)
+    /** The fields of a card split around the block of [blockPrefix] keys: before it, in it and after it (no prefix: no block). */
+    fun layout(fields: List<SchemaField>, blockPrefix: String? = null): Layout {
+        if (blockPrefix.isNullOrEmpty()) return Layout(fields, emptyList(), emptyList())
+        val inBlock = { f: SchemaField -> f.key.startsWith(blockPrefix) }
+        val at = fields.indexOfFirst(inBlock)
         if (at < 0) return Layout(fields, emptyList(), emptyList())
-        val rest = fields.filterNot(isVpn)
+        val rest = fields.filterNot(inBlock)
         val cut = minOf(at, rest.size)
-        return Layout(rest.subList(0, cut), fields.filter(isVpn), rest.subList(cut, rest.size))
+        return Layout(rest.subList(0, cut), fields.filter(inBlock), rest.subList(cut, rest.size))
     }
 
     /** Whether a card has advanced fields (they wait behind "Show advanced"). */
@@ -277,7 +277,7 @@ object SchemaRules {
     /**
      * What Save sends for [field], or null when it sends nothing for it: nothing typed, the value unchanged, an
      * environment variable sets it, an empty secret (keeps the saved one), a mask the server sent, or the secret
-     * that Show put in the field, unchanged ([revealed]). The web's body shape (schema_form.rs `form_values`): a
+     * that Show put in the field, unchanged ([revealed]). The web's body shape: a
      * switch as true/false, `checks` as comma-separated values, a secret trimmed, text, selects and paths as text,
      * and a number as a JSON number (the server reads "5" and 5 alike; an empty number field sends "", which the
      * server reads as the default, like the web). A number that doesn't parse sends nothing ([numberError] says so).
@@ -329,7 +329,7 @@ object SchemaRules {
     fun invalid(fields: List<SchemaField>, values: JsonObject, drafts: Map<String, String>): List<SchemaField> =
         fields.filter { f -> f.kind == "number" && !isLocked(f, values) && drafts[f.key]?.let { numberError(it) } != null }
 
-    /** The answer of PUT /api/settings without its `_warnings`: the values from now on. */
+    /** The answer of PUT <settings> without its `_warnings`: the values from now on. */
     fun withoutWarnings(answer: JsonObject): JsonObject = JsonObject(answer.filterKeys { it != "_warnings" })
 
     /** The `_warnings` of a PUT answer, as lines under the card (a folder the server can't write to, with the chown line). */
@@ -338,7 +338,7 @@ object SchemaRules {
         .filter { it.isNotEmpty() }
         .map { ResultLine(false, it) }
 
-    /** A Test's answer `{ok, message}` as its line ("Connected" / "Failed" when it has no message), as mod.rs `test_result`. */
+    /** A Test's answer `{ok, message}` as its line ("Connected" / "Failed" when it has no message). */
     fun testLine(answer: JsonObject): ResultLine {
         val ok = truthy(answer["ok"])
         val msg = answer["message"].let {

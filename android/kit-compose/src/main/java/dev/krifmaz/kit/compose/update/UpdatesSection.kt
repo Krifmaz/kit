@@ -46,7 +46,7 @@ import dev.krifmaz.kit.compose.update.UpdateRules.Phase
 import dev.krifmaz.kit.compose.widgets.SmallButton
 
 /**
- * Settings → This device → Updates (the web's "Updates" block of This computer, for the phone): the version, "Look
+ * The Updates section of the app's settings: the version, "Look
  * for a new version when <app> starts", the updater's line, Check for updates, Install <version> with the notes of
  * the release ("What changed in …") and View on GitHub. [Updater] does the work.
  */
