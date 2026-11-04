@@ -11,124 +11,123 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
 class SchemaRulesTest {
     // one card of the answer as Config::schema writes it (docs/contracts/settings-schema.md): every attribute present
-    private val torznab = """
-        {"sections":[{"id":"apps","title":"Apps & sources","aliases":["downloads","tagging"],"groups":[
-          {"id":"torznab","title":"Torrents & Usenet (Prowlarr)","part":"Download sources","desc":"Searches your indexers",
-           "test":"torznab","test_label":"Test connection","fields":[
-            {"key":"torrent_client","label":"Torrent client","help":null,"type":"select",
-             "options":[{"value":"qbittorrent","label":"qBittorrent"},{"value":"transmission","label":"Transmission"}],
-             "when":null,"secret":false,"env":"TORRENT_CLIENT","env_locked":false,"default":"qbittorrent","unit":null,
+    private val mail = """
+        {"sections":[{"id":"connections","title":"Connections","aliases":["storage","sharing"],"groups":[
+          {"id":"mail","title":"Email","part":"Notifications","desc":"Sends the app's emails",
+           "test":"mail","test_label":"Test connection","fields":[
+            {"key":"mail_mode","label":"How to send","help":null,"type":"select",
+             "options":[{"value":"smtp","label":"SMTP"},{"value":"api","label":"Mail API"}],
+             "when":null,"secret":false,"env":"MAIL_MODE","env_locked":false,"default":"smtp","unit":null,
              "min":null,"max":null,"step":null,"full":false,"advanced":false},
-            {"key":"qbit_password","label":"qBittorrent password","help":null,"type":"password","options":[],
-             "when":"torrent_client=qbittorrent","secret":true,"env":"QBIT_PASSWORD","env_locked":false,"default":"",
+            {"key":"smtp_password","label":"SMTP password","help":null,"type":"password","options":[],
+             "when":"mail_mode=smtp","secret":true,"env":"SMTP_PASSWORD","env_locked":false,"default":"",
              "unit":null,"min":null,"max":null,"step":null,"full":false,"advanced":false},
-            {"key":"transmission_url","label":"Transmission address","help":"Where Transmission answers","type":"url",
-             "options":[],"when":"torrent_client=transmission","secret":false,"env":null,"env_locked":false,"default":"",
+            {"key":"api_url","label":"Mail API address","help":"Where the mail API answers","type":"url",
+             "options":[],"when":"mail_mode=api","secret":false,"env":null,"env_locked":false,"default":"",
              "unit":null,"min":null,"max":null,"step":null,"full":false,"advanced":false},
-            {"key":"soulseek_port","label":"Listening port","help":null,"type":"number","options":[],"when":null,
-             "secret":false,"env":"SOULSEEK_PORT","env_locked":false,"default":2234,"unit":null,"min":1,"max":65535,
+            {"key":"smtp_port","label":"Port","help":null,"type":"number","options":[],"when":null,
+             "secret":false,"env":"SMTP_PORT","env_locked":false,"default":2234,"unit":null,"min":1,"max":65535,
              "step":null,"full":false,"advanced":false},
-            {"key":"musicbrainz_rate","label":"MusicBrainz requests per second","help":null,"type":"number","options":[],
-             "when":null,"secret":false,"env":"MUSICBRAINZ_RATE","env_locked":true,"default":1.0,"unit":"requests per second",
+            {"key":"send_rate","label":"Emails per second","help":null,"type":"number","options":[],
+             "when":null,"secret":false,"env":"SEND_RATE","env_locked":true,"default":1.0,"unit":"emails per second",
              "min":0,"max":null,"step":0.1,"full":false,"advanced":false},
-            {"key":"release_types","label":"Kinds to request","help":null,"type":"checks",
-             "options":[{"value":"Album","label":"Album"},{"value":"EP","label":"EP"},{"value":"Spokenword","label":"Spoken word"}],
-             "when":null,"secret":false,"env":null,"env_locked":false,"default":"Album,EP","unit":null,"min":null,"max":null,
+            {"key":"notify_on","label":"Send an email for","help":null,"type":"checks",
+             "options":[{"value":"Signup","label":"Signup"},{"value":"Report","label":"Report"},{"value":"Weeklydigest","label":"Weekly digest"}],
+             "when":null,"secret":false,"env":null,"env_locked":false,"default":"Signup,Report","unit":null,"min":null,"max":null,
              "step":null,"full":true,"advanced":false},
-            {"key":"auto_approve","label":"Approve requests on their own","help":null,"type":"bool","options":[],"when":null,
+            {"key":"auto_send","label":"Send without asking","help":null,"type":"bool","options":[],"when":null,
              "secret":false,"env":null,"env_locked":false,"default":false,"unit":null,"min":null,"max":null,"step":null,
              "full":false,"advanced":false},
-            {"key":"streamrip_command","label":"Command template (advanced)","help":null,"type":"text","options":[],
-             "when":null,"secret":false,"env":null,"env_locked":false,"default":"rip","unit":null,"min":null,"max":null,
+            {"key":"mail_command","label":"Command (advanced)","help":null,"type":"text","options":[],
+             "when":null,"secret":false,"env":null,"env_locked":false,"default":"sendmail","unit":null,"min":null,"max":null,
              "step":null,"full":true,"advanced":true,"some_later_attribute":{"x":1}}
           ]}]},
           {"id":"blocked","title":"Blocked","aliases":[],"groups":[]}]}
     """.trimIndent()
 
-    private val schema: SettingsSchema = KitJson.decodeFromString(SettingsSchema.serializer(), torznab)
-    private val card: SchemaGroup = schema.group("torznab")!!
+    private val schema: SettingsSchema = KitJson.decodeFromString(SettingsSchema.serializer(), mail)
+    private val card: SchemaGroup = schema.group("mail")!!
     private fun f(key: String): SchemaField = card.field(key)!!
 
-    // GET /api/admin/settings: values with `_meta`
+    // GET <settings>: values with `_meta`
     private val values: JsonObject = KitJson.parseToJsonElement(
         """
-        {"torrent_client":"qbittorrent","qbit_password":"•••• (saved)","transmission_url":"","soulseek_port":2234,
-         "musicbrainz_rate":1.0,"release_types":"Album,EP","auto_approve":false,"streamrip_command":"rip",
-         "_meta":{"torrent_client":{"source":"ui","env":"TORRENT_CLIENT"},
-                  "qbit_password":{"source":"ui","env":"QBIT_PASSWORD"},
-                  "transmission_url":{"source":"default","env":null},
-                  "soulseek_port":{"source":"default","env":"SOULSEEK_PORT"},
-                  "musicbrainz_rate":{"source":"env","env":"MUSICBRAINZ_RATE"},
-                  "release_types":{"source":"default","env":null},
-                  "auto_approve":{"source":"env","env":"ENCORE_AUTO_APPROVE"},
-                  "streamrip_command":{"source":"default","env":null}}}
+        {"mail_mode":"smtp","smtp_password":"•••• (saved)","api_url":"","smtp_port":2234,
+         "send_rate":1.0,"notify_on":"Signup,Report","auto_send":false,"mail_command":"sendmail",
+         "_meta":{"mail_mode":{"source":"ui","env":"MAIL_MODE"},
+                  "smtp_password":{"source":"ui","env":"SMTP_PASSWORD"},
+                  "api_url":{"source":"default","env":null},
+                  "smtp_port":{"source":"default","env":"SMTP_PORT"},
+                  "send_rate":{"source":"env","env":"SEND_RATE"},
+                  "notify_on":{"source":"default","env":null},
+                  "auto_send":{"source":"env","env":"APP_AUTO_SEND"},
+                  "mail_command":{"source":"default","env":null}}}
         """,
     ).jsonObject
 
     @Test
     fun theAnswerDecodesWithEveryAttribute() {
-        assertEquals(listOf("apps", "blocked"), schema.sections.map { it.id })
-        assertEquals(listOf("downloads", "tagging"), schema.section("apps")!!.aliases)
+        assertEquals(listOf("connections", "blocked"), schema.sections.map { it.id })
+        assertEquals(listOf("storage", "sharing"), schema.section("connections")!!.aliases)
         assertTrue(schema.section("blocked")!!.groups.isEmpty())
-        assertEquals("Download sources", card.part)
-        assertEquals("torznab", card.test)
+        assertEquals("Notifications", card.part)
+        assertEquals("mail", card.test)
         assertEquals("Test connection", SchemaRules.testLabel(card))
-        val pw = f("qbit_password")
+        val pw = f("smtp_password")
         assertEquals("password", pw.kind)
-        assertEquals("torrent_client=qbittorrent", pw.rule)
+        assertEquals("mail_mode=smtp", pw.rule)
         assertTrue(pw.secret && pw.isSecret)
         assertEquals("", pw.help) // null reads as ""
-        assertEquals("", f("transmission_url").env)
-        val port = f("soulseek_port")
+        assertEquals("", f("api_url").env)
+        val port = f("smtp_port")
         assertEquals(1.0, port.min!!, 0.0)
         assertEquals(65535.0, port.max!!, 0.0)
         assertNull(port.step)
         assertEquals(JsonPrimitive(2234), port.default)
-        assertEquals(0.1, f("musicbrainz_rate").step!!, 0.0)
-        assertTrue(f("musicbrainz_rate").envLocked)
-        assertEquals(listOf("Album", "EP", "Spokenword"), f("release_types").options.map { it.value })
-        assertTrue(f("streamrip_command").advanced) // and an attribute this app doesn't know is skipped
+        assertEquals(0.1, f("send_rate").step!!, 0.0)
+        assertTrue(f("send_rate").envLocked)
+        assertEquals(listOf("Signup", "Report", "Weeklydigest"), f("notify_on").options.map { it.value })
+        assertTrue(f("mail_command").advanced) // and an attribute this app doesn't know is skipped
         assertEquals(JsonNull, SchemaField(key = "x").default)
     }
 
     @Test
     fun linksOpenThePageOfAnAliasOrACard() {
-        // this answer is a server's before R2: downloads was an alias of Apps & sources
-        assertEquals("apps", schema.pageOf("apps"))
-        assertEquals("apps", schema.pageOf("downloads"))
-        assertEquals("apps", schema.pageOf("torznab"))
+        // storage is an alias of the Connections page
+        assertEquals("connections", schema.pageOf("connections"))
+        assertEquals("connections", schema.pageOf("storage"))
+        assertEquals("connections", schema.pageOf("mail"))
         assertEquals("users", schema.pageOf("users"))
     }
 
     @Test
     fun aPageIdWinsOverAnAliasOrACardOfTheSameName() {
-        // R2: Library holds a card called library too; a page's own id is looked up first, then aliases, then cards
+        // Files holds a card called files too; a page's own id is looked up first, then aliases, then cards
         val split = KitJson.decodeFromString(
             SettingsSchema.serializer(),
             """
             {"sections":[
-              {"id":"general","title":"General","aliases":["library"],"groups":[{"id":"downloads","title":"x"}]},
-              {"id":"library","title":"Library","aliases":["tagging"],"groups":[{"id":"verify","title":"y"}]},
-              {"id":"downloads","title":"Downloads","aliases":["apps"],"groups":[{"id":"tagging","title":"z"}]}]}
+              {"id":"general","title":"General","aliases":["files"],"groups":[{"id":"storage","title":"x"}]},
+              {"id":"files","title":"Files","aliases":["sharing"],"groups":[{"id":"quota","title":"y"}]},
+              {"id":"storage","title":"Storage","aliases":["connections"],"groups":[{"id":"sharing","title":"z"}]}]}
             """.trimIndent(),
         )
-        assertEquals("library", split.pageOf("library"))
-        assertEquals("downloads", split.pageOf("downloads"))
-        assertEquals("library", split.pageOf("tagging"))
-        assertEquals("downloads", split.pageOf("apps"))
-        assertEquals("library", split.pageOf("verify"))
+        assertEquals("files", split.pageOf("files"))
+        assertEquals("storage", split.pageOf("storage"))
+        assertEquals("files", split.pageOf("sharing"))
+        assertEquals("storage", split.pageOf("connections"))
+        assertEquals("files", split.pageOf("quota"))
     }
 
     @Test
     fun whenRulesParseAndFollowTheUnsavedSelect() {
-        assertEquals(SchemaRules.When("torrent_client", "qbittorrent", true), SchemaRules.parseWhen("torrent_client=qbittorrent"))
-        assertEquals(SchemaRules.When("nzb_client", "none", false), SchemaRules.parseWhen("nzb_client!=none"))
+        assertEquals(SchemaRules.When("mail_mode", "smtp", true), SchemaRules.parseWhen("mail_mode=smtp"))
+        assertEquals(SchemaRules.When("backup_mode", "none", false), SchemaRules.parseWhen("backup_mode!=none"))
         assertEquals(SchemaRules.When("a", "b", true), SchemaRules.parseWhen(" a = b "))
         for (bad in listOf(null, "", "   ", "novalue", "=x", "k=", "k!=")) assertNull(bad, SchemaRules.parseWhen(bad))
         assertTrue(SchemaRules.When("k", "v", true).shows("v"))
@@ -138,16 +137,16 @@ class SchemaRulesTest {
 
         val drafts = HashMap<String, String>()
         val shown = { key: String -> SchemaRules.isShown(f(key)) { k -> SchemaRules.current(k, values, drafts) } }
-        assertTrue(shown("qbit_password"))
-        assertFalse(shown("transmission_url"))
-        assertTrue(shown("soulseek_port")) // no rule
-        drafts["torrent_client"] = "transmission" // chosen, not saved yet
-        assertFalse(shown("qbit_password"))
-        assertTrue(shown("transmission_url"))
+        assertTrue(shown("smtp_password"))
+        assertFalse(shown("api_url"))
+        assertTrue(shown("smtp_port")) // no rule
+        drafts["mail_mode"] = "api" // chosen, not saved yet
+        assertFalse(shown("smtp_password"))
+        assertTrue(shown("api_url"))
     }
 
     @Test
-    fun valuesReadAsTheWebReadsThem() {
+    fun valuesReadAsJavaScriptReadsThem() {
         assertEquals("2", SchemaRules.textOf(JsonPrimitive(2)))
         assertEquals("1", SchemaRules.textOf(KitJson.parseToJsonElement("1.0")))
         assertEquals("0.85", SchemaRules.textOf(KitJson.parseToJsonElement("0.85")))
@@ -161,10 +160,10 @@ class SchemaRulesTest {
         assertTrue(SchemaRules.truthy(JsonPrimitive("•••• (saved)")))
         assertTrue(SchemaRules.truthy(JsonPrimitive("0"))) // a non-empty string, as in JavaScript
 
-        assertEquals("", SchemaRules.initialText(f("qbit_password"), values)) // a secret starts empty
-        assertEquals("false", SchemaRules.initialText(f("auto_approve"), values))
-        assertEquals("2234", SchemaRules.initialText(f("soulseek_port"), values))
-        assertEquals("1", SchemaRules.initialText(f("musicbrainz_rate"), values))
+        assertEquals("", SchemaRules.initialText(f("smtp_password"), values)) // a secret starts empty
+        assertEquals("false", SchemaRules.initialText(f("auto_send"), values))
+        assertEquals("2234", SchemaRules.initialText(f("smtp_port"), values))
+        assertEquals("1", SchemaRules.initialText(f("send_rate"), values))
     }
 
     @Test
@@ -181,12 +180,12 @@ class SchemaRulesTest {
         assertEquals("Enter a number", SchemaRules.numberError("twelve"))
         assertEquals(JsonPrimitive(65535L), SchemaRules.numberJson(65535.0))
         assertEquals(JsonPrimitive(0.25), SchemaRules.numberJson(0.25))
-        assertNull(SchemaRules.rangeNote(f("soulseek_port"), "2234"))
-        assertEquals("Usually 1 to 65535", SchemaRules.rangeNote(f("soulseek_port"), "70000"))
-        assertEquals("Usually 0 or more", SchemaRules.rangeNote(f("musicbrainz_rate"), "-1"))
-        assertNull(SchemaRules.rangeNote(f("soulseek_port"), "x"))
-        assertTrue(SchemaRules.needsDecimalKeys(f("musicbrainz_rate")))
-        assertFalse(SchemaRules.needsDecimalKeys(f("soulseek_port")))
+        assertNull(SchemaRules.rangeNote(f("smtp_port"), "2234"))
+        assertEquals("Usually 1 to 65535", SchemaRules.rangeNote(f("smtp_port"), "70000"))
+        assertEquals("Usually 0 or more", SchemaRules.rangeNote(f("send_rate"), "-1"))
+        assertNull(SchemaRules.rangeNote(f("smtp_port"), "x"))
+        assertTrue(SchemaRules.needsDecimalKeys(f("send_rate")))
+        assertFalse(SchemaRules.needsDecimalKeys(f("smtp_port")))
     }
 
     @Test
@@ -196,56 +195,56 @@ class SchemaRulesTest {
         assertEquals(JsonObject(emptyMap()), SchemaRules.changes(fields, values, drafts))
 
         // typed back to what is saved: nothing to send
-        drafts["torrent_client"] = "qbittorrent"
-        drafts["soulseek_port"] = "2234.0"
-        drafts["release_types"] = "EP,Album"
-        drafts["transmission_url"] = ""
-        drafts["streamrip_command"] = "rip"
+        drafts["mail_mode"] = "smtp"
+        drafts["smtp_port"] = "2234.0"
+        drafts["notify_on"] = "Report,Signup"
+        drafts["api_url"] = ""
+        drafts["mail_command"] = "sendmail"
         assertEquals(JsonObject(emptyMap()), SchemaRules.changes(fields, values, drafts))
 
-        drafts["torrent_client"] = "transmission"
-        drafts["transmission_url"] = "http://transmission:9091" // hidden until the select changed; saved with its card
-        drafts["soulseek_port"] = "50300"
-        drafts["release_types"] = "Album,EP,Spokenword"
-        drafts["streamrip_command"] = "rip --quiet" // an advanced field behind Show advanced is still saved
+        drafts["mail_mode"] = "api"
+        drafts["api_url"] = "http://mail:8025" // hidden until the select changed; saved with its card
+        drafts["smtp_port"] = "50300"
+        drafts["notify_on"] = "Signup,Report,Weeklydigest"
+        drafts["mail_command"] = "sendmail -t" // an advanced field behind Show advanced is still saved
         val body = SchemaRules.changes(fields, values, drafts)
         assertEquals(
-            listOf("torrent_client", "transmission_url", "soulseek_port", "release_types", "streamrip_command"),
+            listOf("mail_mode", "api_url", "smtp_port", "notify_on", "mail_command"),
             body.keys.toList(),
         ) // the card's order
-        assertEquals(JsonPrimitive("transmission"), body["torrent_client"])
-        assertEquals(JsonPrimitive(50300L), body["soulseek_port"]) // a number as a number
-        assertEquals(JsonPrimitive("Album,EP,Spokenword"), body["release_types"]) // checks as comma-separated text
+        assertEquals(JsonPrimitive("api"), body["mail_mode"])
+        assertEquals(JsonPrimitive(50300L), body["smtp_port"]) // a number as a number
+        assertEquals(JsonPrimitive("Signup,Report,Weeklydigest"), body["notify_on"]) // checks as comma-separated text
     }
 
     @Test
     fun switchesChecksAndNumbers() {
         val open = values.toMutableMap().also { it["_meta"] = JsonObject(emptyMap()) }.let(::JsonObject)
-        val sw = f("auto_approve")
+        val sw = f("auto_send")
         assertNull(SchemaRules.changedValue(sw, open, "false"))
         assertEquals(JsonPrimitive(true), SchemaRules.changedValue(sw, open, SchemaRules.textFor(true)))
 
-        // checks compare without case, spaces and punctuation: a saved "Spoken word" ticks "Spokenword"
-        val rt = f("release_types")
-        val saved = JsonObject(mapOf("release_types" to JsonPrimitive("album, Spoken word")))
-        assertEquals(setOf("Album", "Spokenword"), SchemaRules.ticked(rt, "album, Spoken word"))
-        assertNull(SchemaRules.changedValue(rt, saved, "Album,Spokenword"))
-        assertEquals("Album,EP", SchemaRules.toggle(rt, "EP", "Album", true)) // in the options' order
-        assertEquals("EP", SchemaRules.toggle(rt, "Album,EP", "Album", false))
+        // checks compare without case, spaces and punctuation: a saved "Weekly digest" ticks "Weeklydigest"
+        val rt = f("notify_on")
+        val saved = JsonObject(mapOf("notify_on" to JsonPrimitive("signup, Weekly digest")))
+        assertEquals(setOf("Signup", "Weeklydigest"), SchemaRules.ticked(rt, "signup, Weekly digest"))
+        assertNull(SchemaRules.changedValue(rt, saved, "Signup,Weeklydigest"))
+        assertEquals("Signup,Report", SchemaRules.toggle(rt, "Report", "Signup", true)) // in the options' order
+        assertEquals("Report", SchemaRules.toggle(rt, "Signup,Report", "Signup", false))
         assertEquals(JsonPrimitive(""), SchemaRules.changedValue(rt, saved, ""))
 
-        // an emptied number sends "" (the server's default, like the web); one that doesn't parse sends nothing
-        val port = f("soulseek_port")
+        // an emptied number sends "" (the server's default); one that doesn't parse sends nothing
+        val port = f("smtp_port")
         assertEquals(JsonPrimitive(""), SchemaRules.changedValue(port, open, " "))
         assertNull(SchemaRules.changedValue(port, open, "lots"))
-        assertEquals(listOf("soulseek_port"), SchemaRules.invalid(card.fields, open, mapOf("soulseek_port" to "lots")).map { it.key })
-        assertTrue(SchemaRules.invalid(card.fields, open, mapOf("soulseek_port" to "")).isEmpty())
+        assertEquals(listOf("smtp_port"), SchemaRules.invalid(card.fields, open, mapOf("smtp_port" to "lots")).map { it.key })
+        assertTrue(SchemaRules.invalid(card.fields, open, mapOf("smtp_port" to "")).isEmpty())
         assertEquals(JsonPrimitive(0.5), SchemaRules.changedValue(port, open, "0,5"))
     }
 
     @Test
     fun secretsKeepTheSavedValue() {
-        val pw = f("qbit_password")
+        val pw = f("smtp_password")
         assertNull(SchemaRules.changedValue(pw, values, null))
         assertNull(SchemaRules.changedValue(pw, values, ""))
         assertNull(SchemaRules.changedValue(pw, values, "   ")) // empty keeps the saved one
@@ -258,61 +257,66 @@ class SchemaRulesTest {
 
     @Test
     fun environmentLocksAField() {
-        // _meta says env (auto_approve), or the schema does (musicbrainz_rate)
-        assertTrue(SchemaRules.isLocked(f("auto_approve"), values))
-        assertTrue(SchemaRules.isLocked(f("musicbrainz_rate"), values))
-        assertFalse(SchemaRules.isLocked(f("soulseek_port"), values))
-        assertNull(SchemaRules.changedValue(f("auto_approve"), values, "true"))
-        assertNull(SchemaRules.changedValue(f("musicbrainz_rate"), values, "3"))
-        assertTrue(SchemaRules.invalid(card.fields, values, mapOf("musicbrainz_rate" to "x")).isEmpty())
-        assertEquals("ENCORE_AUTO_APPROVE", SchemaRules.envOf(f("auto_approve"), values)) // _meta first
+        // _meta says env (auto_send), or the schema does (send_rate)
+        assertTrue(SchemaRules.isLocked(f("auto_send"), values))
+        assertTrue(SchemaRules.isLocked(f("send_rate"), values))
+        assertFalse(SchemaRules.isLocked(f("smtp_port"), values))
+        assertNull(SchemaRules.changedValue(f("auto_send"), values, "true"))
+        assertNull(SchemaRules.changedValue(f("send_rate"), values, "3"))
+        assertTrue(SchemaRules.invalid(card.fields, values, mapOf("send_rate" to "x")).isEmpty())
+        assertEquals("APP_AUTO_SEND", SchemaRules.envOf(f("auto_send"), values)) // _meta first
         // the hand-written pages read the same `_meta` by key
-        assertEquals("env", SchemaRules.source(values, "auto_approve"))
-        assertEquals("ENCORE_AUTO_APPROVE", SchemaRules.envVar(values, "auto_approve"))
-        assertEquals("", SchemaRules.envVar(values, "release_types"))
+        assertEquals("env", SchemaRules.source(values, "auto_send"))
+        assertEquals("APP_AUTO_SEND", SchemaRules.envVar(values, "auto_send"))
+        assertEquals("", SchemaRules.envVar(values, "notify_on"))
         assertEquals("", SchemaRules.envVar(values, "no_such_key"))
-        assertEquals("set by environment", SchemaRules.passwordPlaceholder(f("qbit_password").copy(envLocked = true), values))
+        assertEquals("set by environment", SchemaRules.passwordPlaceholder(f("smtp_password").copy(envLocked = true), values))
     }
 
     @Test
     fun theNoteUnderAField() {
-        assertEquals(Note.LOCKED, SchemaRules.note(f("auto_approve"), values))
-        assertEquals(Note.SAVED_SECRET, SchemaRules.note(f("qbit_password"), values))
-        val unset = JsonObject(values + ("qbit_password" to JsonPrimitive("")))
-        assertEquals(Note.UNSET_SECRET, SchemaRules.note(f("qbit_password"), unset))
-        assertEquals(Note.NONE, SchemaRules.note(f("torrent_client"), values)) // saved in Settings
-        assertEquals(Note.DEFAULT_ENV, SchemaRules.note(f("soulseek_port"), values))
-        assertEquals(Note.NONE, SchemaRules.note(f("transmission_url"), values)) // no variable
+        assertEquals(Note.LOCKED, SchemaRules.note(f("auto_send"), values))
+        assertEquals(Note.SAVED_SECRET, SchemaRules.note(f("smtp_password"), values))
+        val unset = JsonObject(values + ("smtp_password" to JsonPrimitive("")))
+        assertEquals(Note.UNSET_SECRET, SchemaRules.note(f("smtp_password"), unset))
+        assertEquals(Note.NONE, SchemaRules.note(f("mail_mode"), values)) // saved in Settings
+        assertEquals(Note.DEFAULT_ENV, SchemaRules.note(f("smtp_port"), values))
+        assertEquals(Note.NONE, SchemaRules.note(f("api_url"), values)) // no variable
 
-        assertEquals("saved – paste a new value to replace", SchemaRules.passwordPlaceholder(f("qbit_password"), values))
-        assertEquals("not set", SchemaRules.passwordPlaceholder(f("qbit_password"), unset))
-        assertTrue(SchemaRules.canShow(f("qbit_password"), values, canReveal = true))
-        assertFalse(SchemaRules.canShow(f("qbit_password"), values, canReveal = false))
-        assertFalse(SchemaRules.canShow(f("qbit_password"), unset, canReveal = true))
-        assertFalse(SchemaRules.canShow(f("transmission_url"), values, canReveal = true)) // not a secret
-        val wg = SchemaField(key = "vpn_wireguard_config", kind = "textarea", secret = true)
-        assertFalse(SchemaRules.canShow(wg, JsonObject(mapOf(wg.key to JsonPrimitive("•••• (saved)"))), canReveal = true))
+        assertEquals("saved – paste a new value to replace", SchemaRules.passwordPlaceholder(f("smtp_password"), values))
+        assertEquals("not set", SchemaRules.passwordPlaceholder(f("smtp_password"), unset))
+        assertTrue(SchemaRules.canShow(f("smtp_password"), values, canReveal = true))
+        assertFalse(SchemaRules.canShow(f("smtp_password"), values, canReveal = false))
+        assertFalse(SchemaRules.canShow(f("smtp_password"), unset, canReveal = true))
+        assertFalse(SchemaRules.canShow(f("api_url"), values, canReveal = true)) // not a secret
+        val wg = SchemaField(key = "tunnel_config", kind = "textarea", secret = true)
+        val wgSaved = JsonObject(mapOf(wg.key to JsonPrimitive("•••• (saved)")))
+        assertTrue(SchemaRules.canShow(wg, wgSaved, canReveal = true))
+        assertFalse(SchemaRules.canShow(wg, wgSaved, canReveal = true, neverShown = setOf("tunnel_config"))) // the app's never-shown secret
         assertEquals("Saved – paste to replace", SchemaRules.textareaPlaceholder(wg, JsonObject(mapOf(wg.key to JsonPrimitive("•••• (saved)")))))
     }
 
     @Test
-    fun cardsAndTheVpnBlock() {
+    fun cardsAndAFieldBlock() {
         // a field the server's values lack is left out; a card with none left goes
-        val few = JsonObject(mapOf("torrent_client" to JsonPrimitive("qbittorrent"), "auto_approve" to JsonPrimitive(false)))
-        val cards = SchemaRules.visibleCards(schema.section("apps")!!, few)
-        assertEquals(listOf("torznab"), cards.map { it.first.id })
-        assertEquals(listOf("torrent_client", "auto_approve"), cards[0].second.map { it.key })
-        assertTrue(SchemaRules.visibleCards(schema.section("apps")!!, JsonObject(emptyMap())).isEmpty())
+        val few = JsonObject(mapOf("mail_mode" to JsonPrimitive("smtp"), "auto_send" to JsonPrimitive(false)))
+        val cards = SchemaRules.visibleCards(schema.section("connections")!!, few)
+        assertEquals(listOf("mail"), cards.map { it.first.id })
+        assertEquals(listOf("mail_mode", "auto_send"), cards[0].second.map { it.key })
+        assertTrue(SchemaRules.visibleCards(schema.section("connections")!!, JsonObject(emptyMap())).isEmpty())
         assertTrue(SchemaRules.hasAdvanced(card.fields))
 
         val k = { key: String -> SchemaField(key = key) }
-        val l = SchemaRules.layout(listOf(k("slskd_enabled"), k("vpn_enabled"), k("vpn_wireguard_config"), k("slskd_min_bitrate"), k("vpn_kill_switch")))
-        assertEquals(listOf("slskd_enabled"), l.before.map { it.key })
-        assertEquals(listOf("vpn_enabled", "vpn_wireguard_config", "vpn_kill_switch"), l.vpn.map { it.key })
-        assertEquals(listOf("slskd_min_bitrate"), l.after.map { it.key })
-        val none = SchemaRules.layout(listOf(k("a"), k("b")))
-        assertEquals(listOf("a", "b"), none.before.map { it.key })
-        assertTrue(none.vpn.isEmpty() && none.after.isEmpty())
+        val keys = listOf(k("sync_enabled"), k("tunnel_enabled"), k("tunnel_config"), k("sync_interval"), k("tunnel_kill_switch"))
+        val l = SchemaRules.layout(keys, "tunnel_")
+        assertEquals(listOf("sync_enabled"), l.before.map { it.key })
+        assertEquals(listOf("tunnel_enabled", "tunnel_config", "tunnel_kill_switch"), l.block.map { it.key })
+        assertEquals(listOf("sync_interval"), l.after.map { it.key })
+        // no prefix, or none of its keys: every field in order, no block
+        for (none in listOf(SchemaRules.layout(keys), SchemaRules.layout(listOf(k("a"), k("b")), "tunnel_"))) {
+            assertTrue(none.block.isEmpty() && none.after.isEmpty())
+        }
+        assertEquals(listOf("a", "b"), SchemaRules.layout(listOf(k("a"), k("b")), "tunnel_").before.map { it.key })
     }
 
     @Test
@@ -320,58 +324,41 @@ class SchemaRulesTest {
         fun o(s: String) = KitJson.parseToJsonElement(s).jsonObject
         assertEquals(ResultLine(true, "Connected"), SchemaRules.testLine(o("""{"ok":true}""")))
         assertEquals(ResultLine(false, "Failed"), SchemaRules.testLine(o("""{"ok":false,"message":""}""")))
-        assertEquals(ResultLine(true, "Prowlarr 1.2 · 3 indexers"), SchemaRules.testLine(o("""{"ok":true,"message":"Prowlarr 1.2 · 3 indexers"}""")))
+        assertEquals(ResultLine(true, "Mail server 1.2 · ready"), SchemaRules.testLine(o("""{"ok":true,"message":"Mail server 1.2 · ready"}""")))
         assertEquals(ResultLine(false, "Test failed"), SchemaRules.testFailed(" "))
         assertEquals(ResultLine(false, "Admin only"), SchemaRules.testFailed("Admin only"))
 
-        val answer = o("""{"library_path":"/music","_warnings":[{"key":"library_path","message":"Encore can't write to /music"},{"key":"x"}]}""")
-        assertEquals(listOf(ResultLine(false, "Encore can't write to /music")), SchemaRules.warnings(answer))
-        assertEquals(setOf("library_path"), SchemaRules.withoutWarnings(answer).keys)
+        val answer = o("""{"data_path":"/data","_warnings":[{"key":"data_path","message":"The app can't write to /data"},{"key":"x"}]}""")
+        assertEquals(listOf(ResultLine(false, "The app can't write to /data")), SchemaRules.warnings(answer))
+        assertEquals(setOf("data_path"), SchemaRules.withoutWarnings(answer).keys)
         assertTrue(SchemaRules.warnings(o("{}")).isEmpty())
-        assertEquals("Transmission", SchemaRules.optionLabel(f("torrent_client"), "transmission"))
-        assertEquals("deluge", SchemaRules.optionLabel(f("torrent_client"), "deluge")) // not an option: as it is
+        assertEquals("Mail API", SchemaRules.optionLabel(f("mail_mode"), "api"))
+        assertEquals("pigeon", SchemaRules.optionLabel(f("mail_mode"), "pigeon")) // not an option: as it is
     }
 
-    /** The answer the web's tests use, recorded from GET /api/admin/settings/schema (read when the repo is there). */
+    /** The demo app's settings schema (android/demo) decodes whole, and its rules hold together. */
     @Test
-    fun theRecordedServerAnswerDecodes() {
-        val file = listOf("src/test/fixtures/web-rs", "../../../web-rs", "../../web-rs", "web-rs", "../web-rs")
-            .map { File(it, "src/settings/fixtures/settings-schema.json") }
-            .firstOrNull { it.isFile }
-        assumeTrue("web-rs fixture not found from ${File(".").absolutePath}", file != null)
-        val raw = KitJson.parseToJsonElement(file!!.readText()).jsonObject
+    fun theDemoSchemaDecodesAndHoldsTogether() {
+        val file = File("../demo/src/main/assets/settings-schema.json")
+        assertTrue("demo schema not found from ${File(".").absolutePath}", file.isFile)
+        val raw = KitJson.parseToJsonElement(file.readText()).jsonObject
         val s = KitJson.decodeFromString(SettingsSchema.serializer(), file.readText())
         val rawSections = raw["sections"] as JsonArray
         assertEquals(rawSections.size, s.sections.size)
-        assertEquals("general", s.sections.first().id)
         val all = s.sections.flatMap { it.groups }.flatMap { it.fields }
         val rawCount = rawSections.sumOf { sec -> (sec.jsonObject["groups"] as JsonArray).sumOf { g -> (g.jsonObject["fields"] as JsonArray).size } }
         assertEquals(rawCount, all.size) // no field dropped
         val kinds = setOf("text", "path", "url", "password", "textarea", "number", "bool", "select", "checks")
-        assertTrue(all.map { it.kind }.toSet().toString(), kinds.containsAll(all.map { it.kind }.toSet()))
-        // every rule parses and names a select whose options hold the value (the server's build checks the same)
+        assertEquals(kinds, all.map { it.kind }.toSet()) // every kind of field shows in the demo
+        // every rule parses and names a select whose options hold the value
         for (fld in all.filter { it.rule.isNotEmpty() }) {
             val w = SchemaRules.parseWhen(fld.rule)!!
             val select = all.first { it.key == w.key }
             assertEquals("select", select.kind)
             assertTrue(fld.key, select.options.any { it.value == w.value })
         }
-        // every password is a secret, and every select and checks has options
         assertTrue(all.filter { it.kind == "password" }.all { it.secret })
         assertTrue(all.filter { it.kind == "select" || it.kind == "checks" }.all { it.options.isNotEmpty() })
         assertTrue(s.sections.flatMap { it.groups }.filter { it.test.isNotEmpty() }.all { it.testLabel.isNotEmpty() })
-        // Apps & sources is four pages since R2: its old names and its cards open the page that holds them
-        assertEquals(listOf("general", "library", "downloads", "integrations", "processing"), s.sections.take(5).map { it.id })
-        assertEquals("downloads", s.pageOf("apps"))
-        assertEquals("downloads", s.pageOf("downloads"))
-        assertEquals("downloads", s.pageOf("slskd"))
-        assertEquals("library", s.pageOf("tagging"))
-        assertEquals("library", s.pageOf("verify"))
-        assertEquals("integrations", s.pageOf("services"))
-        assertEquals("processing", s.pageOf("cadenza"))
-        // How requests are fulfilled goes on the page with the pipeline card
-        assertEquals(listOf("downloads"), s.sections.filter { sec -> sec.groups.any { it.id == "pipeline" } }.map { it.id })
-        val vpn = SchemaRules.layout(s.group("slskd")!!.fields)
-        assertTrue(vpn.vpn.map { it.key }.contains("vpn_wireguard_config"))
     }
 }

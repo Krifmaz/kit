@@ -8,7 +8,7 @@ package dev.krifmaz.kit.compose.theme
  * focus. Two ways in:
  *
  * - [FocusRingIndication]: installed as `LocalIndication` by [KitTheme], so every `Modifier.clickable` /
- *   `combinedClickable` (song rows, album tiles, the mini player…) draws the ring on top of its usual ripple.
+ *   `combinedClickable` (list rows, tiles, a bottom bar…) draws the ring on top of its usual ripple.
  * - [focusRing]: a modifier for Material components that pick their own ripple and ignore `LocalIndication`
  *   (the bottom navigation bar's items).
  */

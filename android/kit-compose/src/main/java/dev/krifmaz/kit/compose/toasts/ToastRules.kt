@@ -22,7 +22,7 @@ data class ToastItem(
 data class AppWindow(val type: Int, val shown: Boolean, val toasts: Boolean = false)
 
 /**
- * Which toasts stay and how they stack (Toasts.kt draws them), as the web's `toast` (web-rs/src/ui.rs):
+ * Which toasts stay and how they stack (Toasts.kt draws them), as the web's `toast`:
  * - an error ("err") stays until its Close and has Copy; "Copy failed – select and copy manually" goes like any
  *   other toast, as on the web;
  * - every other toast goes after [SHOW_MS];
@@ -31,8 +31,7 @@ data class AppWindow(val type: Int, val shown: Boolean, val toasts: Boolean = fa
  *   to [MAX_OTHERS];
  * - the same message again does not pile up: the toast on screen moves to the newest place and its time starts
  *   again.
- * The owner (Oct 20): "Errors show behind all other screens [...] making it really hard to copy the error before it
- * disappears."
+ * Errors must never sit behind another screen or vanish before they can be copied.
  */
 object ToastRules {
     /** The words when the clipboard refuses (that toast says what to do instead, so it has no Copy). */

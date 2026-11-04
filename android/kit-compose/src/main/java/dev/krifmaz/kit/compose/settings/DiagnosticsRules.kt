@@ -11,8 +11,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 
 /**
- * The words and reading rules of Settings → Diagnostics (Encore's SettingsRules.kt, diagnostics part; the web's
- * web-rs/src/settings/diagnostics.rs): the check groups, the plain-text report of Copy report, and the app crash
+ * The words and reading rules of Settings → Diagnostics (the same rules as kit-rules'
+ * `diagnostics`): the check groups, the plain-text report of Copy report, and the app crash
  * reports' kinds and text. Plain Kotlin, checked by JUnit tests on its own.
  *
  * The answer it reads is the server's diagnostics (contracts/diagnostics.md): `version`, `uid`, `time`, `checks`
@@ -36,7 +36,7 @@ object DiagnosticsRules {
     }
 
     /**
-     * An app crash as text, for its dialog and Copy (diagnostics.rs `crash_text`): the first line, the kind, device /
+     * An app crash as text, for its dialog and Copy: the first line, the kind, device /
      * app / os / user and the time, then the whole report.
      */
     fun crashText(first: String, kind: String, meta: String, time: String, text: String): String {
@@ -45,13 +45,13 @@ object DiagnosticsRules {
     }
 
     /**
-     * The plain-text report of Copy report: the header, every check, the app's [extra] lines (Encore: its download
-     * folders), the Server block ([serverRows] of `machine`, when the answer has one) and where each setting comes from.
+     * The plain-text report of Copy report: the header, every check, the app's [extra] lines (e.g. the folders
+     * it writes to), the Server block ([serverRows] of `machine`, when the answer has one) and where each setting comes from.
      *
      * @param last the diagnostics answer.
      * @param extra lines between the checks and the Server block.
      * @param serverRows the Server block's (label, value) rows for `machine`.
-     * @param appName the app's name in the header ("Encore 0.29.0 diagnostics (uid 1000)").
+     * @param appName the app's name in the header ("Notes 1.4.2 diagnostics (uid 1000)").
      */
     fun report(
         last: JsonObject,

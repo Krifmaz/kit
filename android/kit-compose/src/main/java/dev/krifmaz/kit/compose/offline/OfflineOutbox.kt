@@ -1,9 +1,8 @@
 package dev.krifmaz.kit.compose.offline
 
 import dev.krifmaz.kit.compose.core.arr
-import dev.krifmaz.kit.compose.core.bool
-import dev.krifmaz.kit.compose.core.dbl
 import dev.krifmaz.kit.compose.core.long
+import dev.krifmaz.kit.compose.core.obj
 import dev.krifmaz.kit.compose.core.objectsOf
 import dev.krifmaz.kit.compose.core.parseJsonObject
 import dev.krifmaz.kit.compose.core.str
@@ -16,23 +15,43 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 
-/** A play the server did not get yet: how long it played and when (Unix seconds). */
-data class OutPlay(val trackId: Long, val seconds: Double, val playedAt: Long)
-
-/** A like (`liked`) or an unlike the server did not get yet, and when the heart was pressed. */
-data class OutLike(val trackId: Long, val liked: Boolean, val at: Long)
+/**
+ * One change made while the server could not be reached, waiting to be sent.
+ *
+ * @property kind what sort of change it is, as the app names it ("comment", "vote", "rename"…); [Outbox.countsText]
+ *   says it with the app's own words.
+ * @property key what it is about (an item's id); with [kind] it tells which waiting changes are about the same thing.
+ * @property data what the app needs to send it (any JSON object; the kit never reads it).
+ * @property at when it was made (Unix seconds).
+ */
+data class OutAction(val kind: String, val key: String, val data: JsonObject = JsonObject(emptyMap()), val at: Long = 0L)
 
 /**
- * Plays and likes made while the server could not be reached (offline-manifest.md "The outbox", the phone's copy
- * of the web's rules). It belongs to the account that made them: [owner] is `<server>|<username>`, a change by
- * another account drops it first, and it is only ever sent under that account's session.
+ * How a new [OutAction] meets the ones already waiting for the same [OutAction.kind] and [OutAction.key].
  */
-data class Outbox(val owner: String = "", val plays: List<OutPlay> = emptyList(), val likes: List<OutLike> = emptyList()) {
-    /** How many plays and likes wait. */
-    val size: Int get() = plays.size + likes.size
+enum class OutMerge {
+    /** Every change counts and is sent in order (the same key at the same second is the same change, kept once). */
+    Each,
+
+    /** Only the last change counts: it replaces the one still waiting for the same key (a toggle, a rename). */
+    Latest,
+}
+
+/**
+ * Changes made while the server could not be reached (the offline outbox). It belongs to the account that made
+ * them: [owner] is `<server>|<username>` (see [account]), a change by another account drops it first, and it is only
+ * ever sent under that account's session. The app decides what a change is ([OutAction]), how it merges
+ * ([OutMerge]) and how it is sent; the outbox keeps them, caps them and says how many wait.
+ *
+ * @property owner the account the changes belong to; "" for none yet.
+ * @property actions the changes in the order they were made.
+ */
+data class Outbox(val owner: String = "", val actions: List<OutAction> = emptyList()) {
+    /** How many changes wait. */
+    val size: Int get() = actions.size
 
     /** Nothing waits. */
-    val isEmpty: Boolean get() = size == 0
+    val isEmpty: Boolean get() = actions.isEmpty()
 
     /** A change by `owner` is coming: another account's outbox is dropped first. */
     fun own(owner: String): Outbox = if (this.owner == owner) this else Outbox(owner)
@@ -40,59 +59,57 @@ data class Outbox(val owner: String = "", val plays: List<OutPlay> = emptyList()
     /** Whether this outbox is [owner]'s (never for an empty owner). */
     fun belongsTo(owner: String): Boolean = owner.isNotEmpty() && this.owner == owner
 
-    /** A play, once (the same song at the same second is the same play); at most [MAX_PLAYS], the oldest go first. */
-    fun addPlay(p: OutPlay): Outbox {
-        if (p.trackId <= 0L || plays.any { it.trackId == p.trackId && it.playedAt == p.playedAt }) return this
-        val list = plays + p
-        return copy(plays = if (list.size > MAX_PLAYS) list.drop(list.size - MAX_PLAYS) else list)
+    /** The waiting changes of one [kind], oldest first. */
+    fun of(kind: String): List<OutAction> = actions.filter { it.kind == kind }
+
+    /** How many changes of each kind wait, in the order the kinds first appear. */
+    fun counts(): Map<String, Int> = actions.groupingBy { it.kind }.eachCount()
+
+    /**
+     * Adds a change. With [OutMerge.Each] the same kind, key and second is kept once; with [OutMerge.Latest] it
+     * replaces the one waiting for the same kind and key (nothing changes when it is the same). An empty kind or key
+     * is ignored. At most [max] changes of a kind wait: the oldest go first.
+     */
+    fun add(a: OutAction, merge: OutMerge = OutMerge.Each, max: Int = MAX_PER_KIND): Outbox {
+        if (a.kind.isEmpty() || a.key.isEmpty()) return this
+        val list =
+            when (merge) {
+                OutMerge.Each -> {
+                    if (actions.any { it.kind == a.kind && it.key == a.key && it.at == a.at }) return this
+                    actions + a
+                }
+
+                OutMerge.Latest -> {
+                    val i = actions.indexOfFirst { it.kind == a.kind && it.key == a.key }
+                    when {
+                        i < 0 -> actions + a
+                        actions[i].data == a.data -> return this
+                        else -> actions.toMutableList().also { it[i] = a }
+                    }
+                }
+            }
+        val over = list.count { it.kind == a.kind } - max.coerceAtLeast(1)
+        if (over <= 0) return copy(actions = list)
+        var drop = over
+        return copy(actions = list.filter { if (it.kind == a.kind && drop > 0) false.also { drop -= 1 } else true })
     }
 
-    /** A like or an unlike replaces the one still waiting for the same song: the last tap is what the server gets. */
-    fun addLike(l: OutLike): Outbox {
-        if (l.trackId <= 0L) return this
-        val i = likes.indexOfFirst { it.trackId == l.trackId }
-        return when {
-            i < 0 -> copy(likes = likes + l)
-            likes[i].liked == l.liked -> this
-            else -> copy(likes = likes.toMutableList().also { it[i] = l })
-        }
-    }
-
-    /** What went: the plays sent, and the likes sent (a like that changed meanwhile stays). */
-    fun forget(sentPlays: List<OutPlay>, sentLikes: List<OutLike>): Outbox {
-        val sent = sentPlays.map { it.trackId to it.playedAt }.toHashSet()
-        return copy(
-            plays = plays.filter { (it.trackId to it.playedAt) !in sent },
-            likes = likes.filter { l -> sentLikes.none { it.trackId == l.trackId && it.liked == l.liked } },
-        )
-    }
+    /** What went: each change sent is removed (one that changed meanwhile, with other data, stays). */
+    fun forget(sent: List<OutAction>): Outbox = copy(actions = actions.filter { it !in sent })
 
     /** The document saved in the app's storage ([parse] reads it back). */
     fun toJson(): JsonObject = buildJsonObject {
         put("owner", owner)
         put(
-            "plays",
+            "actions",
             buildJsonArray {
-                for (p in plays) {
+                for (a in actions) {
                     add(
                         buildJsonObject {
-                            put("track_id", p.trackId)
-                            put("seconds", p.seconds)
-                            put("played_at", p.playedAt)
-                        },
-                    )
-                }
-            },
-        )
-        put(
-            "likes",
-            buildJsonArray {
-                for (l in likes) {
-                    add(
-                        buildJsonObject {
-                            put("track_id", l.trackId)
-                            put("liked", l.liked)
-                            put("at", l.at)
+                            put("kind", a.kind)
+                            put("key", a.key)
+                            put("data", a.data)
+                            put("at", a.at)
                         },
                     )
                 }
@@ -102,55 +119,44 @@ data class Outbox(val owner: String = "", val plays: List<OutPlay> = emptyList()
 
     /** The limits, the saved document and the words. */
     companion object {
-        /** The server takes at most this many plays per call. */
-        const val PLAYS_PER_CALL = 500
+        /** At most this many changes of one kind wait. */
+        const val MAX_PER_KIND = 5000
 
-        /** At most this many plays wait. */
-        const val MAX_PLAYS = 5000
+        /** The owner of an account's outbox: `<server>|<username>`. */
+        fun account(server: String, username: String): String = "${server.trimEnd('/')}|$username"
 
         /** The saved document; an unreadable one is empty. */
         fun parse(text: String?): Outbox {
             val o = parseJsonObject(text) ?: return Outbox()
             return Outbox(
                 owner = o.str("owner"),
-                plays = o.arr("plays").objectsOf().map { OutPlay(it.long("track_id"), it.dbl("seconds"), it.long("played_at")) }.filter { it.trackId > 0L },
-                likes = o.arr("likes").objectsOf().map { OutLike(it.long("track_id"), it.bool("liked"), it.long("at")) }.filter { it.trackId > 0L },
+                actions =
+                o.arr("actions").objectsOf().map {
+                    OutAction(it.str("kind"), it.str("key"), it.obj("data") ?: JsonObject(emptyMap()), it.long("at"))
+                }.filter { it.kind.isNotEmpty() && it.key.isNotEmpty() },
             )
         }
 
-        /** The body of `POST /api/library/plays` for these plays (the list form, 0.28). */
-        fun playsBody(plays: List<OutPlay>): JsonObject = buildJsonObject {
-            put(
-                "plays",
-                buildJsonArray {
-                    for (p in plays) {
-                        add(
-                            buildJsonObject {
-                                put("track_id", p.trackId)
-                                put("seconds", Math.round(p.seconds.coerceAtLeast(0.0) * 10.0) / 10.0)
-                                put("played_at", p.playedAt)
-                            },
-                        )
-                    }
-                },
-            )
-        }
-
-        /** "3 plays and 1 like", "1 play", "2 likes" ("" for none). */
-        fun countsText(plays: Int, likes: Int): String {
-            fun one(n: Int, word: String) = "$n $word" + if (n == 1) "" else "s"
-            return when {
-                plays == 0 && likes == 0 -> ""
-                likes == 0 -> one(plays, "play")
-                plays == 0 -> one(likes, "like")
-                else -> one(plays, "play") + " and " + one(likes, "like")
+        /**
+         * What waits in words: "3 comments and 1 vote", "1 comment" ("" for none). [nouns] names each kind as
+         * (one, many); a kind without a noun is "change"/"changes".
+         */
+        fun countsText(counts: Map<String, Int>, nouns: Map<String, Pair<String, String>> = emptyMap()): String {
+            val parts = counts.filter { it.value > 0 }.map { (kind, n) ->
+                val (one, many) = nouns[kind] ?: ("change" to "changes")
+                "$n ${if (n == 1) one else many}"
+            }
+            return when (parts.size) {
+                0 -> ""
+                1 -> parts[0]
+                else -> parts.dropLast(1).joinToString(", ") + " and " + parts.last()
             }
         }
 
-        /** The toast once the server answers again: "Back online – 3 plays sent". */
-        fun backOnlineText(plays: Int, likes: Int): String {
-            val sent = countsText(plays, likes)
-            return if (sent.isEmpty()) "Back online" else "Back online – $sent sent"
+        /** The toast once the server answers again: "Back online – 3 comments sent" ("Back online" when nothing went). */
+        fun backOnlineText(sent: Map<String, Int>, nouns: Map<String, Pair<String, String>> = emptyMap()): String {
+            val words = countsText(sent, nouns)
+            return if (words.isEmpty()) "Back online" else "Back online – $words sent"
         }
     }
 }
@@ -161,7 +167,7 @@ class OutboxFile(private val file: File) {
     private var doc: Outbox? = null
     private val _changes = MutableStateFlow(0)
 
-    /** Moves on every change, so a screen showing what waits (the Downloaded list's note) reads it again. */
+    /** Moves on every change, so a screen showing what waits (a list's "waiting to send" note) reads it again. */
     val changes: StateFlow<Int> = _changes.asStateFlow()
 
     private fun loaded(): Outbox {

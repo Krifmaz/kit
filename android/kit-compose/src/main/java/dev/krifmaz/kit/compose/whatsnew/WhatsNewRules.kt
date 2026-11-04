@@ -1,11 +1,17 @@
 package dev.krifmaz.kit.compose.whatsnew
 
+import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
+import dev.krifmaz.kit.compose.core.KitApi
 import dev.krifmaz.kit.compose.core.arr
 import dev.krifmaz.kit.compose.core.bool
 import dev.krifmaz.kit.compose.core.objectsOf
 import dev.krifmaz.kit.compose.core.str
 import dev.krifmaz.kit.compose.core.strings
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import java.io.IOException
 
 /**
  * One release in the What's new popup (`GET /api/changelog/new`, contracts/changelog.md).
@@ -74,7 +80,7 @@ sealed interface NoteGroup {
 }
 
 /**
- * The rules and words of What's new (Encore's web-rs/src/whats_new.rs): the popup on the first start after the server
+ * The rules and words of What's new (the same rules as kit-rules' `whats_new`): the popup on the first start after the server
  * was updated (once shown, `POST /api/changelog/seen` marks this version seen for the account), and Settings →
  * What's new, the full changelog with the switch that turns the popup off. Hotfix builds share their release's notes,
  * so they never bring the popup back on their own (the server decides; the client only follows `show`).
@@ -181,4 +187,27 @@ interface ChangelogBackend {
 
     /** `PUT /api/auth/prefs` with `{"whats_new_popup": on}`. */
     fun setPopup(on: Boolean)
+}
+
+/**
+ * The [ChangelogBackend] of an app whose server answers at the kit's paths ([KitApp.routes]): the app passes its
+ * [KitApi] and nothing else.
+ *
+ * @param api the app's server API (carries the session).
+ * @param routes where the changelog calls go.
+ */
+class ApiChangelogBackend(private val api: KitApi, private val routes: KitRoutes = KitApp.routes) : ChangelogBackend {
+    private fun obj(path: String): JsonObject = api.get(path) as? JsonObject ?: throw IOException("Unexpected reply from the server")
+
+    override fun new(): ChangelogNew = WhatsNewRules.newOf(obj(routes.changelogNew))
+
+    override fun markSeen() {
+        api.post(routes.changelogSeen, JsonObject(emptyMap()))
+    }
+
+    override fun all(): Changelog = WhatsNewRules.changelogOf(obj(routes.changelog))
+
+    override fun setPopup(on: Boolean) {
+        api.put(routes.prefs, buildJsonObject { put("whats_new_popup", on) })
+    }
 }

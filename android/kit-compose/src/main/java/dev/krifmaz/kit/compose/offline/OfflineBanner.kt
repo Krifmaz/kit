@@ -1,5 +1,7 @@
 package dev.krifmaz.kit.compose.offline
 
+import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +46,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
-// The offline banner and the sheet it opens (Encore's features/offline/OfflineUi.kt), and the health check that
+// The offline banner and the sheet it opens, and the health check that
 // decides offline mode (OfflineMode.kt `probe`). The app keeps the state (offline or not, a check on its way, the
 // reason) and passes it in; the words that say what still works offline are the app's own.
 
@@ -166,16 +168,17 @@ fun OfflineSheet(active: Boolean, trying: Boolean, message: String, reason: Stri
 }
 
 /**
- * Asks the server's `/api/health` once, as offline mode's check does: null when it answered (any status but
+ * Asks the server's health check ([KitRoutes.health]) once, as offline mode's check does: null when it answered (any status but
  * 502–504: a proxy saying the server behind it is down counts as no answer); otherwise why not, in words
  * ([OfflineReason]). Blocking: run it on Dispatchers.IO.
  *
  * @param http the app's client (its interceptors and headers); the check uses a copy without a cache.
- * @param server the server's base URL ("https://music.example.com").
+ * @param server the server's base URL ("https://app.example.com").
  * @param phoneOnline whether the phone has a network at all (the reason when nothing answers).
  * @param waitSeconds how long the server gets to answer.
+ * @param path the health check's path ([KitRoutes.health] by default).
  */
-fun probeHealth(http: OkHttpClient, server: String, phoneOnline: Boolean, waitSeconds: Long): String? {
+fun probeHealth(http: OkHttpClient, server: String, phoneOnline: Boolean, waitSeconds: Long, path: String = KitApp.routes.health): String? {
     val client =
         http
             .newBuilder()
@@ -184,7 +187,7 @@ fun probeHealth(http: OkHttpClient, server: String, phoneOnline: Boolean, waitSe
             .cache(null)
             .build()
     return try {
-        client.newCall(Request.Builder().url("$server/api/health").build()).execute().use {
+        client.newCall(Request.Builder().url(server.trimEnd('/') + path).build()).execute().use {
             if (it.code in 502..504) OfflineReason.of(phoneOnline = true, code = it.code, error = null, seconds = waitSeconds) else null
         }
     } catch (e: Exception) {

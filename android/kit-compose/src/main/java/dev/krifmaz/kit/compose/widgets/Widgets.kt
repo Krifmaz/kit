@@ -53,7 +53,7 @@ import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette
 
-// The small building blocks of Encore's screens (the web's .btn, .badge, .card, .input, .error-box, .empty …),
+// The small building blocks of an app's screens (the web's .btn, .badge, .card, .input, .error-box, .empty …),
 // shared by every kit screen and by the apps.
 
 /** The web's phone gutter (`.main { padding: 16px }`). */
@@ -203,7 +203,7 @@ fun KitButton(label: String, modifier: Modifier = Modifier, iconRes: Int? = null
 }
 
 /**
- * A row of choices that look like the web's `.tabs` (Albums / Artists / Songs); scrolls when they don't fit.
+ * A row of choices that look like the web's `.tabs` (All / Mine / Shared); scrolls when they don't fit.
  * [end]: the space after it (less when something sits beside it, like the library's Sort chip). [busy]: the choices
  * that show a small spinner after their label (the picker's tabs while their source searches).
  */
@@ -243,7 +243,7 @@ fun RowDivider(modifier: Modifier = Modifier, startIndent: Dp = Gutter) {
 
 /**
  * One line of a "⋯" menu (the web's `popMenu`). A null `onClick` draws a separator; `badge` is a count after the label.
- * [info] (0.36): a muted line of text, not an action (the song ⋯ menu's "Requested by alex on Oct 13, 2026").
+ * [info]: a muted line of text, not an action ("Added by alex on Oct 13, 2026").
  */
 class MenuEntry(val label: String, val iconRes: Int? = null, val danger: Boolean = false, val badge: String? = null, val info: Boolean = false, val onClick: (() -> Unit)?) {
     /** A line that runs something when tapped (not a separator, not an info line). */
@@ -382,27 +382,6 @@ fun CardBox(modifier: Modifier = Modifier, flat: Boolean = false, content: @Comp
             .border(1.dp, p.border, shape)
             .padding(if (flat) 0.dp else 16.dp),
     ) { content() }
-}
-
-/** The web's `confirmDialog(title, text, okLabel, danger)`. */
-@Composable
-fun ConfirmDialog(title: String, text: String, okLabel: String, danger: Boolean = false, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    val p = MaterialTheme.palette
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = p.panel,
-        titleContentColor = p.text,
-        textContentColor = p.muted,
-        title = { Text(title) },
-        text = { if (text.isNotEmpty()) Text(text) },
-        confirmButton = {
-            TextButton(onClick = {
-                onDismiss()
-                onConfirm()
-            }) { Text(okLabel, color = if (danger) KitStatusColors.Err else p.text, fontWeight = FontWeight.SemiBold) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = p.muted) } },
-    )
 }
 
 /** A small spinner for inline "working" states. */

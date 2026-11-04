@@ -4,9 +4,9 @@ package dev.krifmaz.kit.compose.bugs
  * Which of Android's exit records are not crashes and never become a crash report ([CrashLog]), kept apart from
  * [CrashLog] (which needs Android) so the unit tests can check them.
  *
- * Bug report "Crash log: Closed while in use: package updated: stop app.encore.client due to killDueToPackageUpdate"
- * (Oct 23): every install of an update stops the running app, by Android's design, and each one was filed as a crash.
- * The next start logs "update installed" instead, and This device → App crashes still lists the record.
+ * Every install of an update stops the running app, by Android's design ("package updated: stop com.acme.notes due
+ * to killDueToPackageUpdate"), which must not be filed as a crash. The next start logs "update installed" instead,
+ * and This device → App crashes still lists the record.
  */
 object CrashRules {
     /** ApplicationExitInfo.REASON_PACKAGE_STATE_CHANGE (Android 14), by its value: the app was disabled, enabled or

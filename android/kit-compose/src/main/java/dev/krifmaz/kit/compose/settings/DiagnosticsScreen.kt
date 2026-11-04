@@ -44,7 +44,7 @@ import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.widgets.Badge
-import dev.krifmaz.kit.compose.widgets.ConfirmDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.ErrorBox
 import dev.krifmaz.kit.compose.widgets.KitButton
 import dev.krifmaz.kit.compose.widgets.RowDivider
@@ -58,10 +58,10 @@ import java.text.DateFormat
 import java.util.Date
 
 /**
- * Settings → Diagnostics (Encore's features/settings/DiagnosticsScreen.kt; web-rs/src/settings/diagnostics.rs):
- * Copy report and Run checks, then the app's [top] part (Encore: the server's update card), every connection,
+ * Settings → Diagnostics (contracts/diagnostics.md):
+ * Copy report and Run checks, then the app's [top] part (e.g. the server's update card), every connection,
  * folder and tool check with the raw answers, the Server block and where settings come from (folded away until
- * tapped), then the app's [bottom] parts (Encore: backups and the phone app's crash reports, [AppCrashesSection]).
+ * tapped), then the app's [bottom] parts (e.g. the phone app's crash reports, [AppCrashesSection]).
  *
  * @param title the page's title ("Diagnostics").
  * @param subtitle the line under the title.
@@ -69,9 +69,9 @@ import java.util.Date
  * @param load asks the server for the diagnostics answer (blocking; run on Dispatchers.IO). Errors show with Try again.
  * @param report the text of Copy report for an answer ([DiagnosticsRules.report]).
  * @param serverRows the Server block's (label, value) rows for the answer's `machine`.
- * @param appName the app's name in the summary line ("Encore 0.29.0 · running as uid 1000 · …").
+ * @param appName the app's name in the summary line ("Notes 1.4.2 · running as uid 1000 · …").
  * @param top drawn under the buttons; gets "run the checks again".
- * @param afterChecks drawn after the checks, with the answer (Encore: its download folders).
+ * @param afterChecks drawn after the checks, with the answer (e.g. the folders it writes to).
  * @param bottom drawn at the end of the page.
  */
 @Composable
@@ -184,7 +184,7 @@ fun DiagnosticsChecks(d: JsonObject, serverRows: (JsonObject) -> List<Pair<Strin
  * The open/closed choice lasts while the page is on screen (a Run checks keeps it).
  *
  * @param d the diagnostics answer.
- * @param appName the app's name ("saved in Encore").
+ * @param appName the app's name ("saved in Notes").
  */
 @Composable
 fun SettingsSources(d: JsonObject, appName: String = KitApp.name) {

@@ -58,7 +58,7 @@ import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.widgets.BackBar
 import dev.krifmaz.kit.compose.widgets.Badge
 import dev.krifmaz.kit.compose.widgets.CardBox
-import dev.krifmaz.kit.compose.widgets.ConfirmDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.ErrorBox
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.KitButton
@@ -85,7 +85,7 @@ private fun formatDateTime(epochSeconds: Double): String {
 private class Loaded(val detail: BugReportDetail, val admin: Boolean)
 
 /**
- * One report (web-rs/src/pages/bugreports.rs `render_one`): kind, title and status (a status select for admins), who
+ * One report: kind, title and status (a status select for admins), who
  * filed it, when, from which page, app version and device; the description with its pictures; the replies; the reply
  * box with pictures. Admins also get Export this report and Delete. Opening it marks it seen on the server.
  */

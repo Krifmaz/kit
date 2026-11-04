@@ -1,5 +1,7 @@
 package dev.krifmaz.kit.compose.bugs
 
+import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
 import android.content.ContentResolver
 import android.net.Uri
 import dev.krifmaz.kit.compose.core.ApiException
@@ -44,7 +46,7 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-// ---- the answers (server/src/routes/bugreports.rs) ---------------------------------------------------------------
+// ---- the answers (contracts/bug-reports.md) -----------------------------------------------------------------------
 
 /**
  * A report's or a reply's file: `url` is the server path of GET /api/bug-reports/{id}/files/{fid}.
@@ -164,13 +166,14 @@ private class UriBody(private val resolver: ContentResolver, private val uri: Ur
 // ---- the calls ---------------------------------------------------------------------------------------------------
 
 /**
- * The bug report calls (the web's `/api/bug-reports…`). Blocking like [KitApi]: callers run them on
+ * The bug report calls (`<base>…`, contracts/bug-reports.md). Blocking like [KitApi]: callers run them on
  * Dispatchers.IO. Everything goes through the app's OkHttpClient, so it carries the session.
  *
  * @param api the app's server API (paths, JSON calls).
  * @param client the app's OkHttpClient (carries the session); uploads and exports use a slower copy of it.
+ * @param base the bug reports' path ([KitRoutes.bugReports] by default).
  */
-class BugReportsApi(private val api: KitApi, private val client: OkHttpClient) {
+class BugReportsApi(private val api: KitApi, private val client: OkHttpClient, private val base: String = KitApp.routes.bugReports) {
     /** Uploads and the export take longer than an API call: up to 6 pictures of 8 MB, which the server also decodes. */
     private val slow: OkHttpClient by lazy {
         client.newBuilder().writeTimeout(120, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS).build()
@@ -178,14 +181,14 @@ class BugReportsApi(private val api: KitApi, private val client: OkHttpClient) {
 
     /** GET /api/bug-reports with the list's filter. */
     fun list(filter: BugRules.Filter, admin: Boolean): List<BugReportRow> =
-        model(getObject("/api/bug-reports" + BugRules.listQuery(filter, admin)), BugReportList.serializer()).reports
+        model(getObject(base + BugRules.listQuery(filter, admin)), BugReportList.serializer()).reports
 
     /** GET /api/bug-reports/unread: reports with something this account hasn't seen yet. */
-    fun unread(): Int = getObject("/api/bug-reports/unread").int("count")
+    fun unread(): Int = getObject("$base/unread").int("count")
 
     /** GET /api/bug-reports/{id} (the server marks it seen). */
     fun detail(id: Long): BugReportDetail {
-        val d = model(getObject("/api/bug-reports/$id"), BugReportDetail.serializer())
+        val d = model(getObject("$base/$id"), BugReportDetail.serializer())
         if (d.report == null) throw IOException("Unexpected reply from the server")
         return d
     }
@@ -200,24 +203,24 @@ class BugReportsApi(private val api: KitApi, private val client: OkHttpClient) {
             .addFormDataPart("app_version", appVersion)
             .addFormDataPart("device", device)
         for (f in files) form.addFormDataPart("file", f.name, f.body(resolver))
-        return send(slow, Request.Builder().url(api.url("/api/bug-reports")).post(form.build())).long("id")
+        return send(slow, Request.Builder().url(api.url(base)).post(form.build())).long("id")
     }
 
     /** POST /api/bug-reports/{id}/messages (multipart: body, file…). */
     fun reply(id: Long, body: String, files: List<Attachment>, resolver: ContentResolver) {
         val form = MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("body", body)
         for (f in files) form.addFormDataPart("file", f.name, f.body(resolver))
-        send(slow, Request.Builder().url(api.url("/api/bug-reports/$id/messages")).post(form.build()))
+        send(slow, Request.Builder().url(api.url("$base/$id/messages")).post(form.build()))
     }
 
     /** POST /api/bug-reports/{id}/status {status} (admins). */
     fun setStatus(id: Long, status: String) {
-        api.post("/api/bug-reports/$id/status", buildJsonObject { put("status", status) })
+        api.post("$base/$id/status", buildJsonObject { put("status", status) })
     }
 
     /** DELETE /api/bug-reports/{id} (admins): the report, its replies and its files. */
     fun delete(id: Long) {
-        send(client, Request.Builder().url(api.url("/api/bug-reports/$id")).delete())
+        send(client, Request.Builder().url(api.url("$base/$id")).delete())
     }
 
     /**
@@ -226,7 +229,7 @@ class BugReportsApi(private val api: KitApi, private val client: OkHttpClient) {
      * A file left from an earlier export in the same folder is replaced.
      */
     fun export(query: String, into: File): File {
-        val req = Request.Builder().url(api.url("/api/bug-reports/export$query")).header("Accept", "text/plain, application/zip, application/json").build()
+        val req = Request.Builder().url(api.url("$base/export$query")).header("Accept", "text/plain, application/zip, application/json").build()
         slow.newCall(req).execute().use { res ->
             if (!res.isSuccessful) throw failure(res.code, res.body.string())
             into.parentFile?.mkdirs()

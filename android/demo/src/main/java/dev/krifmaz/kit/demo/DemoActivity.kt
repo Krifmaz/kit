@@ -44,7 +44,7 @@ import dev.krifmaz.kit.compose.widgets.BackBar
 import dev.krifmaz.kit.compose.widgets.Badge
 import dev.krifmaz.kit.compose.widgets.CardBox
 import dev.krifmaz.kit.compose.widgets.ChoiceRow
-import dev.krifmaz.kit.compose.widgets.ConfirmDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.EmptyState
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.KitButton

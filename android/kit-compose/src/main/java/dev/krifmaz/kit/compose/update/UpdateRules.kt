@@ -17,19 +17,16 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * Where an app's releases are: the GitHub repository [owner]/[repo], the APK's file name ([apkPrefix] + version +
  * ".apk") and the package of the release builds ([releasePackage], the only one a release's APK can replace).
  *
- * @property owner the repository's owner ("Krifmaz").
- * @property repo the repository's name ("Encore").
- * @property apkPrefix what an APK's release file name starts with before the version ("Encore-android-").
- * @property releasePackage the application id of the release builds ("app.encore.client").
+ * @property owner the repository's owner ("acme").
+ * @property repo the repository's name ("notes").
+ * @property apkPrefix what an APK's release file name starts with before the version ("notes-android-").
+ * @property releasePackage the application id of the release builds ("com.acme.notes").
  */
 data class UpdateSource(val owner: String, val repo: String, val apkPrefix: String, val releasePackage: String) {
     /** The sources the kit knows. */
     companion object {
         /** No source set yet: nothing is ever offered ([UpdateRules.isReleaseFile] refuses everything). */
         val NONE: UpdateSource = UpdateSource("", "", "", "")
-
-        /** Encore's releases (Krifmaz/Encore, `Encore-android-<version>.apk`, app.encore.client). */
-        val ENCORE: UpdateSource = UpdateSource("Krifmaz", "Encore", "Encore-android-", "app.encore.client")
     }
 }
 
@@ -39,7 +36,7 @@ data class UpdateSource(val owner: String, val repo: String, val apkPrefix: Stri
  *
  * - The newest release is the newest full release (`v<version>`, [fullRelease]) of the source's release list:
  *   a hotfix (`hotfix-<version>`) can be GitHub's "Latest" but carries no apps. Its Android app is the asset
- *   `<apkPrefix><version>.apk` (Encore: `Encore-android-<version>.apk`). A release made without the apps carries
+ *   `<apkPrefix><version>.apk` (e.g. `notes-android-<version>.apk`). A release made without the apps carries
  *   the last APK over under its own version, so the version is read from the file name, not from the tag.
  * - Versions are MAJOR.MINOR.PATCH, compared by number. A build without a release number (`0.0.1-dev`, `dev.12`)
  *   counts every release as newer, as the server's update card does.
@@ -320,7 +317,7 @@ object UpdateRules {
         return sb.toString()
     }
 
-    // ---- release notes: Markdown as plain text (web-rs pages/diagnostics.rs `notes_text`) ------------------------
+    // ---- release notes: Markdown as plain text ---------------------------------------------------------------
 
     /** Markdown release notes as plain text: headings as lines, bullets as "• ", links as their text. */
     fun notesText(md: String): String {

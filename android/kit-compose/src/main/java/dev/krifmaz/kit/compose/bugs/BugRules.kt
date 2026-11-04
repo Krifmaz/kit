@@ -12,7 +12,7 @@ import javax.net.ssl.SSLException
 /**
  * What bug reports need without Android: the kinds and statuses in the web's words and badge colours, the list's and
  * the export's query, the lines the list and a report show, and whether a picked picture goes to the server as it is.
- * The server is server/src/routes/bugreports.rs (or its 0.29 crate), the web page web-rs/src/pages/bugreports.rs.
+ * The server side is contracts/bug-reports.md (kit-server-bugreports).
  */
 object BugRules {
     /** Files per report or per reply (the server's MAX_FILES). */
@@ -118,7 +118,7 @@ object BugRules {
         return p
     }
 
-    /** The query of GET /api/bug-reports: the filters, the search, and `mine=1` for an admin who asked for Mine. */
+    /** The query of GET <bug reports>: the filters, the search, and `mine=1` for an admin who asked for Mine. */
     fun listQuery(f: Filter, admin: Boolean): String {
         val p = ArrayList(params(f))
         val q = f.q.trim()
@@ -127,15 +127,15 @@ object BugRules {
         return if (p.isEmpty()) "" else "?" + p.joinToString("&")
     }
 
-    /** The query of GET /api/bug-reports/export for the list: its status and kind, as the web's Export link; a plain text file. */
+    /** The query of GET <bug reports>/export for the list: its status and kind, as the web's Export link; a plain text file. */
     fun exportQuery(f: Filter): String = "?" + (params(f) + "format=txt").joinToString("&")
 
-    /** The query of GET /api/bug-reports/export for one report ("Export this report"); a plain text file. */
+    /** The query of GET <bug reports>/export for one report ("Export this report"); a plain text file. */
     fun exportOneQuery(id: Long): String = "?ids=$id&format=txt"
 
-    /** The export's name on the phone (built here, never taken from the server): "encore-bug-reports-<day>.txt" for Encore. */
+    /** The export's name on the phone (built here, never taken from the server): "<app id>-bug-reports-<day>.txt". */
     fun exportName(day: String, id: Long? = null): String {
-        val app = KitApp.name.lowercase()
+        val app = KitApp.id
         return if (id != null) "$app-bug-report-$id-$day.txt" else "$app-bug-reports-$day.txt"
     }
 
@@ -151,7 +151,7 @@ object BugRules {
         return if (files > 0) "$replies · $files file${if (files == 1) "" else "s"}" else replies
     }
 
-    /** "by ann · 18 Oct 2026, 14:20 · page Home · app 0.30.0 · EncoreAndroid/…": the line under a report's title. */
+    /** "by ann · 18 Oct 2026, 14:20 · page Home · app 0.30.0 · Notes-Android/…": the line under a report's title. */
     fun metaLine(username: String, date: String, page: String, appVersion: String, device: String): String {
         val s = StringBuilder("by ").append(username).append(" · ").append(date)
         if (page.isNotEmpty()) s.append(" · page ").append(page)

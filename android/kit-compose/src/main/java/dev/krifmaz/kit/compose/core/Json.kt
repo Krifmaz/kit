@@ -87,7 +87,7 @@ fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
 
 fun JsonObject.arr(key: String): JsonArray? = this[key] as? JsonArray
 
-/** A list response as its objects: a bare array, or `{items: [...]}` (albums); anything else is empty. */
+/** A list response as its objects: a bare array, or `{items: [...]}` (a paged list); anything else is empty. */
 fun JsonElement?.objects(): List<JsonObject> {
     val list: JsonArray = when (this) {
         is JsonArray -> this

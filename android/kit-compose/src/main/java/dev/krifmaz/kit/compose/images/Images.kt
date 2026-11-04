@@ -27,17 +27,17 @@ import java.io.File
 import kotlin.math.abs
 
 /**
- * An image loader built the way Encore builds its cover loader: images go through the app's [http] client (so they
+ * An image loader for an app's pictures from its server: images go through the app's [http] client (so they
  * carry the session and the app's headers), ask for WebP, keep [memoryPercent] of the app's memory for decoded images
  * and [diskBytes] on disk in [diskDir], follow the server's cache headers (immutable versioned URLs, ETag revalidation
  * for the rest), and share one download when a preload and the view on screen ask for the same image.
  *
  * @param app the application.
  * @param http the app's OkHttp client; its own HTTP cache is turned off here (the disk cache holds the images).
- * @param diskDir the disk cache's folder (Encore: cacheDir/covers/images).
- * @param diskBytes the disk cache's size (Encore: 250 MB).
- * @param memoryPercent the share of the app's memory for decoded images (Encore: 0.20).
- * @param crossfadeMs the fade-in of a loaded image (Encore: 120 ms).
+ * @param diskDir the disk cache's folder (e.g. cacheDir/images).
+ * @param diskBytes the disk cache's size (e.g. 250 MB).
+ * @param memoryPercent the share of the app's memory for decoded images (e.g. 0.20).
+ * @param crossfadeMs the fade-in of a loaded image (e.g. 120 ms).
  */
 @OptIn(ExperimentalCoilApi::class)
 fun buildKitImageLoader(
@@ -77,7 +77,7 @@ fun buildKitImageLoader(
 /**
  * Fetches images ahead of need, to the disk cache only (so images on screen keep the memory cache), each URL once
  * (the last 2000 remembered), and nothing on metered networks. The app turns its own ids into URLs and calls [urls]
- * or [url] (Encore's CoverPreloader does this for album covers).
+ * or [url] (a list screen does this for the pictures of its rows).
  *
  * @param context any context (the application's is used).
  * @param loader the image loader the screens use, so the preloaded images are in its caches.
@@ -121,7 +121,7 @@ class ImagePreloader(context: Context, private val loader: ImageLoader) {
 
     /** The default caps. */
     companion object {
-        /** Images of one loaded page (Encore: a page of albums). */
+        /** Images of one loaded page (a page of a list's rows). */
         const val MAX_PER_PAGE = 60
 
         /** Images ahead of a scroll. */
