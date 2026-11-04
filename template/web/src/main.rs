@@ -144,6 +144,14 @@ fn NavLink(href: &'static str, label: &'static str, route: ReadSignal<Route>) ->
     view! { <a href=format!("#{href}") data-nav=href class:active=active><span>{label}</span></a> }
 }
 
+/// The question Sign out asks first (the kit's confirm dialog; the desktop app asks the same).
+pub fn sign_out_question() -> kit_rules::dialogs::Confirm {
+    kit_rules::dialogs::Confirm::new("Sign out?")
+        .text("This browser forgets its sign-in. You'll need your password to sign in again.")
+        .ok("Sign out")
+        .danger(true)
+}
+
 /// The kit's shell: the sidebar with the app's pages, the notice slot and the page.
 #[component]
 fn Shell(me: Value) -> impl IntoView {
@@ -158,8 +166,10 @@ fn Shell(me: Value) -> impl IntoView {
     };
     let sign_out = move |_| {
         rt::spawn(async {
-            let _ = api::post_empty("/auth/logout").await;
-            rt::reload();
+            if kit_leptos::modal::confirm(sign_out_question()).await {
+                let _ = api::post_empty("/auth/logout").await;
+                rt::reload();
+            }
         })
     };
     let page = move || {
@@ -200,6 +210,12 @@ fn Shell(me: Value) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::Route;
+
+    #[test]
+    fn sign_out_asks_first() {
+        let q = super::sign_out_question();
+        assert_eq!((q.title.as_str(), q.ok.as_str(), q.danger), ("Sign out?", "Sign out", true));
+    }
 
     #[test]
     fn routes_come_from_the_hash() {
