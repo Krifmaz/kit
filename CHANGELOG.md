@@ -5,6 +5,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- kit-iced is app-neutral: no Encore names, words, icons or logo. `theme::encore()` became
+  `theme::default_look()`; `player_bar` became `bottom_bar`; the music icons (library, next, prev, music, disc,
+  volume, shuffle) are gone; `widgets::logo` draws the app's `Logo` (`Logo::KIT` as a neutral mark); the details
+  dialog's links are `title`, `subtitle` and a main `button` that opens a page (no Play); `update::ready_words`
+  takes where the Updates block is; `offline::ENCORE_TEXT` became the neutral `offline::TEXT`.
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its
@@ -36,7 +41,7 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   Android app on this checkout's kit-compose.
 - `kit-android.yml`: the Gradle steps get the run's `GITHUB_TOKEN`, so an app can read kit-compose from GitHub
   Packages (the caller grants `packages: read`).
-- kit-iced: `Icon::Video` (Encore desktop's "Save video to this device" button).
+- kit-iced: `Icon::Video`.
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
   theme and Flutter ThemeData; tests prove the output equals Encore's current CSS, Compose and desktop themes.
@@ -60,13 +65,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   form, diagnostics screen, Encore's Coil setup and JankStats/StrictMode in debug; a demo app, Baseline Profile and
   Macrobenchmark modules; ktlint and unit tests in CI (`android.yml`), published to GitHub Packages for every
   release (`android-publish.yml`).
-- `crates/kit-iced`: Encore's desktop components on Iced 0.14 and kit-rules, styled from the generated Iced
-  tokens: `theme` (every palette, `theme::encore()`, every widget style), `widgets` (text styles, buttons, cards,
-  fields, modal, badges, skeletons, tabs, icons, text area), `toast` (desktop toast rules), `details`,
-  `whats_new` (popup and changelog page), `update` (release checks, SHA256SUMS, the Updates block), `notice`,
-  `drop_zone`, `settings` (the settings pieces), `form` (the settings form from a const table or the server's
-  schema), `bug_report` (labels, file picker, New report dialog, reply box), `diagnostics` and `offline`.
-  Components hold no network code: their updates return what the app must request.
+- `crates/kit-iced`: desktop components for any app on Iced 0.14 and kit-rules, styled from the generated Iced
+  tokens: `theme` (every palette, `theme::default_look()`, every widget style), `widgets` (text styles, buttons,
+  cards, fields, modal, badges, skeletons, tabs, icons, the app's `Logo`, text area), `toast` (desktop toast
+  rules), `details`, `confirm` (the confirm dialog), `whats_new` (popup and changelog page), `update` (release
+  checks, SHA256SUMS, the Updates block), `notice`, `drop_zone`, `settings` (the settings pieces), `form` (the
+  settings form from a const table or the server's schema), `bug_report` (labels, file picker, New report dialog,
+  reply box), `diagnostics` (with `view_with` for an app's own check groups) and `offline`. Components hold no
+  network code: their updates return what the app must request. App names, words, routes and logos are the app's.
+- `crates/kit-iced/demo` (`kit-iced-demo`): a desktop app showing every kit-iced component with fake data, and
+  headless `iced_test` tests for each.
 - `crates/kit-leptos`: Encore's web components as Leptos 0.8 components on kit-rules, drawing Encore's HTML
   node for node: toasts (with the global `toast`/`toast_action`), copy to clipboard, modals and the confirm
   dialog, the details dialog, What's new (popup and changelog page), the self-update reload (health polling and
