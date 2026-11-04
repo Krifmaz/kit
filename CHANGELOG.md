@@ -11,3 +11,6 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `contracts/`: the shared APIs (health, changelog, notices, bug reports, diagnostics, settings schema,
   update feed) as prose and OpenAPI, matching Encore's current API.
 - CI (fmt, clippy, tests, generated files up to date) and the release workflow.
+- `kit-server-bugreports`: Encore's bug reports (threads, statuses, unread counts, screenshot and log
+  uploads, zip / plain text export) and app crash reports (`/api/diagnostics/client-crash`), behind a
+  `BugReportsHost` trait for the app's folder, rate limiter, log, notifications, mail and enrichment.
