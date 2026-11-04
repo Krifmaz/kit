@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- `cleanup-branches.yml`: after every push to main, deletes branches whose pull request is merged and which have
+  no commits since.
+
 ### Changed
 - Clients follow the neutral server routes: kit-leptos `Paths::test` defaults to `/api/diagnostics/{name}/test`;
   kit-iced's docs and demo, and the template's web and desktop apps, call `/api/settings*`, `/api/diagnostics*` and
