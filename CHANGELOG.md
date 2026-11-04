@@ -4,6 +4,12 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.1.2 — 2026-11-04
+
+### Changed
+- `docs/GOALS.md` keeps only the shared app block and the kit's own goal, with no app names; each app's goals
+  live in its own repo.
+
 ## v0.1.1 — 2026-11-04
 
 ### Added

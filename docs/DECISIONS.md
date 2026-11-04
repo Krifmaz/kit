@@ -170,4 +170,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · The `--player`/`--player-h` tokens keep their names (apps' stylesheets use them); they are documented as the room for a bar along the bottom, 0 by default.
 - 2026-11-04 · Merged branches are deleted by a kit workflow (cleanup-branches.yml, GITHUB_TOKEN) because this environment's proxy refuses ref deletes; it only deletes a branch with no open PR whose head is a merged PR's head.
 - 2026-11-04 · CHANGELOG.md: the long Unreleased list (written while the kit was still being lifted from one app) is replaced by one v0.1.0 section describing the neutral kit as released; the per-PR detail stays in the merged pull requests.
-- 2026-11-04 · docs/GOALS.md names the apps (the owner's goals, kept word for word); it is the one place app names are allowed, as planning text, never in code, data or the template.
+- 2026-11-04 · docs/GOALS.md holds only the shared app block and the kit's own goal, with no app names; each app's goals live in that app's own repo.
