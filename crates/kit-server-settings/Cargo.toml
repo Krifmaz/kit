@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-settings"
-description = "TODO"
+description = "An app's server settings from one settings.toml table: the checks and the generated code for its build script, the values (environment, then saved, then default), the schema answer and the admin settings API."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,16 +8,24 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-kit-server-core.workspace = true
-axum.workspace = true
-serde.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
+kit-server-core = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
 
 [dev-dependencies]
 kit-server-core = { workspace = true, features = ["testing"] }
 tokio.workspace = true
 tower.workspace = true
+
+[features]
+default = ["server", "toml"]
+# `Store` (the values on the app's database) and `router` (GET/PUT /api/admin/settings, the schema, a secret)
+server = ["dep:kit-server-core", "dep:axum", "dep:tracing"]
+# `file`: read and check a settings.toml, and generate an app's `Keys`/`TABLE`/`SCHEMA`/accessors from it
+# (an app's build script takes the crate with `default-features = false, features = ["toml"]`, which leaves out axum)
+toml = ["dep:toml"]
 
 [lints]
 workspace = true

@@ -18,6 +18,7 @@ tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 rusqlite = { version = "0.37", features = ["bundled"] }
+toml = { version = "0.8.23", default-features = false, features = ["parse", "preserve_order"] }
 kit-server-core = { path = "crates/kit-server-core" }
 
 [workspace.lints.rust]
