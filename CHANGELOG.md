@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- `cleanup-branches.yml`: after every push to main, deletes branches whose pull request is merged and which have
+  no commits since.
+
 ### Changed
 - The template's release no longer re-uploads the apps under its title. `kit-android.yml` and `kit-desktop.yml` upload as `kit-app-android` / `kit-app-desktop-<OS>`, and `kit-release.yml`
   collects `kit-app-*`, so an app whose name has a space ("Kit Demo") still gets its APK and installers attached;
