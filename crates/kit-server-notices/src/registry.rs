@@ -14,13 +14,13 @@ type CurrentFn<S> = Arc<dyn Fn(S, bool) -> Notice + Send + Sync>;
 /// Check a notice again: the app's state and whether an admin asks.
 type CheckFn<S> = Arc<dyn Fn(S, bool) -> Boxed<Notice> + Send + Sync>;
 
-/// How long Check again waits for a probe that does not end before it answers with `checking` (Encore's
-/// storage check: a network mount that stopped answering is not waited for longer than 15 s).
+/// How long Check again waits for a probe that does not end before it answers with `checking` (a network
+/// mount that stopped answering is not waited for longer than 15 s).
 pub const CHECK_WAIT: Duration = Duration::from_secs(15);
 
 /// One notice the app registers.
 pub struct NoticeCheck<S> {
-    /// the notice's id (`downloads`)
+    /// the notice's id (`disk`)
     id: String,
     /// how serious it is
     severity: Severity,
@@ -56,9 +56,9 @@ struct Kept {
 }
 
 impl<S: Clone + Send + Sync + 'static> NoticeCheck<S> {
-    /// A notice whose state the app keeps itself (Encore's storage probe): `current` reads it now without
-    /// probing (it runs on the blocking pool, so it may read the database), `check` probes again and answers
-    /// the new state. Both are told whether an admin asks (everyone else gets less: Encore answers `{ok}`).
+    /// A notice whose state the app keeps itself: `current` reads it now without probing (it runs on the
+    /// blocking pool, so it may read the database), `check` probes again and answers the new state. Both are
+    /// told whether an admin asks (everyone else should get less, such as only `{ok}`).
     pub fn new<C, K, Fut>(id: impl Into<String>, severity: Severity, current: C, check: K) -> Self
     where
         C: Fn(&S, bool) -> Notice + Send + Sync + 'static,

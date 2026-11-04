@@ -1,16 +1,15 @@
 //! Plain-language banners (contract: `contracts/notices.md`): a server tells signed-in admins, in one plain
-//! sentence, that something is wrong and what to check, with a Check again action. Encore's storage notice
-//! (the `downloads` part of `GET /api/requests/storage`, `POST /api/requests/storage/check`), generalised.
+//! sentence, that something is wrong and what to check, with a Check again action.
 //!
 //! An app registers its notices ([`NoticeCheck`]) in [`Notices`] and hands them to the kit through
 //! [`NoticesHost`]. Each notice has an id, a [`Severity`], how it reads now (`current`, cheap: no probing) and
 //! how it is checked again (`check`, on demand and, with [`NoticeCheck::every`], on a timer started by
 //! [`spawn_rechecks`]). [`NoticeCheck::kept`] makes one from a single probe and keeps its last result.
 //!
-//! The kit's default routes ([`router`]): `GET /api/notices` (signed in) → `{"notices": [<notice>…]}` and
-//! `POST /api/notices/check` (admin) → the same after every notice was checked again. An app that serves a
-//! notice at its own paths or inside its own answer (Encore) calls [`Notices::current`] / [`Notices::check`]
-//! and gets the notice's object exactly as the check made it, or merges [`router_at`].
+//! The routes ([`router`], or [`router_with`] at the app's own [`NoticePaths`]): `GET /api/notices` (signed
+//! in) → `{"notices": [<notice>…]}` and `POST /api/notices/check` (admin) → the same after every notice was
+//! checked again. An app that shows a notice inside an answer of its own calls [`Notices::current`] /
+//! [`Notices::check`] and gets the notice's object exactly as the check made it.
 //!
 //! ```ignore
 //! impl kit_server_notices::NoticesHost for App {
@@ -42,36 +41,30 @@ pub trait NoticesHost: Host {
     fn notices(&self) -> Notices<Self>;
 }
 
-/// The kit's default notice routes: `GET /api/notices` (signed in) and `POST /api/notices/check` (admins).
+/// Where the notice routes are served. [`Default`] gives the kit's paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NoticePaths {
+    /// every notice as it reads now (`GET`; default `/api/notices`)
+    pub list: String,
+    /// every notice checked again (`POST`; default `/api/notices/check`)
+    pub check: String,
+}
+
+impl Default for NoticePaths {
+    fn default() -> Self {
+        NoticePaths { list: "/api/notices".into(), check: "/api/notices/check".into() }
+    }
+}
+
+/// The notice routes at the kit's paths: `GET /api/notices` (signed in) and `POST /api/notices/check`
+/// (admins).
 pub fn router<S: NoticesHost>() -> Router<S> {
-    Router::new().route("/api/notices", get(list::<S>)).route("/api/notices/check", post(check_all::<S>))
+    router_with(NoticePaths::default())
 }
 
-/// One notice served alone at the app's own paths: `GET <get_path>` (signed in) answers the notice's object
-/// as the check makes it, and `POST <check_path>` (admins) checks it again first. An unknown `id` answers 404
-/// "Not found".
-pub fn router_at<S: NoticesHost>(get_path: &str, check_path: &str, id: &str) -> Router<S> {
-    let (a, b) = (id.to_string(), id.to_string());
-    Router::new()
-        .route(
-            get_path,
-            get(move |State(st): State<S>, SignedIn(who): SignedIn| {
-                let id = a.clone();
-                async move { st.notices().current(&st, &id, who.admin).await.map(|n| Json(n.into_json())).ok_or_else(not_found) }
-            }),
-        )
-        .route(
-            check_path,
-            post(move |State(st): State<S>, Admin(_): Admin| {
-                let id = b.clone();
-                async move { st.notices().check(&st, &id, true).await.map(|n| Json(n.into_json())).ok_or_else(not_found) }
-            }),
-        )
-}
-
-/// The 404 of a notice id the app does not have.
-fn not_found() -> kit_server_core::Error {
-    kit_server_core::err(404, "Not found")
+/// The notice routes at the app's own `paths`.
+pub fn router_with<S: NoticesHost>(paths: NoticePaths) -> Router<S> {
+    Router::new().route(&paths.list, get(list::<S>)).route(&paths.check, post(check_all::<S>))
 }
 
 /// `GET /api/notices`: every notice as it reads now, each with its `id` and `severity`.

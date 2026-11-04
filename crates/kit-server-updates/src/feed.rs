@@ -1,16 +1,20 @@
-//! The app's GitHub releases as an update feed for its in-app updaters (Encore's `UpdateRules.kt` on Android
-//! and `clients/desktop/src/desktop/updater.rs`): the newest full release, its file for this device, the
-//! release's SHA256SUMS, and the checks before anything is installed.
+//! The app's GitHub releases as an update feed for its in-app updaters (phone, desktop): the newest full
+//! release, its file for this device, the release's SHA256SUMS, and the checks before anything is installed.
 //!
-//! - **Full release:** tag `v<MAJOR>.<MINOR>.<PATCH>`, not a draft, not a prerelease. It carries the apps.
-//! - **Hotfix:** tag `hotfix-<version>`. It can be GitHub's "Latest" but carries no apps, so an app updater
-//!   never picks it (the server's hotfix channel does: [`crate::server`]).
-//! - A release made without rebuilding the apps carries the last APK over under its own version, so the
-//!   APK's version is read from its file name, not from the tag.
-//! - Only files under `https://github.com/<owner>/<app>/releases/download/` are used, and a file installs
+//! Everything app-specific is the app's [`Feed`]: the repository, the tag prefixes and the file name of each
+//! platform's download.
+//!
+//! - **Full release:** tag `<release prefix><MAJOR>.<MINOR>.<PATCH>` (prefix `v` unless the app says
+//!   otherwise), not a draft, not a prerelease. It carries the apps.
+//! - **Hotfix:** tag `<hotfix prefix><version>`, when the app has hotfixes ([`Feed::hotfix_prefix`]). It can be
+//!   GitHub's "Latest" but carries no apps, so an app updater never picks it (the server's hotfix channel
+//!   does: [`crate::server`]).
+//! - A download's version is read from its file name, not from the tag: a release made without rebuilding an
+//!   app carries that app's last file over under its old version.
+//! - Only files under `https://github.com/<owner>/<repo>/releases/download/` are used, and a file installs
 //!   only when the release's `SHA256SUMS` (or `SHA256SUMS.txt`) lists it with the same hash.
 
-use crate::{is_release_version, newer_release, HOTFIX_PREFIX, NOTES_MAX};
+use crate::{is_release_version, newer_release, NOTES_MAX};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -18,45 +22,103 @@ use std::collections::HashMap;
 /// The checksum files of a release (the release workflow writes `SHA256SUMS` over every file).
 pub const SUMS: [&str; 2] = ["SHA256SUMS", "SHA256SUMS.txt"];
 
-/// The most an APK download may take when the release does not give its size (300 MiB).
-pub const MAX_APK_BYTES: u64 = 300 * 1024 * 1024;
+/// The most a download may take when the release does not give its size, unless the app says otherwise
+/// (300 MiB).
+pub const DEFAULT_MAX_DOWNLOAD_BYTES: u64 = 300 * 1024 * 1024;
 
 /// How many releases the feed asks GitHub for (newest first).
 pub const PER_PAGE: usize = 30;
 
-/// The app's repository on GitHub (Encore: `Repo::new("Krifmaz", "Encore")`).
+/// The placeholder for the version in an asset name pattern.
+pub const VERSION: &str = "{version}";
+
+/// The app's update feed: its repository on GitHub, its tag prefixes and the file name of each platform's
+/// download. Build it with [`Feed::new`] and the builders.
+///
+/// ```
+/// use kit_server_updates::feed::Feed;
+/// let feed = Feed::new("acme", "demo")
+///     .hotfix_prefix("hotfix-")
+///     .asset("android", "Demo-android-{version}.apk")
+///     .asset("linux", "Demo-{version}-linux-x86_64.AppImage");
+/// assert_eq!(feed.asset_name("1.2.3", "android").as_deref(), Some("Demo-android-1.2.3.apk"));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Repo {
-    /// the account (`Krifmaz`)
+pub struct Feed {
+    /// the account (`acme`)
     pub owner: String,
-    /// the repository, which is also the app's name in its file names (`Encore`)
-    pub app: String,
+    /// the repository (`demo`)
+    pub repo: String,
+    /// what a full release's tag starts with before its version (default `v`)
+    pub release_prefix: String,
+    /// what a hotfix's tag starts with before its version; `None` (the default): the app has no hotfixes
+    pub hotfix_prefix: Option<String>,
+    /// each platform's file name, by the app's platform id, with `{version}` where the version goes
+    pub assets: Vec<(String, String)>,
+    /// the most a download may take when the release does not give its size
+    pub max_download_bytes: u64,
 }
 
-impl Repo {
-    /// The repository `owner/app`.
-    pub fn new(owner: impl Into<String>, app: impl Into<String>) -> Repo {
-        Repo { owner: owner.into(), app: app.into() }
+impl Feed {
+    /// The feed of the repository `owner/repo`: full releases tagged `v<version>`, no hotfixes, no
+    /// downloads yet.
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Feed {
+        Feed {
+            owner: owner.into(),
+            repo: repo.into(),
+            release_prefix: "v".into(),
+            hotfix_prefix: None,
+            assets: vec![],
+            max_download_bytes: DEFAULT_MAX_DOWNLOAD_BYTES,
+        }
     }
 
-    /// `owner/app`.
+    /// The same feed with full releases tagged `<prefix><version>` (`""` for bare versions).
+    pub fn release_prefix(mut self, prefix: impl Into<String>) -> Feed {
+        self.release_prefix = prefix.into();
+        self
+    }
+
+    /// The same feed with hotfixes tagged `<prefix><version>` (such as `hotfix-`).
+    pub fn hotfix_prefix(mut self, prefix: impl Into<String>) -> Feed {
+        self.hotfix_prefix = Some(prefix.into()).filter(|p: &String| !p.is_empty());
+        self
+    }
+
+    /// The same feed with the download of `platform` (an id the app picks: `android`, `windows`, …) named by
+    /// `pattern`, which holds `{version}` once (`Demo-android-{version}.apk`). A later call for the same
+    /// platform replaces the earlier one.
+    pub fn asset(mut self, platform: impl Into<String>, pattern: impl Into<String>) -> Feed {
+        let (platform, pattern) = (platform.into(), pattern.into());
+        self.assets.retain(|(p, _)| *p != platform);
+        self.assets.push((platform, pattern));
+        self
+    }
+
+    /// The same feed with another download limit.
+    pub fn max_download_bytes(mut self, bytes: u64) -> Feed {
+        self.max_download_bytes = bytes;
+        self
+    }
+
+    /// `owner/repo`.
     pub fn slug(&self) -> String {
-        format!("{}/{}", self.owner, self.app)
+        format!("{}/{}", self.owner, self.repo)
     }
 
-    /// GitHub's list of the newest releases (`https://api.github.com/repos/<owner>/<app>/releases?per_page=30`).
+    /// GitHub's list of the newest releases (`https://api.github.com/repos/<owner>/<repo>/releases?per_page=30`).
     pub fn releases_api(&self) -> String {
-        format!("https://api.github.com/repos/{}/{}/releases?per_page={PER_PAGE}", self.owner, self.app)
+        format!("https://api.github.com/repos/{}/{}/releases?per_page={PER_PAGE}", self.owner, self.repo)
     }
 
-    /// The releases page (`https://github.com/<owner>/<app>/releases`).
+    /// The releases page (`https://github.com/<owner>/<repo>/releases`).
     pub fn releases_page(&self) -> String {
-        format!("https://github.com/{}/{}/releases", self.owner, self.app)
+        format!("https://github.com/{}/{}/releases", self.owner, self.repo)
     }
 
-    /// Every file an updater fetches is under this (`https://github.com/<owner>/<app>/releases/download/`).
+    /// Every file an updater fetches is under this (`https://github.com/<owner>/<repo>/releases/download/`).
     pub fn downloads(&self) -> String {
-        format!("https://github.com/{}/{}/releases/download/", self.owner, self.app)
+        format!("https://github.com/{}/{}/releases/download/", self.owner, self.repo)
     }
 
     /// Whether `url` is a file of the project's releases (`<downloads><tag>/<file>`), read as an HTTP client
@@ -73,30 +135,59 @@ impl Repo {
             })
     }
 
-    /// The version in an Android app's file name (`<App>-android-<version>.apk`), `None` for any other file.
-    pub fn apk_version(&self, name: &str) -> Option<String> {
-        let v = name.strip_prefix(&format!("{}-android-", self.app))?.strip_suffix(".apk")?;
+    /// The name pattern of `platform`'s download, split around `{version}`; `None` for a platform the app did
+    /// not name or a pattern without `{version}`.
+    fn pattern(&self, platform: &str) -> Option<(&str, &str)> {
+        let (_, pattern) = self.assets.iter().find(|(p, _)| p == platform)?;
+        pattern.split_once(VERSION)
+    }
+
+    /// The file name of `platform`'s download at `version`; `None` for a platform the app did not name.
+    pub fn asset_name(&self, version: &str, platform: &str) -> Option<String> {
+        let (pre, post) = self.pattern(platform)?;
+        Some(format!("{pre}{version}{post}"))
+    }
+
+    /// The version in the file name `name` of `platform`'s download; `None` for any other file.
+    pub fn asset_version(&self, name: &str, platform: &str) -> Option<String> {
+        let (pre, post) = self.pattern(platform)?;
+        let v = name.strip_prefix(pre)?.strip_suffix(post)?;
         is_release_version(v).then(|| v.to_string())
     }
 
-    /// The release file for `platform` at `version` (the names the release workflow gives them).
-    pub fn asset_name(&self, version: &str, platform: Platform) -> String {
-        let app = &self.app;
-        match platform {
-            Platform::Android => format!("{app}-android-{version}.apk"),
-            Platform::Windows => format!("{app}-{version}-windows-x86_64.exe"),
-            Platform::MacOs => format!("{app}-{version}-macos-universal.dmg"),
-            Platform::AppImage => format!("{app}-{version}-linux-x86_64.AppImage"),
-            Platform::Deb => format!("{}_{version}_amd64.deb", app.to_lowercase()),
+    /// Whether a release tag is a full release's (`<release prefix><MAJOR>.<MINOR>.<PATCH>`).
+    pub fn is_full_tag(&self, tag: &str) -> bool {
+        tag.trim().strip_prefix(self.release_prefix.as_str()).is_some_and(is_release_version)
+    }
+
+    /// Whether a release tag is a hotfix's (`<hotfix prefix><version>`); never for an app without hotfixes.
+    pub fn is_hotfix_tag(&self, tag: &str) -> bool {
+        self.hotfix_prefix.as_deref().is_some_and(|p| tag.trim().starts_with(p))
+    }
+
+    /// The version a tag names: without its hotfix prefix, else without its release prefix.
+    pub fn tag_version<'a>(&self, tag: &'a str) -> &'a str {
+        let tag = tag.trim();
+        if let Some(v) = self.hotfix_prefix.as_deref().and_then(|p| tag.strip_prefix(p)) {
+            return v;
         }
+        tag.strip_prefix(self.release_prefix.as_str()).unwrap_or(tag)
+    }
+
+    /// The newest full release (not a draft or prerelease) of GitHub's release list, which is newest first.
+    /// Hotfixes are passed over: they carry no apps.
+    pub fn full_release<'a>(&self, list: &'a Value) -> Option<&'a Value> {
+        list.as_array()?
+            .iter()
+            .find(|r| r["draft"] != true && r["prerelease"] != true && self.is_full_tag(r["tag_name"].as_str().unwrap_or("")))
     }
 
     /// The newer release in a release of GitHub's answer for `platform` (`Ok(None)` when there is none for
     /// this device), with its file and checksum file, both only from the project's release downloads. The
-    /// Android app's version is the newest APK's file name; a desktop app's is the tag's, and a release
-    /// without this device's file (a server-only release) is not offered. An answer without a tag (GitHub's
+    /// version is the one in the newest matching file's name, so a release without a newer file for this
+    /// device (one that did not rebuild it) is not offered. An answer without a tag (GitHub's
     /// `{"message": …}`) is an error in the updaters' words.
-    pub fn newest(&self, release: &Value, current: &str, platform: Platform) -> Result<Option<AppRelease>, String> {
+    pub fn newest(&self, release: &Value, current: &str, platform: &str) -> Result<Option<AppRelease>, String> {
         let tag = release["tag_name"].as_str().unwrap_or("").trim();
         if tag.is_empty() {
             let why = release["message"].as_str().filter(|m| !m.trim().is_empty()).unwrap_or("no release found");
@@ -117,24 +208,12 @@ impl Repo {
             })
             .filter(|a| !a.name.is_empty() && self.is_release_file(&a.url))
             .collect();
-        let (version, asset) = match platform {
-            // the newest APK the release carries (a release without the apps carries the last one over)
-            Platform::Android => {
-                let Some((v, a)) = assets
-                    .iter()
-                    .filter_map(|a| Some((self.apk_version(&a.name)?, a)))
-                    .max_by(|x, y| kit_server_core::version::compare(&x.0, &y.0))
-                else {
-                    return Ok(None);
-                };
-                (v, a.clone())
-            }
-            _ => {
-                let v = tag.trim_start_matches(['v', 'V']).to_string();
-                let want = self.asset_name(&v, platform);
-                let Some(a) = assets.iter().find(|a| a.name == want) else { return Ok(None) };
-                (v, a.clone())
-            }
+        let Some((version, asset)) = assets
+            .iter()
+            .filter_map(|a| Some((self.asset_version(&a.name, platform)?, a)))
+            .max_by(|x, y| kit_server_core::version::compare(&x.0, &y.0))
+        else {
+            return Ok(None);
         };
         if !newer_release(&version, current) {
             return Ok(None);
@@ -151,25 +230,10 @@ impl Repo {
             notes,
             notes_cut,
             published_at: release["published_at"].as_str().unwrap_or("").to_string(),
-            asset,
+            asset: asset.clone(),
             sums: assets.iter().find(|a| SUMS.contains(&a.name.as_str())).cloned(),
         }))
     }
-}
-
-/// Which app's file a release carries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Platform {
-    /// the Android app (`<App>-android-<version>.apk`)
-    Android,
-    /// the Windows installer (`<App>-<version>-windows-x86_64.exe`)
-    Windows,
-    /// the macOS disk image (`<App>-<version>-macos-universal.dmg`)
-    MacOs,
-    /// the Linux AppImage (`<App>-<version>-linux-x86_64.AppImage`)
-    AppImage,
-    /// the Debian package (`<app>_<version>_amd64.deb`)
-    Deb,
 }
 
 /// A release file.
@@ -177,7 +241,7 @@ pub enum Platform {
 pub struct Asset {
     /// its file name
     pub name: String,
-    /// where it is downloaded from (always under [`Repo::downloads`])
+    /// where it is downloaded from (always under [`Feed::downloads`])
     pub url: String,
     /// its size in bytes (0 when GitHub does not say)
     pub size: u64,
@@ -188,7 +252,7 @@ pub struct Asset {
 /// A newer release for this device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppRelease {
-    /// the version the file installs (the APK's from its file name)
+    /// the version the file installs (from its file name)
     pub version: String,
     /// the release's tag
     pub tag: String,
@@ -204,22 +268,6 @@ pub struct AppRelease {
     pub asset: Asset,
     /// the release's checksum file, when it has one
     pub sums: Option<Asset>,
-}
-
-/// Whether a release tag is a full release's (`v<MAJOR>.<MINOR>.<PATCH>`).
-pub fn is_full_tag(tag: &str) -> bool {
-    tag.trim().strip_prefix('v').is_some_and(is_release_version)
-}
-
-/// Whether a release tag is a hotfix's (`hotfix-<version>`).
-pub fn is_hotfix_tag(tag: &str) -> bool {
-    tag.trim().starts_with(HOTFIX_PREFIX)
-}
-
-/// The newest full release (tag `v<MAJOR>.<MINOR>.<PATCH>`, not a draft or prerelease) of GitHub's release
-/// list, which is newest first. Hotfixes are passed over: they carry no apps.
-pub fn full_release(list: &Value) -> Option<&Value> {
-    list.as_array()?.iter().find(|r| r["draft"] != true && r["prerelease"] != true && is_full_tag(r["tag_name"].as_str().unwrap_or("")))
 }
 
 /// Release notes as kept: CRLF as LF, cut to [`NOTES_MAX`] characters, trailing space trimmed; and whether
