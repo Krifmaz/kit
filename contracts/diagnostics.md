@@ -22,7 +22,7 @@ Every check runs at once; the answer lists them:
 | `ok` | passed |
 | `detail` | the result in one plain sentence (what happened) |
 | `request` | what was asked, when it was a request (shown so it can be copied) |
-| `status` | kit: `ok`, `warn` or `fail`; when left out, `ok` → `ok`, otherwise `fail` |
+| `status` | kit: `ok`, `warn` or `fail`; when left out (or not one of these words: Encore's service checks carry the HTTP status code here), `ok` → `ok`, otherwise `fail` |
 | `fix` | kit: how to fix it, in plain words; optional |
 
 Apps may add fields per check (Encore's Soulseek check carries `soulseek`).
@@ -30,4 +30,5 @@ Apps may add fields per check (Encore's Soulseek check carries `soulseek`).
 ## `POST /api/system/test/{service}` (admin)
 
 The Test button of a settings card (`test` in the settings schema) runs that one check and answers
-`{ok, detail}` (plus fields of its own).
+`{ok, message}` (plus fields of its own), as Encore does. A test that failed on the way answers
+`{ok: false, message}` with the whole error; a service without a test answers 404 "Unknown service".

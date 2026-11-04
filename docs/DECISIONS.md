@@ -26,6 +26,14 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · details: the web's blank-title rule (`trim().is_empty()`) is `details::title`, Android's empty-only rule is `details::title_android`; Encore has no "is it cut off" rule in code (CSS/Compose decide), so kit-rules has none.
 - 2026-11-04 · Offline reasons are classified from a platform-neutral `Failure` enum (Dns, Timeout, Refused, Tls, Other) that each client maps its errors to, with Android's words.
 - 2026-11-04 · Android-only window placement (`ToastRules.covered`, `lift`, `drop`) stays in kit-compose: it is Android window and inset logic, not shared rules.
+- 2026-11-04 · kit-compose compiles the theme straight from design/out/KitTokens.kt (an extra source dir), so the library can't drift from the tokens and nothing is copied.
+- 2026-11-04 · kit-compose pins the same AGP, Kotlin, Compose BOM and library versions as Encore's Android app, so an app that includes the kit's build gets one of each.
+- 2026-11-04 · App identity (name, version, User-Agent) reaches the kit through `KitApp.init(...)` at start-up, so messages like "Encore needs access…" stay word for word.
+- 2026-11-04 · Kit names drop the app name where Encore had it in code only (EncoreButton → KitButton, EncoreField → KitField, EncoreJson → KitJson); nothing users see changes.
+- 2026-11-04 · Encore's Android tests for code that moved (ToastRules, offline, bug, update, schema rules) moved with it into kit-compose/src/test, assertions unchanged.
+- 2026-11-04 · Encore Android builds kit-compose from source (settings.gradle.kts fetches the kit at the commit/tag in clients/android/kit.properties and includes it): GitHub Packages needs a token to read even public packages, which Encore's CI doesn't have.
+- 2026-11-04 · Encore Android doesn't show the kit's What's new popup (it never had one; adding it would be a visible change DESIGN.md doesn't ask for on Android); the component is in the kit, tested, for other apps.
+- 2026-11-04 · android-publish.yml also runs after each release workflow run, since releases made with GITHUB_TOKEN start no `release` event.
 - 2026-11-04 · kit-iced components hold no network code: they keep state, draw it and return what the app must request (Encore keeps reqwest, rfd and its API paths), so any app can use them.
 - 2026-11-04 · kit-iced has one active look (`theme::set`/`look`, as Encore's desktop); Encore's `theme.rs` re-exports it, so Encore and the kit share one look.
 - 2026-11-04 · App names in kit-iced words are parameters (`update::describe(p, "Encore")`, `whats_new::changelog(state, "Encore")`), giving Encore's exact words.
@@ -48,6 +56,25 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · kit-leptos: Error-toast Copy and Close use per-button handlers with `stop_propagation` instead of relying on Encore's page-wide click listener (`details.rs` `init`), so a toast works without it; the listener still serves hand-written `[data-copy-text]` buttons, and the user sees the same.
 - 2026-11-04 · kit-leptos: The update toast lives in the toast store, placed after the toasts that were there when it came, so it sits where Encore's `appendChild` put it.
 - 2026-11-04 · kit-leptos: The demo links `design/out/tokens.css` plus a copy of Encore's `app.css` after its colour tokens (with a SOURCE note), because the kit ships no component stylesheet yet; the copy is demo-only.
+- 2026-11-04 · The server crates share an eighth small crate, `kit-server-core` (error answer, `Host`/`Db` traits, `SignedIn`/`Admin`, version compare, `SqliteDb`, `TestHost`), so the seven feature crates don't each repeat them.
+- 2026-11-04 · Errors answer `{"detail": …}` as Encore's `encore_core::error` really does; the contracts said `{"error": …}`, which no Encore client reads, so the contracts were corrected.
+- 2026-11-04 · The kit crates take the app's database as JSON rows and parameters over SQL strings (Encore's `encore_db` shape), so they keep Encore's SQL unchanged; apps without a database layer use `SqliteDb`.
+- 2026-11-04 · Admin is the account's `role` being `admin` or `owner` (Encore's `perms::is_admin`); an app can override `Host::admin` to keep its own checks and words.
+- 2026-11-04 · kit-server-changelog's notes parser and build-script embedding work without its server half (`default-features = false`), so an app's build.rs needs no Axum.
+- 2026-11-04 · kit-server-settings has two features, both on by default: `toml` (read, check and generate settings.toml) and `server` (Store and routes); an app's build script takes only `toml`, so axum stays out of build scripts.
+- 2026-11-04 · The table at run time (`file::parse`) leaks its strings to give the same `&'static` types as the generated code, so one renderer and one set of types serve both; a file is meant to be read once.
+- 2026-11-04 · The accessor-name check takes the app's method names from the app (`Codegen::methods`) and keeps the Rust keywords in the kit; the refusal text stays Encore's ("taken by a Config method or a Rust keyword").
+- 2026-11-04 · Encore's `Config` wraps the kit `Store` (`saved()`, then its one-time migration, then `apply()`), keeping its public API and `defs` field.
+- 2026-11-04 · Encore-only save behaviour goes through `SettingsHost` hooks (`kept`, `unrevealed`, `before_save` returning `_warnings`, `after_save`, `log`, `owner`, `dump`); `before_save` runs before the activity-log line, as Encore's signup-mode check did.
+- 2026-11-04 · `Store::load` creates the `settings` table if it is missing (for apps without migrations); Encore uses `Store::new` and its own reload, so it runs no new statement.
+- 2026-11-04 · The Test button answers `{ok, message}` as Encore does, not `{ok, detail}` as the contract said; diagnostics.md and openapi.yaml are corrected.
+- 2026-11-04 · A diagnostics check keeps its JSON object as the app built it, so Encore's numeric HTTP `status`, `body` and `ms` stay; a `status` that isn't ok/warn/fail counts as absent for the kit status.
+- 2026-11-04 · Diagnostics groups all run at once (Encore ran only the HTTP checks together, then the folders and tools in turn); the answer and its order are the same.
+- 2026-11-04 · On an app's own paths a notice is the app's object unchanged (no `id`/`severity`); only `/api/notices` adds them and gives non-admins `{ok}` alone.
+- 2026-11-04 · Encore does not mount `/api/notices`; its storage notice has no kit timer, because Encore's worker already probes the download folders every minute.
+- 2026-11-04 · App updaters take a full release only for tag `^v\d+\.\d+\.\d+$` (Android's rule; desktop accepted any 3-part semver), and use Android's newer-than rule on every platform.
+- 2026-11-04 · The server-side release fetch and its sync_state cache (ETags, token, check_updates) stay in encore-system; the kit takes the parsing, channel, newer rule, shared answer and restart planning.
+- 2026-11-04 · kit-server-changelog serves notes parsed by kit-rules `changelog` (the same `parse`/`unseen`/`Block`), so the server crate keeps no second copy of the parser.
 - 2026-11-04 · Template: server/ and web/ are separate Cargo workspaces, as Encore's server/ and web-rs/, so the shared workflows take them as `rust-dirs: server`, `wasm-dirs: web`.
 - 2026-11-04 · Template: the app reads `APP_PORT`, `APP_DATA_DIR`, `APP_STATIC_DIR` (Encore's `ENCORE_*` without the app name), so its Rust files carry no Liquid.
 - 2026-11-04 · Template image: `gcr.io/distroless/cc-debian13:nonroot` (same glibc as the trixie builder); the health check is the binary's own `healthcheck` command, since distroless has no curl.

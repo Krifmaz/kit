@@ -20,6 +20,6 @@ and the rules behind them.
 **Rule:** a contract change is a kit release with a changelog entry. Servers and clients built against the
 same kit version always match. A breaking change raises MAJOR (`docs/releases/<version>.md`).
 
-Common to every endpoint: JSON bodies; errors answer `{"error": "<plain sentence>"}` with the HTTP status
-(Encore's `encore_core::error`), and every error text can be shown in full and copied. "Admin" means a
+Common to every endpoint: JSON bodies; errors answer `{"detail": "<plain sentence>"}` with the HTTP status
+(Encore's `encore_core::error`; more fields may follow), and every error text can be shown in full and copied. "Admin" means a
 signed-in admin (cookie session, app token or API key); 401 without a session, 403 for a non-admin.
