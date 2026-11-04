@@ -18,6 +18,9 @@ Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
 - kit-leptos: `crash::install` sends the web app's crash logs (panics, uncaught errors, unhandled
   rejections) to the server's crash reports, keeping them until it can.
 
+### Fixed
+- kit-server-bugreports: the same crash sent twice at once is kept once instead of failing with a 500.
+
 ## v0.1.2 — 2026-11-04
 
 ### Changed

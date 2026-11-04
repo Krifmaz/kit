@@ -157,11 +157,21 @@ impl CrashStore for SqliteReports {
             }
         }
         let c = &n.crash;
-        let id = self.db.execute(
+        let id = match self.db.execute(
             "INSERT INTO kit_client_crashes (user_id, username, kind, device, device_id, app_version, os, time, received_at, first_line, text, dedupe)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             p![c.user_id, c.username, c.kind, c.device, c.device_id, c.app_version, c.os, c.time, c.received_at, c.first_line, c.text, n.dedupe],
-        )?;
+        ) {
+            Ok(id) => id,
+            // The same crash sent twice at once: the other one is kept.
+            Err(e) => match &n.dedupe {
+                Some(d) => match self.db.one("SELECT id FROM kit_client_crashes WHERE dedupe = ?", p![d])? {
+                    Some(r) => return Ok((r.i("id"), true)),
+                    None => return Err(e),
+                },
+                None => return Err(e),
+            },
+        };
         self.db.execute(
             "DELETE FROM kit_client_crashes WHERE id NOT IN (SELECT id FROM kit_client_crashes ORDER BY id DESC LIMIT ?)",
             p![keep],

@@ -18,6 +18,7 @@ pub const MAX_TEXT: usize = 16_000;
 
 thread_local! {
     static REPORTING: Cell<bool> = const { Cell::new(false) };
+    static FLUSHING: Cell<bool> = const { Cell::new(false) };
 }
 
 fn key(name: &str) -> String {
@@ -138,6 +139,15 @@ pub fn report(kind: &str, summary: &str, text: &str) {
 
 /// Sends the logs not sent yet; one the server can't take is dropped, one that didn't get there waits.
 pub async fn flush() {
+    // One at a time; a log written meanwhile goes with this one or the next start.
+    if FLUSHING.with(|f| f.replace(true)) {
+        return;
+    }
+    send_pending().await;
+    FLUSHING.with(|f| f.set(false));
+}
+
+async fn send_pending() {
     let path = crate::config::get().paths.crash_reports.clone();
     for item in pending() {
         let r = api::post(&path, item.clone()).await;

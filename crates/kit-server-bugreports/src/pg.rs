@@ -153,11 +153,21 @@ impl CrashStore for PgReports {
             }
         }
         let c = &n.crash;
-        let id = self.insert(
+        let id = match self.insert(
             "INSERT INTO kit_client_crashes (user_id, username, kind, device, device_id, app_version, os, time, received_at, first_line, text, dedupe)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8::DOUBLE PRECISION, $9::DOUBLE PRECISION, $10, $11, $12) RETURNING id",
             p![c.user_id, c.username, c.kind, c.device, c.device_id, c.app_version, c.os, c.time, c.received_at, c.first_line, c.text, n.dedupe],
-        ).await?;
+        ).await {
+            Ok(id) => id,
+            // The same crash sent twice at once: the other one is kept.
+            Err(e) => match &n.dedupe {
+                Some(d) => match self.db.one("SELECT id FROM kit_client_crashes WHERE dedupe = $1", p![d]).await? {
+                    Some(r) => return Ok((r.i("id"), true)),
+                    None => return Err(e),
+                },
+                None => return Err(e),
+            },
+        };
         self.db
             .execute(
                 "DELETE FROM kit_client_crashes WHERE id NOT IN (SELECT id FROM kit_client_crashes ORDER BY id DESC LIMIT $1)",
