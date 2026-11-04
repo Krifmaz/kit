@@ -56,21 +56,24 @@ pub fn parse_release(v: &Value, now: f64, repo: &Repo) -> Option<Value> {
     }))
 }
 
-/// The hotfix channel's pick from GitHub's release list: the highest version among the full releases and the
-/// hotfix prereleases (drafts and other prereleases don't count).
-pub fn pick_newest(list: &Value, now: f64, repo: &Repo) -> Option<Value> {
+/// Whether `channel` counts the release `v` (one entry of GitHub's release list): never a draft or a
+/// prerelease that is not a hotfix (a beta); a hotfix published as a normal release (what CI does) on both
+/// channels, a hotfix prerelease on the hotfix channel only.
+pub fn counts(v: &Value, channel: Channel) -> bool {
+    let hotfix = v["tag_name"].as_str().is_some_and(|t| t.starts_with(HOTFIX_PREFIX));
+    let prerelease = v["prerelease"] == true;
+    v["draft"] != true && (!prerelease || (hotfix && channel == Channel::Hotfix))
+}
+
+/// The channel's pick from GitHub's release list: the highest version among the releases it counts
+/// ([`counts`]), whichever of them GitHub marks "Latest" (a hotfix built while a full release was on its way
+/// carries the older number yet can become "Latest").
+pub fn pick_newest(list: &Value, channel: Channel, now: f64, repo: &Repo) -> Option<Value> {
     list.as_array()?
         .iter()
-        .filter(|v| v["draft"] != true)
-        .filter(|v| {
-            let hotfix = v["tag_name"].as_str().is_some_and(|t| t.starts_with(HOTFIX_PREFIX));
-            if v["prerelease"] == true {
-                hotfix
-            } else {
-                !hotfix
-            }
-        })
+        .filter(|v| counts(v, channel))
         .filter_map(|v| parse_release(v, now, repo))
+        // a tag without a number (a stray name) can't be compared
         .filter(|r| !kit_server_core::version::parts(r["latest"].as_str().unwrap_or("")).is_empty())
         .max_by(|a, b| kit_server_core::version::compare(a["latest"].as_str().unwrap_or(""), b["latest"].as_str().unwrap_or("")))
 }

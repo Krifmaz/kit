@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Changed
+- `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
+  (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
+
 ### Added
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced

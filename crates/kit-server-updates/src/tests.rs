@@ -233,11 +233,11 @@ fn the_hotfix_channel_takes_the_highest_of_releases_and_hotfixes() {
         { "tag_name": "v0.35.2" },
         { "tag_name": "hotfix-0.35.1.9", "prerelease": true },
     ]);
-    let r = pick_newest(&list, 0.0, &repo).unwrap();
+    let r = pick_newest(&list, Channel::Hotfix, 0.0, &repo).unwrap();
     assert_eq!((r["tag"].as_str(), r["latest"].as_str(), r["hotfix"].as_bool()), (Some("hotfix-0.35.2.17"), Some("0.35.2.17"), Some(true)));
     let list = json!([{ "tag_name": "v0.35.3" }, { "tag_name": "hotfix-0.35.2.17", "prerelease": true }]);
-    assert_eq!(pick_newest(&list, 0.0, &repo).unwrap()["latest"], json!("0.35.3"));
-    assert!(pick_newest(&json!([]), 0.0, &repo).is_none());
+    assert_eq!(pick_newest(&list, Channel::Hotfix, 0.0, &repo).unwrap()["latest"], json!("0.35.3"));
+    assert!(pick_newest(&json!([]), Channel::Hotfix, 0.0, &repo).is_none());
     assert!(is_newer("0.35.3", "0.35.2.17", false));
     assert!(is_newer("0.35.2.17", "0.35.2", false));
     assert!(!is_newer("0.35.2", "0.35.2.17", false), "the stable channel does not go back from a hotfix");
@@ -360,4 +360,33 @@ async fn the_update_routes() {
     tokio::time::timeout(Duration::from_secs(3), app.restart.requested()).await.unwrap();
     assert_eq!(call(&app, "POST", "/api/system/restart", 1, None).await.0, StatusCode::ACCEPTED);
     assert_eq!(asked(), vec!["restart admin"], "planned once");
+}
+
+/// The stable channel takes the highest full release from the list, not GitHub's "Latest" (Encore's
+/// `the_highest_release_wins_over_githubs_latest`).
+#[test]
+fn the_highest_release_wins_over_githubs_latest() {
+    let repo = Repo::new("Krifmaz", "Encore");
+    let list = json!([
+        { "tag_name": "v0.42.6" },
+        { "tag_name": "v0.42.5" },
+        { "tag_name": "hotfix-0.42.5.191" },
+        { "tag_name": "hotfix-0.42.3.183" },
+    ]);
+    for channel in [Channel::Stable, Channel::Hotfix] {
+        let r = pick_newest(&list, channel, 0.0, &repo).unwrap();
+        assert_eq!(r["latest"], json!("0.42.6"), "{channel:?}");
+        assert!(is_newer(r["latest"].as_str().unwrap(), "0.42.5.191", false));
+    }
+    let list = json!([{ "tag_name": "hotfix-0.42.6.195" }, { "tag_name": "v0.42.6" }]);
+    assert_eq!(pick_newest(&list, Channel::Stable, 0.0, &repo).unwrap()["latest"], json!("0.42.6.195"));
+    assert_eq!(pick_newest(&list, Channel::Hotfix, 0.0, &repo).unwrap()["latest"], json!("0.42.6.195"));
+    let list = json!([
+        { "tag_name": "hotfix-0.42.6.196", "prerelease": true },
+        { "tag_name": "v0.43.0-beta", "prerelease": true },
+        { "tag_name": "v0.43.0", "draft": true },
+        { "tag_name": "v0.42.6" },
+    ]);
+    assert_eq!(pick_newest(&list, Channel::Stable, 0.0, &repo).unwrap()["latest"], json!("0.42.6"));
+    assert_eq!(pick_newest(&list, Channel::Hotfix, 0.0, &repo).unwrap()["latest"], json!("0.42.6.196"));
 }
