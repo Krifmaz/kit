@@ -104,3 +104,17 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · Template Android: sign-in errors show in full, selectable, with Copy, where Encore's sign-in shows plain red text, to follow the kit's copyable-errors rule.
 - 2026-11-04 · Template Android: the first-start address rules and words are Encore's `EncoreApi.probe`; "an Encore server" becomes "a/an <App> server". Admin pages show unless `/api/auth/me` says the account isn't an admin; the server's 403 covers the rest.
 - 2026-11-04 · Template Android: release signing, the debug `.debug` suffix, the manifest (update receiver, FileProvider, cleartext allowed) and the App crashes block are copied from Encore's app; no Baseline Profile is committed (the APK's comes from the libraries until the app generates its own on a device), and the benchmarks expect the app signed in once by hand.
+- 2026-11-04 · Server crates take their routes as `XPaths` structs with neutral defaults (`router()` = `router_with(Default)`); bug reports' config reaches its handlers through an axum Extension.
+- 2026-11-04 · Bug report status ids stay fixed; only their words are the app's. "Pick a kind" lists every configured kind, Crash log included.
+- 2026-11-04 · `BugReportsHost::enrich` is dropped: an app adds its own fields in routes of its own.
+- 2026-11-04 · SQL table names and pref keys of the server crates are kept as they are (already generic), so existing databases keep working.
+- 2026-11-04 · kit-server-health's `web_build` takes the file prefix from the app and has no default (it is the app's file name).
+- 2026-11-04 · kit-server-settings drops `listed_last`: it only kept one app's historical key order; keys are A to Z, and the file's order still sets pages, cards and fields.
+- 2026-11-04 · Settings routes default to `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` (still admin, secret owner-only).
+- 2026-11-04 · A settings card's `test` names a diagnostics check id; clients run it with `POST /api/diagnostics/<test>/test`.
+- 2026-11-04 · `Codegen` keeps the optional typed accessors and the check against the accessor type's own method names; the refusal text says "a method of the settings type".
+- 2026-11-04 · Diagnostics' unknown-test 404 says "Unknown check" (was "Unknown service"): the route names a check id now.
+- 2026-11-04 · kit-server-notices replaces `router_at` (one notice at an app-named path) with the generic `GET /api/notices/{id}` and `POST /api/notices/{id}/check`, so a client banner that shows one notice needs no app route.
+- 2026-11-04 · Update feed platforms are app-chosen string ids with `{version}` file name patterns, not a fixed enum, so an app can ship any set of builds.
+- 2026-11-04 · Every platform's update version is read from the file name (was: APK from the file name, desktop from the tag); a release that did not rebuild a platform is then never offered for it.
+- 2026-11-04 · `Feed::new` defaults to release prefix `v` and no hotfixes; an app opts into hotfixes with `.hotfix_prefix(...)`.

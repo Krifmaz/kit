@@ -18,8 +18,9 @@ serves them.
   `Notices::current` / `Notices::check` give one notice's own object, for an app that shows it inside an
   answer of its own.
 - **`router()`** — `GET /api/notices` (signed in) → `{"notices": [{id, severity, ok, text, checking, …}]}`
-  and `POST /api/notices/check` (admins); **`router_with(NoticePaths { list, check })`** serves them at the
-  app's own paths.
+  and `POST /api/notices/check` (admins), plus one notice at `GET /api/notices/{id}` and
+  `POST /api/notices/{id}/check`; **`router_with(NoticePaths { list, check, one, check_one })`** serves them
+  at the app's own paths.
 
 ```rust
 impl kit_server_notices::NoticesHost for App {

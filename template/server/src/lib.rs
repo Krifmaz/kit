@@ -4,10 +4,10 @@
 //! | --- | --- |
 //! | `GET /api/health` | kit-server-health |
 //! | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` (What's new) | kit-server-changelog |
-//! | `/api/notices`, `/api/storage`, `/api/storage/check` (the data folder notice) | kit-server-notices |
-//! | `/api/bug-reports/*`, `/api/diagnostics/client-crash` | kit-server-bugreports |
-//! | `/api/system/diagnostics`, `/api/system/test/{service}` | kit-server-diagnostics |
-//! | `/api/admin/settings`, `/api/admin/settings/schema` | kit-server-settings |
+//! | `/api/notices`, `/api/notices/check`, `/api/notices/{id}`, `/api/notices/{id}/check` | kit-server-notices |
+//! | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports |
+//! | `/api/diagnostics`, `/api/diagnostics/{id}/test` | kit-server-diagnostics |
+//! | `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` | kit-server-settings |
 //! | `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` | [`auth`] |
 //!
 //! Everything the app adds of its own goes into [`app`] next to them.
@@ -181,7 +181,6 @@ pub fn app(st: AppState) -> Router {
         .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web)))
         .merge(kit_server_changelog::router())
         .merge(kit_server_notices::router())
-        .merge(kit_server_notices::router_at("/api/storage", "/api/storage/check", checks::DATA_NOTICE))
         .merge(kit_server_bugreports::router())
         .merge(kit_server_bugreports::crash::router())
         .merge(kit_server_diagnostics::router())

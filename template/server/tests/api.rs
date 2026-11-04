@@ -110,7 +110,7 @@ async fn whats_new_shows_the_built_in_notes_once() {
 #[tokio::test]
 async fn the_data_folder_notice_is_fine_and_checks_again() {
     let (app, _, _) = server("notices");
-    let (s, v, _) = call(&app, admin("POST", "/api/storage/check", None)).await;
+    let (s, v, _) = call(&app, admin("POST", "/api/notices/data/check", None)).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(v["ok"], true, "{v}");
     let (s, v, _) = call(&app, admin("GET", "/api/notices", None)).await;
@@ -152,40 +152,40 @@ async fn a_crash_log_is_kept_once() {
     let (app, _, _) = server("crash");
     let crash = json!({ "kind": "crash", "device": "Pixel 8", "device_id": "d1", "app_version": "0.1.0", "os": "Android 16",
                         "time": 1_793_800_000, "summary": "NullPointerException", "text": "java.lang.NullPointerException\n\tat …", "key": "k1" });
-    let (s, v, _) = call(&app, admin("POST", "/api/diagnostics/client-crash", Some(crash.clone()))).await;
+    let (s, v, _) = call(&app, admin("POST", "/api/crash-reports", Some(crash.clone()))).await;
     assert_eq!((s, v["duplicate"].as_bool()), (StatusCode::OK, Some(false)), "{v}");
-    let (_, v, _) = call(&app, admin("POST", "/api/diagnostics/client-crash", Some(crash))).await;
+    let (_, v, _) = call(&app, admin("POST", "/api/crash-reports", Some(crash))).await;
     assert_eq!(v["duplicate"], true, "{v}");
-    let (_, v, _) = call(&app, admin("GET", "/api/diagnostics/client-crash", None)).await;
+    let (_, v, _) = call(&app, admin("GET", "/api/crash-reports", None)).await;
     assert_eq!(v["crashes"].as_array().map(Vec::len), Some(1), "{v}");
 }
 
 #[tokio::test]
 async fn diagnostics_check_the_data_folder_and_the_database() {
     let (app, _, _) = server("diag");
-    let (s, v, _) = call(&app, admin("GET", "/api/system/diagnostics", None)).await;
+    let (s, v, _) = call(&app, admin("GET", "/api/diagnostics", None)).await;
     assert_eq!(s, StatusCode::OK);
     let names: Vec<&str> = v["checks"].as_array().unwrap().iter().filter_map(|c| c["name"].as_str()).collect();
     assert_eq!(names, ["Data folder", "Database"]);
     assert!(v["checks"].as_array().unwrap().iter().all(|c| c["ok"] == true), "{v}");
-    let (s, v, _) = call(&app, admin("POST", "/api/system/test/nothing", None)).await;
-    assert_eq!((s, v["detail"].as_str()), (StatusCode::NOT_FOUND, Some("Unknown service")));
+    let (s, v, _) = call(&app, admin("POST", "/api/diagnostics/nothing/test", None)).await;
+    assert_eq!((s, v["detail"].as_str()), (StatusCode::NOT_FOUND, Some("Unknown check")));
 }
 
 #[tokio::test]
 async fn settings_come_from_the_schema_and_save() {
     let (app, st, _) = server("settings");
-    let (s, v, _) = call(&app, admin("GET", "/api/admin/settings/schema", None)).await;
+    let (s, v, _) = call(&app, admin("GET", "/api/settings/schema", None)).await;
     assert_eq!(s, StatusCode::OK);
     assert!(v.to_string().contains("App name"), "{v}");
-    let (s, _, _) = call(&app, admin("PUT", "/api/admin/settings", Some(json!({ "app_name": "Notes" })))).await;
+    let (s, _, _) = call(&app, admin("PUT", "/api/settings", Some(json!({ "app_name": "Notes" })))).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(st.app_name(), "Notes");
-    let (_, v, _) = call(&app, admin("GET", "/api/admin/settings", None)).await;
+    let (_, v, _) = call(&app, admin("GET", "/api/settings", None)).await;
     assert_eq!(v["app_name"], "Notes");
     assert_ne!(v["api_key"], "test-key", "a secret never goes to a browser");
     // members may not
-    let (s, _, _) = call(&app, Request::get("/api/admin/settings").body(Body::empty()).unwrap()).await;
+    let (s, _, _) = call(&app, Request::get("/api/settings").body(Body::empty()).unwrap()).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
 }
 

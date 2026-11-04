@@ -29,6 +29,9 @@ The defaults; an app may serve them at paths of its own.
   the app registered them.
 - `POST /api/notices/check` (admin) → the same, after every notice was checked again. A check that does not
   end within 15 s answers with `checking: true`.
+- `GET /api/notices/{id}` (signed in) → that one notice's object (without `id` and `severity`), and
+  `POST /api/notices/{id}/check` (admin) → it after one check; `404 {"detail": "Not found"}` for an id the
+  app does not have. A client that shows one notice reads these.
 
 An app may also show one notice's object inside an answer of its own.
 

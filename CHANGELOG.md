@@ -5,6 +5,26 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- Server crates are neutral (no app's names, words, routes or checks); every route can move with the
+  crate's `XPaths` and `router_with`, and the defaults are the kit's own:
+  - `kit-server-health`: `HealthPaths`; the `web_build` file prefix is the app's (no default).
+  - `kit-server-changelog`: `ChangelogPaths`; `Changelog::from_dir` reads a folder of `<version>.md`.
+  - `kit-server-bugreports`: `BugReportsConfig { paths, limits, words }` (kinds, statuses' words, export name,
+    size limits); the public limit constants, `KINDS`, `kind_label`, `status_label`, `export_stem`, the public
+    handlers and `BugReportsHost::enrich` are gone; crash logs moved to `/api/crash-reports`
+    (`crash::CrashConfig`, `crash::router_with`).
+  - `kit-server-settings`: `GET/PUT /api/settings`, `GET /api/settings/schema`, `GET /api/settings/secret/{key}`
+    (`SettingsPaths`); settings.toml loses `listed_last` (keys are A to Z); errors no longer name `Config`.
+  - `kit-server-diagnostics`: `GET /api/diagnostics`, `POST /api/diagnostics/{id}/test` (`DiagnosticsPaths`);
+    an unknown test answers 404 "Unknown check"; no app-specific checks or answer fields.
+  - `kit-server-notices`: `NoticePaths`; one notice is served generically at `GET /api/notices/{id}` and
+    `POST /api/notices/{id}/check`, replacing `router_at`; every sentence and toast comes from the app.
+  - `kit-server-updates`: `feed::Feed` (owner/repo, release and hotfix tag prefixes, a `{version}` file name
+    pattern per app-chosen platform id, a download limit) replaces `feed::Repo` and `Platform`; every platform
+    reads its version from the file name; `GET/POST /api/update`, `POST /api/restart` (`UpdatePaths`);
+    `MAX_APK_BYTES` → `DEFAULT_MAX_DOWNLOAD_BYTES`; `HOTFIX_PREFIX` removed.
+  - `kit-server-core`: neutral docs and tests, no API change.
+  - `contracts/` and the template's server, web and Android calls use the new routes.
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its

@@ -147,13 +147,38 @@ async fn the_default_routes() {
 #[tokio::test]
 async fn the_app_can_move_the_routes() {
     let a = app();
-    let r = || router_with::<App>(NoticePaths { list: "/admin/banners".into(), check: "/admin/banners/recheck".into() });
+    let paths = NoticePaths {
+        list: "/admin/banners".into(),
+        check: "/admin/banners/recheck".into(),
+        one: "/admin/banners/{id}".into(),
+        check_one: "/admin/banners/{id}/recheck".into(),
+    };
+    let r = || router_with::<App>(paths.clone());
     a.broken.store(true, Ordering::SeqCst);
     let (s, v) = call(r(), &a, "GET", "/admin/banners", 1).await;
     assert_eq!((s, v["notices"][0]["ok"].clone()), (StatusCode::OK, json!(false)));
     assert_eq!(call(r(), &a, "POST", "/admin/banners/recheck", 2).await.0, StatusCode::FORBIDDEN);
     assert_eq!(call(r(), &a, "GET", "/api/notices", 1).await.0, StatusCode::NOT_FOUND, "the default path is not served");
-    assert_eq!(NoticePaths::default(), NoticePaths { list: "/api/notices".into(), check: "/api/notices/check".into() });
+    assert_eq!(call(r(), &a, "GET", "/admin/banners/disk", 1).await.1["ok"], json!(false));
+    let d = NoticePaths::default();
+    assert_eq!((d.list.as_str(), d.check.as_str()), ("/api/notices", "/api/notices/check"));
+    assert_eq!((d.one.as_str(), d.check_one.as_str()), ("/api/notices/{id}", "/api/notices/{id}/check"));
+}
+
+#[tokio::test]
+async fn one_notice_at_its_own_route() {
+    let a = app();
+    a.broken.store(true, Ordering::SeqCst);
+    let (s, v) = call(router(), &a, "GET", "/api/notices/disk", 1).await;
+    assert_eq!((s, v["ok"].clone()), (StatusCode::OK, json!(false)));
+    assert_eq!(call(router(), &a, "GET", "/api/notices/disk", 2).await.1, json!({ "ok": false }), "a member sees only ok");
+    assert_eq!(call(router(), &a, "GET", "/api/notices/disk", 0).await.0, StatusCode::UNAUTHORIZED);
+    assert_eq!(call(router(), &a, "POST", "/api/notices/disk/check", 2).await.0, StatusCode::FORBIDDEN);
+    a.broken.store(false, Ordering::SeqCst);
+    let (s, v) = call(router(), &a, "POST", "/api/notices/disk/check", 1).await;
+    assert_eq!((s, v["ok"].clone()), (StatusCode::OK, json!(true)));
+    assert_eq!(call(router(), &a, "GET", "/api/notices/nope", 1).await, (StatusCode::NOT_FOUND, json!({ "detail": "Not found" })));
+    assert_eq!(call(router(), &a, "POST", "/api/notices/nope/check", 1).await.0, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

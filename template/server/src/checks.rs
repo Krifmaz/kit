@@ -1,7 +1,7 @@
 //! The app's notices and Diagnostics checks.
 //!
 //! - Notice `data`: the data folder can't be written (Encore's storage notice, for the one folder this app
-//!   writes to), checked every minute and on Check again. Served at `/api/storage` (and in `/api/notices`).
+//!   writes to), checked every minute and on Check again. Served at `/api/notices/data` (and in `/api/notices`).
 //! - Diagnostics: the data folder and the database. An app adds its own services, folders and tools here.
 
 use crate::AppState;
