@@ -244,7 +244,7 @@ jobs:
         if: inputs.ndk != ''
         run: |
           APK="$APP-android-$APP_VERSION.apk"
-          READELF=$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-readelf 2>/dev/null | head -1)
+          READELF=$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' 2>/dev/null | head -1)
           [ -n "$READELF" ] || { echo "::error::llvm-readelf not found under $ANDROID_NDK_HOME"; exit 1; }
           D=$(mktemp -d)
           unzip -q -o "$APK" 'lib/*' -d "$D"
@@ -252,7 +252,7 @@ jobs:
           for so in $(find "$D/lib" -name '*.so' | sort); do
             ALIGNS=$("$READELF" -lW "$so" | awk '$1 == "LOAD" { print $NF }')
             [ -n "$ALIGNS" ] || { echo "::error::${so#"$D"/}: no LOAD segments read"; BAD=1; continue; }
-            echo "${so#"$D"/}: LOAD alignment $(echo $ALIGNS)"
+            echo "${so#"$D"/}: LOAD alignment ${ALIGNS//$'\n'/ }"
             for a in $ALIGNS; do
               if [ $((a)) -lt $((0x4000)) ]; then
                 echo "::error::${so#"$D"/} has a LOAD segment aligned to $a, below 16 KB (0x4000)"

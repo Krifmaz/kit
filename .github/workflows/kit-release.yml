@@ -344,7 +344,8 @@ jobs:
             # Android only: keep the other files of the newest full release, with this run's APK and server
             # (SHA256SUMS is written again when publishing)
             PREV=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
-            mkdir -p keep && [ -n "$PREV" ] && gh release download "$PREV" --dir keep 2>/dev/null || true
+            mkdir -p keep
+            if [ -n "$PREV" ]; then gh release download "$PREV" --dir keep 2>/dev/null || true; fi
             read -ra drop <<< "$KEEP_DROP"
             # shellcheck disable=SC2086
             (cd keep && rm -f SHA256SUMS && for g in "${drop[@]}"; do rm -f -- $g; done)
@@ -363,9 +364,9 @@ jobs:
           CARRY: ${{ inputs.carry-over }}
           CARRY_DROP: ${{ inputs.carry-over-drop }}
         run: |
-          read -ra apps <<< "$APP_FILES"
+          read -ra installers <<< "$APP_FILES"
           built=false
-          for g in "${apps[@]}"; do compgen -G "out/$g" >/dev/null && built=true; done
+          for g in "${installers[@]}"; do compgen -G "out/$g" >/dev/null && built=true; done
           # app installers from the previous release when this run built none of them (a run with some of the apps
           # attaches only those: an older build beside a newer one would offer two versions)
           if [ "$APPS" != success ] && [ "$built" = false ] && [ -n "$CARRY" ]; then
@@ -373,7 +374,8 @@ jobs:
             read -ra drop <<< "$CARRY_DROP"
             args=(); for g in "${carry[@]}"; do args+=(--pattern "$g"); done
             PREV=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "v$V" | sort -V | tail -1)
-            mkdir -p prev && [ -n "$PREV" ] && gh release download "$PREV" --dir prev "${args[@]}" 2>/dev/null || true
+            mkdir -p prev
+            if [ -n "$PREV" ]; then gh release download "$PREV" --dir prev "${args[@]}" 2>/dev/null || true; fi
             # shellcheck disable=SC2086
             (cd prev && for g in "${drop[@]}"; do rm -f -- $g; done)
             mv prev/* out/ 2>/dev/null || true
