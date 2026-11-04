@@ -1,7 +1,8 @@
 name: ci
 
 # The kit's own checks on every pull request and push to main: fmt, clippy, tests (the token tests prove the
-# generated themes equal Encore's), and that design/out is up to date. Required to pass before a merge.
+# generated themes equal Encore's), the web components and their demo built for wasm32, and that design/out is
+# up to date. Required to pass before a merge.
 on:
   pull_request:
   push:
@@ -25,6 +26,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Format
         run: cargo fmt --all --check
@@ -32,6 +34,12 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      - name: Web components build for the browser (wasm32 check and clippy)
+        run: |
+          cargo check -p kit-leptos -p kit-leptos-demo --target wasm32-unknown-unknown --locked
+          cargo clippy -p kit-leptos -p kit-leptos-demo --target wasm32-unknown-unknown --locked -- -D warnings
+      - name: Demo app builds for the browser
+        run: cargo build -p kit-leptos-demo --target wasm32-unknown-unknown --locked
       - name: Generated themes are up to date
         run: cargo run -p kit-tokens --locked -- --check
       - name: Contracts parse

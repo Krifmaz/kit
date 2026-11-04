@@ -16,3 +16,12 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
   notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
   with Encore's words as constants and Encore's tests ported.
+- `crates/kit-leptos`: Encore's web components as Leptos 0.8 components on kit-rules, drawing Encore's HTML
+  node for node: toasts (with the global `toast`/`toast_action`), copy to clipboard, modals and the confirm
+  dialog, the details dialog, What's new (popup and changelog page), the self-update reload (health polling and
+  the service worker), the notice banner, drop zones, the schema settings form (Encore's fixtures pass), the
+  bug report sheet, the Diagnostics page, and the offline and connection banners.
+- `crates/kit-leptos/demo`: a trunk app showing every component with fake data, checking its DOM against
+  Encore's HTML in the browser; CI builds kit-leptos and the demo for wasm32 (check, clippy, build).
+- kit-rules: `bugs` (bug report kinds, statuses, the sheet's words and checks), `diagnostics` (the page's
+  words, groups and copied report), `dialogs` (`CANCEL`), and `offline::mode::NOT_CONNECTED` / `server_down`.
