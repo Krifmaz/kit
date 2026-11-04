@@ -12,8 +12,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import coil3.ImageLoader
 import coil3.annotation.ExperimentalCoilApi
+import coil3.disk.DiskCache
+import coil3.disk.directory
+import coil3.memory.MemoryCache
+import coil3.network.DeDupeConcurrentRequestStrategy
+import coil3.network.cachecontrol.CacheControlCacheStrategy
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import kotlinx.coroutines.flow.distinctUntilChanged
 import okhttp3.OkHttpClient
 import java.io.File
