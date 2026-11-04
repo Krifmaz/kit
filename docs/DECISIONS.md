@@ -112,3 +112,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · kit-iced keeps Play and Pause as generic media icons and drops the music-only ones; the logo is the app's `Logo` (view box, paths, gradient), with `Logo::KIT` as a neutral default.
 - 2026-11-04 · kit-iced offline: the default sentence is "Offline – showing what this computer saved."; anything more an app keeps offline goes in its own text.
 - 2026-11-04 · kit-iced demo answers the components' requests locally on a half-second tick (a thread through `Subscription::run`, since kit-iced doesn't turn on iced's `tokio`/`smol` timers), so busy states show.
+- 2026-11-04 · App artifacts use a fixed `kit-app-` prefix (not the app name) so kit-release finds them whatever the app is called; file names inside still carry the app name.

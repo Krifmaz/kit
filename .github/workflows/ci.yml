@@ -46,6 +46,17 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+      - name: App artifacts reach the release
+        # kit-release's publish stage collects kit-app-*; kit-android and kit-desktop must upload under that prefix,
+        # never under the app's name (a title with a space, "Kit Demo", would never match)
+        run: |
+          set -e
+          grep -q '^          pattern: kit-app-\*$' .github/workflows/kit-release.yml
+          grep -q '^          name: kit-app-android$' .github/workflows/kit-android.yml
+          # ('$''{{' keeps Actions from evaluating the expression in this script)
+          grep -qF '          name: kit-app-desktop-$''{{ runner.os }}' .github/workflows/kit-desktop.yml
+          if grep -nE 'name: \$\{\{ inputs.app-name' .github/workflows/kit-*.yml; then echo "::error::an artifact is named after the app"; exit 1; fi
+          echo "kit-android and kit-desktop upload what kit-release collects (kit-app-*)"
 
   template:
     runs-on: ubuntu-latest

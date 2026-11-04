@@ -5,6 +5,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- `kit-android.yml` and `kit-desktop.yml` upload as `kit-app-android` / `kit-app-desktop-<OS>`, and `kit-release.yml`
+  collects `kit-app-*`, so an app whose name has a space ("Kit Demo") still gets its APK and installers attached;
+  the kit's CI checks the three agree.
 - Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
   carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
   `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
