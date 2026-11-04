@@ -1,7 +1,7 @@
 name: ci
 
 # The kit's own checks on every pull request and push to main, run through the kit's shared kit-ci.yml (so every
-# change also proves it): fmt, clippy, tests (the token tests prove the generated themes equal Encore's), that
+# change also proves it): fmt, clippy, tests, that
 # design/out is up to date and the contracts parse; the web components (kit-leptos) and their demo are checked
 # and linted for wasm32. `template` generates an app from template/ against this checkout and proves it builds,
 # runs, shows every kit feature in a browser and ships a healthy read-only Docker image (scripts/template-check.sh);

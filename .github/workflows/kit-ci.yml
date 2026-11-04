@@ -1,6 +1,6 @@
 name: kit-ci
 
-# The checks every pull request and every release of an app runs, taken from Encore's release.yml `test` job:
+# The checks every pull request and every release of an app runs:
 # fmt (optional), clippy with -D warnings and the tests of each Rust workspace, the web app's WebAssembly check,
 # clippy and tests (the strings/parity tests among them), plus the app's own extra checks.
 #
@@ -11,7 +11,7 @@ name: kit-ci
 #         rust-dirs: server
 #         wasm-dirs: web-rs
 #
-# The job is called `test`, so a caller's job `test` shows as the check "test / test", as Encore's always did.
+# The job is called `test`, so a caller's job `test` shows as the check "test / test".
 on:
   workflow_call:
     inputs:

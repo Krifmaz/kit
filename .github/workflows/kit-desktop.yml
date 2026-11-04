@@ -1,13 +1,17 @@
 name: kit-desktop
 
-# An app's desktop installers for Windows, Linux and macOS, taken from Encore's apps.yml `desktop` job. Each system
-# runs the app's tests (not on the Mac, to save its 10× minutes), then the app's package script, checks that the
-# files the app's updater looks for were made, and uploads them as the artifact <app-name>-desktop-<OS>, which
-# kit-release attaches to the release (and SHA256SUMS covers).
+# An app's desktop installers for Windows, Linux and macOS. Each system runs the app's tests (not on the Mac, to
+# save its 10× minutes), then the app's own `package` command, checks that the files the app's updater looks for
+# were made, and uploads them as the artifact <app-name>-desktop-<OS>, which kit-release attaches to the release
+# (and SHA256SUMS covers).
 #
-# The package script is the app's own (Encore: scripts/desktop-package.sh) and is called as
-#   bash <package-script> --version <V> [--stamp] --features <features> [<os args>] --out out
-# --stamp (a release) builds the app as that version, so its in-app updater compares the right number.
+# `package` is a bash command run at the repository root (Git Bash on Windows) with these variables set:
+#   V         the version that names the files (the release's, or dev.<run number> on a manual run)
+#   RELEASE   true for a release (build the app as V, so its updater compares the right number), false otherwise
+#   FEATURES  this system's Cargo features (<os>-features)
+#   ARGS      this system's extra arguments (<os>-args)
+#   OUT       the folder the files go to (out)
+# e.g.  package: bash scripts/package.sh --version "$V" --features "$FEATURES" $ARGS --out "$OUT"
 #
 # Signing is optional, from secrets the caller passes (without them the .exe is unsigned and the .app is signed
 # ad hoc – macOS then asks for System Settings → Privacy & Security → Open Anyway the first time):
@@ -22,6 +26,7 @@ name: kit-desktop
 #       app-name: Notes
 #       version: ${{ needs.prepare.outputs.version }}
 #       project-dir: desktop
+#       package: bash scripts/package.sh "$V" "$OUT"
 #       linux-files: "Notes-{V}-linux-x86_64.AppImage"
 #       windows-files: "Notes-{V}-windows-x86_64.exe"
 #       macos-files: "Notes-{V}-macos-universal.dmg"
@@ -50,14 +55,14 @@ on:
         description: "The desktop app's Cargo project (tests, cache)"
         type: string
         required: true
-      package-script:
+      package:
+        description: "The bash command that builds and packages the app into $OUT (see the top of this file)"
         type: string
-        required: false
-        default: scripts/desktop-package.sh
+        required: true
       linux-runner:
         type: string
         required: false
-        default: ubuntu-22.04
+        default: ubuntu-latest
       windows-runner:
         type: string
         required: false
@@ -65,7 +70,7 @@ on:
       macos-runner:
         type: string
         required: false
-        default: macos-15-intel
+        default: macos-latest
       linux-features:
         type: string
         required: false
@@ -78,11 +83,19 @@ on:
         type: string
         required: false
         default: ""
-      macos-args:
-        description: "Extra package-script arguments on the Mac (--universal: both Mac targets joined with lipo)"
+      linux-args:
+        description: "Extra arguments for the package command on Linux ($ARGS)"
         type: string
         required: false
-        default: --universal
+        default: ""
+      windows-args:
+        type: string
+        required: false
+        default: ""
+      macos-args:
+        type: string
+        required: false
+        default: ""
       linux-packages:
         description: "apt packages the Linux build needs"
         type: string
@@ -97,7 +110,7 @@ on:
         description: "Install NSIS on Windows (for an .exe installer)"
         type: boolean
         required: false
-        default: true
+        default: false
       linux-files:
         description: "Files the Linux build must make, space-separated; {V} is the version"
         type: string
@@ -143,9 +156,11 @@ jobs:
           SYSTEMS: ${{ inputs.systems }}
           LINUX_OS: ${{ inputs.linux-runner }}
           LINUX_FEATURES: ${{ inputs.linux-features }}
+          LINUX_ARGS: ${{ inputs.linux-args }}
           LINUX_FILES: ${{ inputs.linux-files }}
           WINDOWS_OS: ${{ inputs.windows-runner }}
           WINDOWS_FEATURES: ${{ inputs.windows-features }}
+          WINDOWS_ARGS: ${{ inputs.windows-args }}
           WINDOWS_FILES: ${{ inputs.windows-files }}
           MACOS_OS: ${{ inputs.macos-runner }}
           MACOS_FEATURES: ${{ inputs.macos-features }}
@@ -156,8 +171,8 @@ jobs:
           entry() { jq -nc --arg os "$1" --arg features "$2" --arg args "$3" --arg files "$4" '{os: $os, features: $features, args: $args, files: $files}'; }
           M="[]"
           add() { M=$(jq -c --argjson e "$1" '. + [$e]' <<< "$M"); }
-          if want linux; then add "$(entry "$LINUX_OS" "$LINUX_FEATURES" "" "$LINUX_FILES")"; fi
-          if want windows; then add "$(entry "$WINDOWS_OS" "$WINDOWS_FEATURES" "" "$WINDOWS_FILES")"; fi
+          if want linux; then add "$(entry "$LINUX_OS" "$LINUX_FEATURES" "$LINUX_ARGS" "$LINUX_FILES")"; fi
+          if want windows; then add "$(entry "$WINDOWS_OS" "$WINDOWS_FEATURES" "$WINDOWS_ARGS" "$WINDOWS_FILES")"; fi
           if want macos; then add "$(entry "$MACOS_OS" "$MACOS_FEATURES" "$MACOS_ARGS" "$MACOS_FILES")"; fi
           [ "$M" != "[]" ] || { echo "::error::no system to build (systems: $SYSTEMS)"; exit 1; }
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
@@ -246,7 +261,8 @@ jobs:
       - name: Build and package
         shell: bash
         env:
-          SCRIPT: ${{ inputs.package-script }}
+          PACKAGE: ${{ inputs.package }}
+          OUT: out
           FEATURES: ${{ matrix.features }}
           ARGS: ${{ matrix.args }}
           FILES: ${{ matrix.files }}
@@ -256,9 +272,9 @@ jobs:
           APPLE_TEAM_ID: ${{ env.HAS_MACOS_CERT == 'true' && secrets.apple-team-id || '' }}
           APPLE_APP_PASSWORD: ${{ env.HAS_MACOS_CERT == 'true' && secrets.apple-app-password || '' }}
         run: |
-          STAMP=""; [ "$IS_RELEASE" = true ] && STAMP=--stamp
-          # shellcheck disable=SC2086
-          bash "$SCRIPT" --version "$V" $STAMP --features "$FEATURES" $ARGS --out out
+          export RELEASE="$IS_RELEASE"
+          mkdir -p "$OUT"
+          bash -c "$PACKAGE"
           # the names the app's updater looks for
           for f in ${FILES//\{V\}/$V}; do
             [ -s "out/$f" ] || { echo "::error::out/$f was not made"; ls -la out; exit 1; }
