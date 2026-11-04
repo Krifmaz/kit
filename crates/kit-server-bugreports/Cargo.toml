@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-bugreports"
-description = "Bug reports with screenshots and log files, a reply thread with the admin, crash logs, and an export as a zip or one plain text file; plus the app crash reports a phone uploads."
+description = "Bug reports with screenshots and log files, a reply thread with the admin, crash logs, and an export as a zip or one plain text file; plus the crash reports an app uploads. Paths, limits and words are the app's."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

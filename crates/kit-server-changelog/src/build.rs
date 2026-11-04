@@ -1,5 +1,6 @@
 //! The build-script half: embeds `docs/releases/<MAJOR.MINOR.PATCH>.md` into a Rust file in `OUT_DIR`, so the
-//! server carries its notes (Encore's `server/crates/api/build.rs`).
+//! server carries its notes. (An app that would rather read the folder at start uses
+//! `Changelog::from_dir` instead.)
 //!
 //! ```no_run
 //! // build.rs, with `kit-server-changelog = { …, default-features = false }` under [build-dependencies]
@@ -11,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 /// The release-notes files in `dir`: (version, path) of every `MAJOR.MINOR.PATCH.md`, in name order. Other
-/// files (old dated `2026.10.11.1.md`, `-edge` builds) are left out. `None` when the folder can't be read.
+/// files (`README.md`, four-part or `-beta` names) are left out. `None` when the folder can't be read.
 pub fn notes_in(dir: &Path) -> Option<Vec<(String, PathBuf)>> {
     let rd = std::fs::read_dir(dir).ok()?;
     let mut notes: Vec<(String, PathBuf)> = rd
@@ -19,7 +20,7 @@ pub fn notes_in(dir: &Path) -> Option<Vec<(String, PathBuf)>> {
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().to_string();
             let v = name.strip_suffix(".md")?;
-            // plain releases only: 0.36.0, not the old dated 2026.10.11.1 or the -edge builds
+            // plain releases only: 1.4.0, not 1.4.0.1 or 1.4.0-beta
             let parts: Vec<&str> = v.split('.').collect();
             (parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())))
                 .then(|| (v.to_string(), e.path().canonicalize().unwrap_or(e.path())))
@@ -61,16 +62,16 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kit-notes-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        for f in ["0.36.0.md", "0.9.1.md", "2026.10.11.1.md", "0.36.0-edge.md", "README.md", "0.36.1.txt"] {
+        for f in ["1.4.0.md", "0.9.1.md", "1.4.0.1.md", "1.4.0-beta.md", "README.md", "1.4.1.txt"] {
             std::fs::write(dir.join(f), "## x\n").unwrap();
         }
         let n = notes_in(&dir).unwrap();
-        assert_eq!(n.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>(), vec!["0.36.0", "0.9.1"]);
+        assert_eq!(n.iter().map(|(v, _)| v.as_str()).collect::<Vec<_>>(), vec!["0.9.1", "1.4.0"]);
         let src = source(&n);
         assert!(
             src.starts_with("/// The release notes as (version, Markdown), in version order.\npub static NOTES: &[(&str, &str)] = &[\n")
         );
-        assert!(src.contains("(\"0.36.0\", include_str!(") && src.ends_with("];\n"));
+        assert!(src.contains("(\"1.4.0\", include_str!(") && src.ends_with("];\n"));
         assert!(notes_in(&dir.join("missing")).is_none());
         assert_eq!(
             source(&[]),

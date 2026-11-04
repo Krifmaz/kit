@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-changelog"
-description = "What's new: an app's release notes (docs/releases/<version>.md) for the popup after an update and the full changelog, with per-account seen tracking, the popup switch and the hotfix rule."
+description = "What's new: an app's release notes (a folder of <version>.md, or a list) for the popup after an update and the full changelog, with per-account seen tracking, the popup switch and the hotfix rule."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

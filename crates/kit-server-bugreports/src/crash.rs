@@ -1,32 +1,68 @@
-//! App crash reports (Encore's Diagnostics → "App crashes", from `routes/client_crash.rs`). The Android app
-//! writes a report when it crashes (Java/Kotlin stack, or a native crash / ANR / low-memory kill read back from
-//! the system on the next start) and uploads it here the next time it runs. Admins see the newest 50.
+//! App crash reports. A client app writes a report when it crashes (a stack trace, or a native crash / ANR /
+//! low-memory kill read back from the system on the next start) and uploads it here the next time it runs.
+//! Admins see the newest ([`CrashConfig::keep`], 50 by default).
 //!
 //! ```text
-//! POST   /api/diagnostics/client-crash  {kind, device, device_id, app_version, os, time, summary, text, key} → {ok, id, duplicate}
-//! GET    /api/diagnostics/client-crash  (admin) → {crashes: [{id, kind, user, device, device_id, app_version, os, time, received_at, first_line, text}]}
-//! DELETE /api/diagnostics/client-crash  (admin) → {ok}
+//! POST   /api/crash-reports  {kind, device, device_id, app_version, os, time, summary, text, key} → {ok, id, duplicate}
+//! GET    /api/crash-reports  (admin) → {crashes: [{id, kind, user, device, device_id, app_version, os, time, received_at, first_line, text}]}
+//! DELETE /api/crash-reports  (admin) → {ok}
 //! ```
+//!
+//! The path is [`CrashPaths`] (default `/api/crash-reports`).
 
 use axum::extract::State;
 use axum::routing::get;
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use kit_server_core::db::now;
 use kit_server_core::{err, p, Admin, Host, Result, RowExt, SignedIn};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::sync::Arc;
 
-/// How many reports are kept (the oldest go first).
-pub const KEEP: i64 = 50;
-/// A report's text is cut to this many bytes (an ANR trace holds every thread of the process).
-pub const MAX_TEXT: usize = 256 * 1024;
-
-/// The crash report routes: `/api/diagnostics/client-crash` (POST, GET, DELETE).
-pub fn router<S: Host>() -> Router<S> {
-    Router::new().route("/api/diagnostics/client-crash", get(list::<S>).post(upload::<S>).delete(clear::<S>))
+/// Where the crash report route is served.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrashPaths {
+    /// `POST` (upload), `GET` (list, admins), `DELETE` (clear, admins); default `/api/crash-reports`
+    pub crashes: String,
 }
 
-/// Create the client_crashes table when it isn't there (Encore's table, unchanged).
+impl Default for CrashPaths {
+    fn default() -> Self {
+        CrashPaths { crashes: "/api/crash-reports".into() }
+    }
+}
+
+/// Where the crash reports are served and how many are kept.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CrashConfig {
+    /// the route's path
+    pub paths: CrashPaths,
+    /// how many reports are kept, the oldest going first (default 50)
+    pub keep: i64,
+    /// a report's text is cut to this many bytes (default 256 KiB: an ANR trace holds every thread of the process)
+    pub max_text: usize,
+}
+
+impl Default for CrashConfig {
+    fn default() -> Self {
+        CrashConfig { paths: CrashPaths::default(), keep: 50, max_text: 256 * 1024 }
+    }
+}
+
+/// The configuration the handlers are given.
+type Cfg = Extension<Arc<CrashConfig>>;
+
+/// The crash report route at its default path and limits ([`CrashConfig::default`]).
+pub fn router<S: Host>() -> Router<S> {
+    router_with(CrashConfig::default())
+}
+
+/// The crash report route (POST, GET, DELETE) at `config.paths`.
+pub fn router_with<S: Host>(config: CrashConfig) -> Router<S> {
+    Router::new().route(&config.paths.crashes, get(list::<S>).post(upload::<S>).delete(clear::<S>)).layer(Extension(Arc::new(config)))
+}
+
+/// Create the client_crashes table when it isn't there.
 fn ensure_table(st: &impl Host) -> Result<()> {
     // created on first use: an older server simply never reads it
     st.db().execute_batch(
@@ -49,7 +85,7 @@ fn ensure_table(st: &impl Host) -> Result<()> {
     )
 }
 
-/// `POST /api/diagnostics/client-crash` body.
+/// `POST /api/crash-reports` body.
 #[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct CrashBody {
@@ -91,8 +127,8 @@ pub fn first_line(summary: &str, text: &str) -> String {
     line.chars().take(300).collect()
 }
 
-/// POST /api/diagnostics/client-crash: keep a crash report from an app.
-pub async fn upload<S: Host>(State(st): State<S>, SignedIn(u): SignedIn, Json(b): Json<CrashBody>) -> Result<Json<Value>> {
+/// POST /api/crash-reports: keep a crash report from an app.
+async fn upload<S: Host>(State(st): State<S>, Extension(cfg): Cfg, SignedIn(u): SignedIn, Json(b): Json<CrashBody>) -> Result<Json<Value>> {
     if b.text.trim().is_empty() && b.summary.trim().is_empty() {
         return Err(err(400, "Empty crash report"));
     }
@@ -120,27 +156,27 @@ pub async fn upload<S: Host>(State(st): State<S>, SignedIn(u): SignedIn, Json(b)
             time,
             received,
             first_line(&b.summary, &b.text),
-            cut(&b.text, MAX_TEXT),
+            cut(&b.text, cfg.max_text),
             dedupe
         ],
     )?;
-    st.db().execute("DELETE FROM client_crashes WHERE id NOT IN (SELECT id FROM client_crashes ORDER BY id DESC LIMIT ?)", p![KEEP])?;
+    st.db().execute("DELETE FROM client_crashes WHERE id NOT IN (SELECT id FROM client_crashes ORDER BY id DESC LIMIT ?)", p![cfg.keep])?;
     tracing::warn!("app crash report from {} ({}): {}", u.username, small(&b.device), first_line(&b.summary, &b.text));
     Ok(Json(json!({ "ok": true, "id": id, "duplicate": false })))
 }
 
-/// GET /api/diagnostics/client-crash: the crash reports, newest first (admins).
-pub async fn list<S: Host>(State(st): State<S>, Admin(_): Admin) -> Result<Json<Value>> {
+/// GET /api/crash-reports: the crash reports, newest first (admins).
+async fn list<S: Host>(State(st): State<S>, Extension(cfg): Cfg, Admin(_): Admin) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let rows = st.db().query(
         "SELECT id, kind, username user, device, device_id, app_version, os, time, received_at, first_line, text FROM client_crashes ORDER BY time DESC, id DESC LIMIT ?",
-        p![KEEP],
+        p![cfg.keep],
     )?;
     Ok(Json(json!({ "crashes": rows })))
 }
 
-/// DELETE /api/diagnostics/client-crash: delete every crash report (admins).
-pub async fn clear<S: Host>(State(st): State<S>, Admin(_): Admin) -> Result<Json<Value>> {
+/// DELETE /api/crash-reports: delete every crash report (admins).
+async fn clear<S: Host>(State(st): State<S>, Admin(_): Admin) -> Result<Json<Value>> {
     ensure_table(&st)?;
     st.db().execute("DELETE FROM client_crashes", p![])?;
     Ok(Json(json!({ "ok": true })))
@@ -155,7 +191,11 @@ mod tests {
     use tower::ServiceExt;
 
     async fn call(app: &Router, method: &str, user: i64, body: Option<Value>) -> (StatusCode, Value) {
-        let mut b = Request::builder().method(method).uri("/api/diagnostics/client-crash").header("x-test-user", user.to_string());
+        call_at(app, "/api/crash-reports", method, user, body).await
+    }
+
+    async fn call_at(app: &Router, uri: &str, method: &str, user: i64, body: Option<Value>) -> (StatusCode, Value) {
+        let mut b = Request::builder().method(method).uri(uri).header("x-test-user", user.to_string());
         if body.is_some() {
             b = b.header("content-type", "application/json");
         }
@@ -211,9 +251,24 @@ mod tests {
         }
         let v = call(&app, "GET", 1, None).await.1;
         let list = v["crashes"].as_array().unwrap();
-        assert_eq!(list.len(), KEEP as usize);
+        assert_eq!(list.len(), 50);
         assert_eq!(list[0]["first_line"], json!("Error number 54"));
         assert_eq!(list[49]["first_line"], json!("Error number 5"));
+    }
+
+    #[tokio::test]
+    async fn the_path_and_limits_are_the_apps() {
+        let config = CrashConfig { paths: CrashPaths { crashes: "/crashes".into() }, keep: 2, max_text: 1024 };
+        let app = router_with(config).with_state(TestHost::new());
+        for i in 0..3 {
+            let body = json!({ "text": format!("Boom {i}\n{}", "x".repeat(2000)), "time": 1_700_000_000.0 + i as f64 });
+            assert_eq!(call_at(&app, "/crashes", "POST", 2, Some(body)).await.0, StatusCode::OK);
+        }
+        let list = call_at(&app, "/crashes", "GET", 1, None).await.1["crashes"].as_array().unwrap().clone();
+        assert_eq!(list.len(), 2);
+        assert!(list[0]["text"].as_str().unwrap().ends_with("x\n… (cut at 1 KB)"));
+        assert_eq!(list[0]["first_line"], json!("Boom 2"));
+        assert_eq!(call(&app, "GET", 1, None).await.0, StatusCode::NOT_FOUND);
     }
 
     #[test]

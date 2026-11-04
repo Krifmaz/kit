@@ -1,4 +1,5 @@
-//! The What's new routes, for an app state that implements [`ChangelogHost`]:
+//! The What's new routes, for an app state that implements [`ChangelogHost`], at [`ChangelogPaths`] (the
+//! defaults below):
 //!
 //! - `GET /api/changelog[?limit=N]` (signed in): every release this server includes, newest first, with
 //!   the account's popup switch and the version it last saw.
@@ -12,22 +13,39 @@ use axum::{Json, Router};
 use kit_server_core::{p, version, Account, Host, Result, SignedIn};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::path::Path;
 
-/// An app's notes and version, made once at start.
+/// An app's notes and version, made once at start: from notes built into the server ([`Changelog::new`]) or
+/// from a folder of `<MAJOR.MINOR.PATCH>.md` read at start ([`Changelog::from_dir`]).
 #[derive(Debug, Clone)]
 pub struct Changelog {
-    /// this server's version (a hotfix build `0.36.0.17` shares its release's notes)
+    /// this server's version (a hotfix build `1.4.0.17` shares its release's notes)
     pub version: String,
     /// every release with notes, newest first
     pub releases: Vec<Release>,
 }
 
 impl Changelog {
-    /// The changelog of `app` at `version` from its embedded notes ([`crate::build::embed`]'s `NOTES`).
+    /// The changelog of `app` (the name in each title, "Demo 1.4.0") at `version` from (version, Markdown)
+    /// pairs: [`crate::build::embed`]'s `NOTES`, or any list the app makes.
     pub fn new(app: &str, version: &str, notes: &[(&str, &str)]) -> Changelog {
         let mut releases: Vec<Release> = notes.iter().map(|(ver, md)| parse(app, ver, md)).collect();
         releases.sort_by(|a, b| version::compare(&b.version, &a.version));
         Changelog { version: version.to_string(), releases }
+    }
+
+    /// The changelog of `app` at `version` from the `<MAJOR.MINOR.PATCH>.md` files in `dir`, read now (other
+    /// files are left out, as [`crate::build::notes_in`] says). An error in words when the folder or a file
+    /// can't be read.
+    pub fn from_dir(app: &str, version: &str, dir: &Path) -> std::result::Result<Changelog, String> {
+        let files = crate::build::notes_in(dir).ok_or_else(|| format!("The release notes folder {} can't be read", dir.display()))?;
+        let mut notes = Vec::with_capacity(files.len());
+        for (v, path) in files {
+            let md = std::fs::read_to_string(&path).map_err(|e| format!("The release notes {} can't be read: {e}", path.display()))?;
+            notes.push((v, md));
+        }
+        let pairs: Vec<(&str, &str)> = notes.iter().map(|(v, md)| (v.as_str(), md.as_str())).collect();
+        Ok(Changelog::new(app, version, &pairs))
     }
 
     /// The releases this server includes (none written ahead for a later version), newest first.
@@ -48,19 +66,38 @@ pub trait ChangelogHost: Host {
         account.row.get("prefs").and_then(Value::as_str).and_then(|s| serde_json::from_str(s).ok()).unwrap_or(json!({}))
     }
 
-    /// Keep the account's preferences: by default `UPDATE users SET prefs=? WHERE id=?` (Encore's table).
+    /// Keep the account's preferences: by default `UPDATE users SET prefs=? WHERE id=?`.
     fn save_prefs(&self, account: &Account, prefs: &Value) -> Result<()> {
         self.db().execute("UPDATE users SET prefs=? WHERE id=?", p![prefs.to_string(), account.id])?;
         Ok(())
     }
 }
 
-/// The What's new routes.
+/// Where the What's new routes are served.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangelogPaths {
+    /// `GET`: every release (default `/api/changelog`)
+    pub all: String,
+    /// `GET`: the popup (default `/api/changelog/new`)
+    pub new: String,
+    /// `POST`: the popup was seen (default `/api/changelog/seen`)
+    pub seen: String,
+}
+
+impl Default for ChangelogPaths {
+    fn default() -> Self {
+        ChangelogPaths { all: "/api/changelog".into(), new: "/api/changelog/new".into(), seen: "/api/changelog/seen".into() }
+    }
+}
+
+/// The What's new routes at their default paths ([`ChangelogPaths::default`]).
 pub fn router<S: ChangelogHost>() -> Router<S> {
-    Router::new()
-        .route("/api/changelog", get(all::<S>))
-        .route("/api/changelog/new", get(new::<S>))
-        .route("/api/changelog/seen", post(seen::<S>))
+    router_with(ChangelogPaths::default())
+}
+
+/// The What's new routes at `paths`.
+pub fn router_with<S: ChangelogHost>(paths: ChangelogPaths) -> Router<S> {
+    Router::new().route(&paths.all, get(all::<S>)).route(&paths.new, get(new::<S>)).route(&paths.seen, post(seen::<S>))
 }
 
 /// The popup is on unless the person switched it off.
@@ -76,7 +113,7 @@ struct AllQuery {
     limit: Option<usize>,
 }
 
-/// Settings → What's new: every release this server includes, newest first.
+/// The full What's new list: every release this server includes, newest first.
 async fn all<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn, Query(q): Query<AllQuery>) -> Json<Value> {
     let c = st.changelog();
     let mut list = c.included();
@@ -126,7 +163,7 @@ mod tests {
     use std::sync::{Arc, OnceLock};
     use tower::ServiceExt;
 
-    /// The test app with notes for 0.35.2, 0.36.0, 0.36.1 and 0.37.0 (written ahead), running 0.36.1.17.
+    /// The test app with notes for 1.2.1, 1.3.0, 1.4.0 and 1.5.0 (written ahead), running 1.4.0.17.
     #[derive(Clone)]
     struct App(TestHost, Arc<Changelog>);
 
@@ -148,13 +185,13 @@ mod tests {
     fn app() -> (App, Router) {
         static NOTES: OnceLock<Vec<(String, String)>> = OnceLock::new();
         let notes = NOTES.get_or_init(|| {
-            ["0.35.2", "0.37.0", "0.36.0", "0.36.1"]
+            ["1.2.1", "1.5.0", "1.3.0", "1.4.0"]
                 .iter()
-                .map(|v| (v.to_string(), format!("## Encore {v}\n\nAbout {v}.\n\n- **New {v}.** Text.\n")))
+                .map(|v| (v.to_string(), format!("## Demo {v}\n\nAbout {v}.\n\n- **New {v}.** Text.\n")))
                 .collect()
         });
         let pairs: Vec<(&str, &str)> = notes.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
-        let st = App(TestHost::new(), Arc::new(Changelog::new("Encore", "0.36.1.17", &pairs)));
+        let st = App(TestHost::new(), Arc::new(Changelog::new("Demo", "1.4.0.17", &pairs)));
         (st.clone(), router().with_state(st))
     }
 
@@ -169,21 +206,21 @@ mod tests {
     #[tokio::test]
     async fn the_popup_shows_once_per_release() {
         let (st, r) = app();
-        // never seen: the newest included release only (0.37.0 is not out yet)
+        // never seen: the newest included release only (1.5.0 is not out yet)
         let (s, v) = call(&r, "GET", "/api/changelog/new", 2).await;
         assert_eq!(s, 200);
-        assert_eq!(v["version"], "0.36.1.17");
+        assert_eq!(v["version"], "1.4.0.17");
         assert_eq!((v["popup"].as_bool(), v["show"].as_bool()), (Some(true), Some(true)));
         assert_eq!(v["releases"].as_array().unwrap().len(), 1);
         assert_eq!(
             v["releases"][0],
-            json!({ "version": "0.36.1", "title": "Encore 0.36.1", "summary": "About 0.36.1.", "highlights": ["New 0.36.1"] })
+            json!({ "version": "1.4.0", "title": "Demo 1.4.0", "summary": "About 1.4.0.", "highlights": ["New 1.4.0"] })
         );
         // seen: kept in the account's prefs; the next hotfix shows nothing again
         let (_, v) = call(&r, "POST", "/api/changelog/seen", 2).await;
-        assert_eq!(v, json!({ "ok": true, "seen": "0.36.1.17" }));
+        assert_eq!(v, json!({ "ok": true, "seen": "1.4.0.17" }));
         let prefs = st.0.db.one("SELECT prefs FROM users WHERE id=2", p![]).unwrap().unwrap();
-        assert_eq!(prefs["prefs"], "{\"whats_new_seen\":\"0.36.1.17\"}");
+        assert_eq!(prefs["prefs"], "{\"whats_new_seen\":\"1.4.0.17\"}");
         let (_, v) = call(&r, "GET", "/api/changelog/new", 2).await;
         assert_eq!((v["show"].as_bool(), v["releases"].as_array().unwrap().len()), (Some(false), 0));
     }
@@ -192,24 +229,49 @@ mod tests {
     async fn the_switch_turns_the_popup_off_but_not_the_list() {
         let (st, r) = app();
         st.0.db
-            .execute("UPDATE users SET prefs=? WHERE id=1", p![json!({ "whats_new_popup": false, "whats_new_seen": "0.35.2" }).to_string()])
+            .execute("UPDATE users SET prefs=? WHERE id=1", p![json!({ "whats_new_popup": false, "whats_new_seen": "1.2.1" }).to_string()])
             .unwrap();
         let (_, v) = call(&r, "GET", "/api/changelog/new", 1).await;
         assert_eq!((v["popup"].as_bool(), v["show"].as_bool()), (Some(false), Some(false)));
         assert_eq!(
             v["releases"].as_array().unwrap().iter().map(|x| x["version"].as_str().unwrap()).collect::<Vec<_>>(),
-            vec!["0.36.1", "0.36.0"]
+            vec!["1.4.0", "1.3.0"]
         );
         let (_, v) = call(&r, "GET", "/api/changelog", 1).await;
-        assert_eq!((v["popup"].as_bool(), v["seen"].as_str()), (Some(false), Some("0.35.2")));
+        assert_eq!((v["popup"].as_bool(), v["seen"].as_str()), (Some(false), Some("1.2.1")));
         let list = v["releases"].as_array().unwrap();
-        assert_eq!(list.iter().map(|x| x["version"].as_str().unwrap()).collect::<Vec<_>>(), vec!["0.36.1", "0.36.0", "0.35.2"]);
-        assert_eq!(list[0]["blocks"][1], json!({ "k": "li", "lead": "New 0.36.1.", "text": "Text." }));
+        assert_eq!(list.iter().map(|x| x["version"].as_str().unwrap()).collect::<Vec<_>>(), vec!["1.4.0", "1.3.0", "1.2.1"]);
+        assert_eq!(list[0]["blocks"][1], json!({ "k": "li", "lead": "New 1.4.0.", "text": "Text." }));
         let (_, v) = call(&r, "GET", "/api/changelog?limit=1", 1).await;
         assert_eq!(v["releases"].as_array().unwrap().len(), 1);
-        assert_eq!(v["seen"], json!("0.35.2"));
+        assert_eq!(v["seen"], json!("1.2.1"));
         let (_, v) = call(&r, "GET", "/api/changelog", 2).await;
         assert_eq!(v["seen"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn notes_from_a_folder_at_the_apps_paths() {
+        let dir = std::env::temp_dir().join(format!("kit-changelog-dir-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("1.0.0.md"), "## Demo 1.0.0\n\nFirst.\n").unwrap();
+        std::fs::write(dir.join("1.1.0.md"), "## Demo 1.1.0 – Faster\n\nSecond.\n").unwrap();
+        std::fs::write(dir.join("notes.txt"), "not notes").unwrap();
+        let c = Changelog::from_dir("Demo", "1.1.0.3", &dir).unwrap();
+        assert_eq!(c.releases.iter().map(|r| r.title.as_str()).collect::<Vec<_>>(), vec!["Faster", "Demo 1.0.0"]);
+        let missing = Changelog::from_dir("Demo", "1.0.0", &dir.join("missing")).unwrap_err();
+        assert!(missing.starts_with("The release notes folder ") && missing.ends_with(" can't be read"), "{missing}");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let st = App(TestHost::new(), Arc::new(c));
+        let paths = ChangelogPaths { all: "/notes".into(), new: "/notes/new".into(), seen: "/notes/seen".into() };
+        let r = router_with(paths).with_state(st);
+        let (s, v) = call(&r, "GET", "/notes/new", 2).await;
+        assert_eq!((s, v["releases"][0]["title"].clone()), (200, json!("Faster")));
+        assert_eq!(call(&r, "POST", "/notes/seen", 2).await.1, json!({ "ok": true, "seen": "1.1.0.3" }));
+        assert_eq!(call(&r, "GET", "/notes", 2).await.1["seen"], json!("1.1.0.3"));
+        let req = Request::builder().uri("/api/changelog").header("x-test-user", "2").body(Body::empty()).unwrap();
+        assert_eq!(r.clone().oneshot(req).await.unwrap().status(), 404);
     }
 
     #[tokio::test]

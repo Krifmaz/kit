@@ -1,5 +1,5 @@
-//! The error answer: every failure is `{"detail": "<plain sentence>"}` with an HTTP status, as Encore's
-//! `encore_core::error` answers, so Encore's clients show kit errors exactly as they show Encore's own.
+//! The error answer: every failure is `{"detail": "<plain sentence>"}` with an HTTP status, so every kit
+//! client shows (and lets the person copy) any server's errors the same way.
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -33,7 +33,7 @@ impl Error {
         self
     }
 
-    /// A database failure: logged with its cause, answered as Encore does ("Database error", 500).
+    /// A database failure: logged with its cause, answered as "Database error" (500).
     pub fn database(cause: impl std::fmt::Display) -> Self {
         tracing::error!("database: {cause}");
         Error::new(500, "Database error")

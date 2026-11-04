@@ -1,14 +1,12 @@
 //! The report handlers: file, list, count unread, read, reply, set the status, delete, and fetch a file.
 
 use crate::files::{check_quota, read_form, store_files};
-use crate::{
-    cut, ensure_table, line, reports_dir, status_label, BugReportsHost, KINDS, MAX_BODY, MAX_TITLE, REPLIES_PER_HOUR, REPORTS_PER_HOUR,
-    STATUSES,
-};
+use crate::{cut, ensure_table, fill, line, or_list, reports_dir, BugReportsConfig, BugReportsHost, Cfg, STATUSES};
 use axum::body::Body;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{header, HeaderValue};
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
 use axum::Json;
 use kit_server_core::db::now;
 use kit_server_core::{err, p, Account, Admin, Result, Row, RowExt, SignedIn};
@@ -51,19 +49,19 @@ pub(crate) fn load_full(st: &impl BugReportsHost, report: Row) -> Result<Full> {
     Ok(Full { report, files, messages })
 }
 
-/// A file as the API gives it, with its download URL.
-fn file_json(report_id: i64, f: &Row) -> Value {
-    json!({ "id": f.i("id"), "name": f.s("name"), "mime": f.s("mime"), "size": f.i("size"), "url": format!("/api/bug-reports/{report_id}/files/{}", f.i("id")) })
+/// A file as the API gives it, with its download URL under the routes' `base`.
+fn file_json(base: &str, report_id: i64, f: &Row) -> Value {
+    json!({ "id": f.i("id"), "name": f.s("name"), "mime": f.s("mime"), "size": f.i("size"), "url": format!("{base}/{report_id}/files/{}", f.i("id")) })
 }
 
 /// A reply as the API gives it.
-fn message_json(report_id: i64, m: &Row, files: &[Row]) -> Value {
+fn message_json(base: &str, report_id: i64, m: &Row, files: &[Row]) -> Value {
     json!({ "id": m.i("id"), "username": m.s("username"), "is_admin": m.b("is_admin"), "body": m.s("body"), "created_at": m.f("created_at"),
-            "files": files.iter().map(|f| file_json(report_id, f)).collect::<Vec<_>>() })
+            "files": files.iter().map(|f| file_json(base, report_id, f)).collect::<Vec<_>>() })
 }
 
 /// A report as the API gives it, with its files and its thread.
-fn report_json(full: &Full) -> Value {
+fn report_json(base: &str, full: &Full) -> Value {
     let r = &full.report;
     let id = r.i("id");
     json!({
@@ -71,9 +69,9 @@ fn report_json(full: &Full) -> Value {
             "id": id, "kind": r.s("kind"), "title": r.s("title"), "body": r.s("body"), "page": r.s("page"), "app_version": r.s("app_version"),
             "device": r.s("device"), "status": r.s("status"), "username": r.s("username"), "user_id": r.i("user_id"),
             "created_at": r.f("created_at"), "updated_at": r.f("updated_at"),
-            "files": full.files.iter().map(|f| file_json(id, f)).collect::<Vec<_>>(),
+            "files": full.files.iter().map(|f| file_json(base, id, f)).collect::<Vec<_>>(),
         },
-        "messages": full.messages.iter().map(|(m, files)| message_json(id, m, files)).collect::<Vec<_>>(),
+        "messages": full.messages.iter().map(|(m, files)| message_json(base, id, m, files)).collect::<Vec<_>>(),
     })
 }
 
@@ -93,30 +91,30 @@ fn unread_sql(admin: bool) -> String {
 /// `GET /api/bug-reports` (and export) query.
 #[derive(Deserialize, Default)]
 #[serde(default)]
-pub struct ListQ {
+pub(crate) struct ListQ {
     /// only this status
-    pub status: String,
+    pub(crate) status: String,
     /// only this kind
-    pub kind: String,
+    pub(crate) kind: String,
     /// a search text
-    pub q: String,
+    pub(crate) q: String,
     /// "1" for the caller's own only (admins)
-    pub mine: String,
+    pub(crate) mine: String,
     /// export only: `1,2,3`
-    pub ids: String,
+    pub(crate) ids: String,
     /// export only: `txt` for one plain text file instead of the zip
-    pub format: String,
+    pub(crate) format: String,
 }
 
 /// WHERE … for a list: the filters that are set, and the viewer's own reports unless an admin asks for all.
-pub(crate) fn filter_sql(q: &ListQ, u: &Account, admin: bool) -> (String, Vec<Value>) {
+pub(crate) fn filter_sql(cfg: &BugReportsConfig, q: &ListQ, u: &Account, admin: bool) -> (String, Vec<Value>) {
     let mut where_ = vec!["1=1".to_string()];
     let mut params = p![];
     if STATUSES.contains(&q.status.as_str()) {
         where_.push("r.status=?".into());
         params.push(json!(q.status));
     }
-    if KINDS.contains(&q.kind.as_str()) {
+    if cfg.words.has_kind(&q.kind) {
         where_.push("r.kind=?".into());
         params.push(json!(q.kind));
     }
@@ -138,37 +136,43 @@ pub(crate) fn filter_sql(q: &ListQ, u: &Account, admin: bool) -> (String, Vec<Va
     (where_.join(" AND "), params)
 }
 
-/// POST /api/bug-reports: file a report with up to [`crate::MAX_FILES`] files (20 an hour for non-admins).
-pub async fn create<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn, form: Multipart) -> Result<Json<Value>> {
+/// POST /api/bug-reports: file a report with up to [`crate::Limits::max_files`] files (a few an hour for
+/// non-admins).
+pub(crate) async fn create<S: BugReportsHost>(
+    State(st): State<S>,
+    Extension(cfg): Cfg,
+    SignedIn(u): SignedIn,
+    form: Multipart,
+) -> Result<Json<Value>> {
     ensure_table(&st)?;
-    let admin = u.admin;
-    if !admin && st.limited(&format!("bugreport:{}", u.id), REPORTS_PER_HOUR, 3600.0) {
+    let (admin, lim, words) = (u.admin, &cfg.limits, &cfg.words);
+    if !admin && st.limited(&format!("bugreport:{}", u.id), lim.reports_per_hour, 3600.0) {
         return Err(err(429, "Too many reports in a short time – try again later"));
     }
-    let form = read_form(&st, form).await?;
+    let form = read_form(&st, lim, form).await?;
     let title = line(form.text("title"));
     let body = form.text("body").trim().to_string();
     if title.is_empty() {
         return Err(err(400, "Give the report a title"));
     }
-    if title.chars().count() > MAX_TITLE {
-        return Err(err(400, format!("The title can have at most {MAX_TITLE} characters")));
+    if title.chars().count() > lim.max_title {
+        return Err(err(400, format!("The title can have at most {} characters", lim.max_title)));
     }
     if body.is_empty() {
         return Err(err(400, "Describe what happened"));
     }
-    if body.chars().count() > MAX_BODY {
-        return Err(err(400, format!("The description can have at most {MAX_BODY} characters")));
+    if body.chars().count() > lim.max_body {
+        return Err(err(400, format!("The description can have at most {} characters", lim.max_body)));
     }
     let kind = form.text("kind").trim();
     let kind = if kind.is_empty() {
-        "bug"
-    } else if KINDS.contains(&kind) {
+        words.default_kind()
+    } else if words.has_kind(kind) {
         kind
     } else {
-        return Err(err(400, "Pick a kind: Bug, Not a bug or How do I…"));
+        return Err(err(400, format!("Pick a kind: {}", or_list(words.kinds.iter().map(|(_, l)| l.as_str())))));
     };
-    check_quota(&st, &u, &form.files)?;
+    check_quota(&st, lim, &u, &form.files)?;
     let t = now();
     // an admin's own report is not news to them
     let admin_seen = if admin { t } else { 0.0 };
@@ -192,15 +196,20 @@ pub async fn create<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedI
     )?;
     store_files(&st, id, None, form.files).await?;
     st.log("info", &format!("{} filed bug report #{id}: {title}", u.username));
-    tokio::spawn(st.notify("New bug report".to_string(), format!("{}: {title}", u.username)));
+    tokio::spawn(st.notify(words.notify_new.clone(), format!("{}: {title}", u.username)));
     Ok(Json(json!({ "ok": true, "id": id })))
 }
 
 /// GET /api/bug-reports: the reports the caller may see.
-pub async fn list<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn, Query(q): Query<ListQ>) -> Result<Json<Value>> {
+pub(crate) async fn list<S: BugReportsHost>(
+    State(st): State<S>,
+    Extension(cfg): Cfg,
+    SignedIn(u): SignedIn,
+    Query(q): Query<ListQ>,
+) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let admin = u.admin;
-    let (where_, params) = filter_sql(&q, &u, admin);
+    let (where_, params) = filter_sql(&cfg, &q, &u, admin);
     let rows = st.db().query(
         &format!(
             "SELECT r.id, r.kind, r.title, r.status, r.username, r.user_id, r.created_at, r.updated_at,
@@ -222,13 +231,11 @@ pub async fn list<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn,
             })
         })
         .collect();
-    let mut v = json!({ "reports": reports });
-    st.enrich(&u, &mut v).await;
-    Ok(Json(v))
+    Ok(Json(json!({ "reports": reports })))
 }
 
 /// GET /api/bug-reports/unread: how many reports have something the caller hasn't seen.
-pub async fn unread<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
+pub(crate) async fn unread<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let admin = u.admin;
     let own = if admin { "" } else { "AND r.user_id=?" };
@@ -238,7 +245,12 @@ pub async fn unread<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedI
 }
 
 /// GET /api/bug-reports/{id}: a report with its thread; marks it seen.
-pub async fn detail<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn, Path(id): Path<i64>) -> Result<Json<Value>> {
+pub(crate) async fn detail<S: BugReportsHost>(
+    State(st): State<S>,
+    Extension(cfg): Cfg,
+    SignedIn(u): SignedIn,
+    Path(id): Path<i64>,
+) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let r = load(&st, id, &u)?;
     let t = now();
@@ -248,33 +260,32 @@ pub async fn detail<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedI
     if r.i("user_id") == u.id {
         st.db().execute("UPDATE bug_reports SET user_seen_at=? WHERE id=?", p![t, id])?;
     }
-    let mut v = report_json(&load_full(&st, r)?);
-    st.enrich(&u, &mut v).await;
-    Ok(Json(v))
+    Ok(Json(report_json(cfg.paths.base.trim_end_matches('/'), &load_full(&st, r)?)))
 }
 
 /// POST /api/bug-reports/{id}/messages: reply to a report.
-pub async fn reply<S: BugReportsHost>(
+pub(crate) async fn reply<S: BugReportsHost>(
     State(st): State<S>,
+    Extension(cfg): Cfg,
     SignedIn(u): SignedIn,
     Path(id): Path<i64>,
     form: Multipart,
 ) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let r = load(&st, id, &u)?;
-    let admin = u.admin;
-    if !admin && st.limited(&format!("bugreply:{}", u.id), REPLIES_PER_HOUR, 3600.0) {
+    let (admin, lim, words) = (u.admin, &cfg.limits, &cfg.words);
+    if !admin && st.limited(&format!("bugreply:{}", u.id), lim.replies_per_hour, 3600.0) {
         return Err(err(429, "Too many replies in a short time – try again later"));
     }
-    let form = read_form(&st, form).await?;
+    let form = read_form(&st, lim, form).await?;
     let body = form.text("body").trim().to_string();
     if body.is_empty() && form.files.is_empty() {
         return Err(err(400, "Write a reply or attach a file"));
     }
-    if body.chars().count() > MAX_BODY {
-        return Err(err(400, format!("A reply can have at most {MAX_BODY} characters")));
+    if body.chars().count() > lim.max_body {
+        return Err(err(400, format!("A reply can have at most {} characters", lim.max_body)));
     }
-    check_quota(&st, &u, &form.files)?;
+    check_quota(&st, lim, &u, &form.files)?;
     let t = now();
     let mid = st.db().execute(
         "INSERT INTO bug_report_messages (report_id, user_id, username, is_admin, body, created_at) VALUES (?,?,?,?,?,?)",
@@ -295,13 +306,14 @@ pub async fn reply<S: BugReportsHost>(
             let to = st.mail_address(r.i("user_id"))?;
             if !to.trim().is_empty() {
                 let base = st.base_url();
+                let link = fill(&words.report_link, &[("id", &id.to_string())]);
                 let link = if base.trim().is_empty() {
-                    format!("#/bug-reports/{id}")
+                    link
                 } else {
-                    format!("{}/#/bug-reports/{id}", base.trim().trim_end_matches('/'))
+                    format!("{}/{}", base.trim().trim_end_matches('/'), link.trim_start_matches('/'))
                 };
-                let subject = format!("{}: a reply to your report “{title}”", st.app_name());
-                let text = format!("{} answered your report “{title}”:\n\n{body}\n\n{link}\n", u.username);
+                let subject = fill(&words.mail_subject, &[("app", &st.app_name()), ("title", &title)]);
+                let text = fill(&words.mail_text, &[("who", &u.username), ("title", &title), ("body", &body), ("link", &link)]);
                 let (sending, st2) = (st.send_mail(to, subject, text), st.clone());
                 tokio::spawn(async move {
                     if let Err(e) = sending.await {
@@ -322,7 +334,7 @@ pub async fn reply<S: BugReportsHost>(
         } else {
             format!("{who} on #{id} {title}: {}", cut(&body, 300))
         };
-        tokio::spawn(st.notify("Bug report reply".to_string(), text));
+        tokio::spawn(st.notify(words.notify_reply.clone(), text));
     }
     Ok(Json(json!({ "ok": true, "id": mid })))
 }
@@ -330,14 +342,15 @@ pub async fn reply<S: BugReportsHost>(
 /// `POST /api/bug-reports/{id}/status` body.
 #[derive(Deserialize, Default)]
 #[serde(default)]
-pub struct StatusBody {
+pub(crate) struct StatusBody {
     /// one of [`STATUSES`]
-    pub status: String,
+    pub(crate) status: String,
 }
 
 /// POST /api/bug-reports/{id}/status: set a report's status (admins).
-pub async fn set_status<S: BugReportsHost>(
+pub(crate) async fn set_status<S: BugReportsHost>(
     State(st): State<S>,
+    Extension(cfg): Cfg,
     Admin(u): Admin,
     Path(id): Path<i64>,
     Json(b): Json<StatusBody>,
@@ -345,16 +358,16 @@ pub async fn set_status<S: BugReportsHost>(
     ensure_table(&st)?;
     let status = b.status.trim();
     if !STATUSES.contains(&status) {
-        return Err(err(400, "Pick a status: New, Looking into it, Fixed, Won't fix or Answered"));
+        return Err(err(400, format!("Pick a status: {}", or_list(STATUSES.iter().map(|s| cfg.words.status_label(s))))));
     }
     let r = load(&st, id, &u)?;
     st.db().execute("UPDATE bug_reports SET status=?, updated_at=? WHERE id=?", p![status, now(), id])?;
-    st.log("info", &format!("{} set bug report #{id} ({}) to {}", u.username, r.s("title"), status_label(status)));
+    st.log("info", &format!("{} set bug report #{id} ({}) to {}", u.username, r.s("title"), cfg.words.status_label(status)));
     Ok(Json(json!({ "ok": true })))
 }
 
 /// DELETE /api/bug-reports/{id}: delete a report and its files (admins).
-pub async fn remove<S: BugReportsHost>(State(st): State<S>, Admin(u): Admin, Path(id): Path<i64>) -> Result<Json<Value>> {
+pub(crate) async fn remove<S: BugReportsHost>(State(st): State<S>, Admin(u): Admin, Path(id): Path<i64>) -> Result<Json<Value>> {
     ensure_table(&st)?;
     let r = load(&st, id, &u)?;
     st.db().execute("DELETE FROM bug_report_files WHERE report_id=?", p![id])?;
@@ -374,7 +387,11 @@ fn disposition(inline: bool, name: &str) -> HeaderValue {
 }
 
 /// GET /api/bug-reports/{id}/files/{fid}: an attached file.
-pub async fn file<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn, Path((id, fid)): Path<(i64, i64)>) -> Result<Response> {
+pub(crate) async fn file<S: BugReportsHost>(
+    State(st): State<S>,
+    SignedIn(u): SignedIn,
+    Path((id, fid)): Path<(i64, i64)>,
+) -> Result<Response> {
     ensure_table(&st)?;
     load(&st, id, &u)?;
     let f = st

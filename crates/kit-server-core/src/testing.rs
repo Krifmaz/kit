@@ -1,4 +1,4 @@
-//! [`TestHost`]: an app state for the kit crates' tests. SQLite in memory with an Encore-shaped `users` table;
+//! [`TestHost`]: an app state for the kit crates' tests. SQLite in memory with a small `users` table;
 //! a request is signed in as the account whose id is in its `x-test-user` header.
 
 use crate::{err, Account, Db, Host, Result, SqliteDb};

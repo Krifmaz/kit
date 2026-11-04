@@ -6,7 +6,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use kit_server_core::testing::TestHost;
 use kit_server_core::{p, Db};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Mutex;
@@ -22,10 +22,10 @@ impl BugReportsHost for TestHost {
         self.data_dir.clone()
     }
     fn app_name(&self) -> String {
-        "Encore".into()
+        "Demo".into()
     }
     fn app_version(&self) -> String {
-        "0.36.0".into()
+        "1.4.0".into()
     }
     fn limited(&self, key: &str, limit: usize, _window_secs: f64) -> bool {
         let mut m = COUNTS.lock().unwrap();
@@ -186,10 +186,10 @@ async fn report_reply_status_export_and_delete() {
         USER,
         &[
             ("kind", "bug"),
-            ("title", "Play button does nothing"),
+            ("title", "Save button does nothing"),
             ("body", "Nothing happened."),
-            ("page", "#/album/12"),
-            ("app_version", "0.26.4"),
+            ("page", "#/projects/12"),
+            ("app_version", "1.3.2"),
         ],
         &[("../shot one.png", "image/png", &shot)],
     )
@@ -198,7 +198,7 @@ async fn report_reply_status_export_and_delete() {
     let id = body["id"].as_i64().unwrap();
     let folder = st.data_dir.join("reports").join(id.to_string());
     assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
-    assert!(TOLD.lock().unwrap().contains(&("New bug report".into(), "ana: Play button does nothing".into())));
+    assert!(TOLD.lock().unwrap().contains(&("New bug report".into(), "ana: Save button does nothing".into())));
 
     // the admin has it unread, the reporter doesn't; someone else sees nothing
     let r = call(&app, "GET", "/api/bug-reports", ADMIN, None).await;
@@ -208,7 +208,7 @@ async fn report_reply_status_export_and_delete() {
     assert_eq!(unread_count(&app, USER).await, 0);
     assert_eq!(call(&app, "GET", "/api/bug-reports", OTHER, None).await.1["reports"], json!([]));
     assert_eq!(call(&app, "GET", "/api/bug-reports?mine=1", ADMIN, None).await.1["reports"], json!([]));
-    assert_eq!(call(&app, "GET", "/api/bug-reports?kind=bug&q=play", ADMIN, None).await.1["reports"].as_array().unwrap().len(), 1);
+    assert_eq!(call(&app, "GET", "/api/bug-reports?kind=bug&q=save", ADMIN, None).await.1["reports"].as_array().unwrap().len(), 1);
     assert_eq!(call(&app, "GET", "/api/bug-reports?q=50%25", ADMIN, None).await.1["reports"], json!([]));
 
     // read: the file with its url; seen
@@ -235,15 +235,15 @@ async fn report_reply_status_export_and_delete() {
     assert_eq!(unread_count(&app, USER).await, 1);
     tokio::task::yield_now().await;
     assert!(TOLD.lock().unwrap().contains(&(
-        "mail ana@example.com: Encore: a reply to your report “Play button does nothing”".into(),
-        format!("admin answered your report “Play button does nothing”:\n\nLooking.\n\n#/bug-reports/{id}\n")
+        "mail ana@example.com: Demo: a reply to your report “Save button does nothing”".into(),
+        format!("admin answered your report “Save button does nothing”:\n\nLooking.\n\n#/bug-reports/{id}\n")
     )));
     // the reporter answers with a log only: new again, unread for the admin
     let (status, _) =
         post_form(&app, &format!("/api/bug-reports/{id}/messages"), USER, &[], &[("console.log", "text/plain", b"TypeError\n")]).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(unread_count(&app, ADMIN).await, 1);
-    assert!(TOLD.lock().unwrap().contains(&("Bug report reply".into(), format!("ana on #{id} Play button does nothing: (a file)"))));
+    assert!(TOLD.lock().unwrap().contains(&("Bug report reply".into(), format!("ana on #{id} Save button does nothing: (a file)"))));
     assert_eq!(call(&app, "GET", &format!("/api/bug-reports/{id}"), ADMIN, None).await.1["report"]["status"], json!("new"));
 
     // status: admins only, one of the five
@@ -264,18 +264,18 @@ async fn report_reply_status_export_and_delete() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(headers["content-type"], "application/zip");
     let cd = headers["content-disposition"].to_str().unwrap();
-    assert!(cd.starts_with("attachment; filename=\"encore-bug-reports-") && cd.ends_with(".zip\""), "{cd}");
+    assert!(cd.starts_with("attachment; filename=\"demo-bug-reports-") && cd.ends_with(".zip\""), "{cd}");
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
     let mut md = String::new();
     zip.by_name("reports.md").unwrap().read_to_string(&mut md).unwrap();
-    assert!(md.starts_with("# Encore bug reports (0.36.0, exported "), "{md}");
-    assert!(md.contains(&format!("## #{id} [Bug] Play button does nothing — Looking into it")), "{md}");
+    assert!(md.starts_with("# Demo bug reports (1.4.0, exported "), "{md}");
+    assert!(md.contains(&format!("## #{id} [Bug] Save button does nothing — Looking into it")), "{md}");
     assert!(md.contains(&format!("![shot one.png](<files/{id}/{fid}-shot one.png>)")), "{md}");
     assert!(md.contains("**admin (admin) — ") && md.contains("**ana — "), "{md}");
     let mut js = String::new();
     zip.by_name("reports.json").unwrap().read_to_string(&mut js).unwrap();
     let js: Value = serde_json::from_str(&js).unwrap();
-    assert_eq!((js["version"].clone(), js["reports"][0]["status_label"].clone()), (json!("0.36.0"), json!("Looking into it")));
+    assert_eq!((js["version"].clone(), js["reports"][0]["status_label"].clone()), (json!("1.4.0"), json!("Looking into it")));
     let mut img = Vec::new();
     zip.by_name(&format!("files/{id}/{fid}-shot one.png")).unwrap().read_to_end(&mut img).unwrap();
     assert_eq!(img, shot);
@@ -284,9 +284,9 @@ async fn report_reply_status_export_and_delete() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(headers["content-type"], "text/plain; charset=utf-8");
     let txt = String::from_utf8(bytes).unwrap();
-    assert!(txt.starts_with("Encore bug reports (0.36.0, exported "), "{txt}");
-    assert!(txt.contains(&format!("#{id} [Bug] Play button does nothing - Looking into it\nBy: ana\nCreated: ")), "{txt}");
-    assert!(txt.contains("Page: #/album/12\nApp: 0.26.4\n") && txt.contains("\nFiles: shot one.png\n"), "{txt}");
+    assert!(txt.starts_with("Demo bug reports (1.4.0, exported "), "{txt}");
+    assert!(txt.contains(&format!("#{id} [Bug] Save button does nothing - Looking into it\nBy: ana\nCreated: ")), "{txt}");
+    assert!(txt.contains("Page: #/projects/12\nApp: 1.3.2\n") && txt.contains("\nFiles: shot one.png\n"), "{txt}");
     assert!(txt.contains("Files: console.log\n\n----- console.log -----\nTypeError\n----- end of console.log -----"), "{txt}");
 
     // delete: admins only; the rows and the folder go
@@ -347,7 +347,7 @@ async fn bad_uploads_are_refused_with_a_sentence() {
     );
     assert_eq!(
         refused(post_form(&app, "/api/bug-reports", USER, &[("kind", "feature"), ("title", "T"), ("body", "x")], &[]).await),
-        "Pick a kind: Bug, Not a bug or How do I…"
+        "Pick a kind: Bug, Not a bug, How do I… or Crash log"
     );
     assert!(!st.data_dir.join("reports").exists());
     // a PNG called .html is kept as .png; the title stays on one line
@@ -369,12 +369,12 @@ async fn bad_uploads_are_refused_with_a_sentence() {
 async fn too_many_or_too_much_is_refused() {
     let (app, st) = app();
     let fields = [("title", "Again"), ("body", "the same")];
-    for _ in 0..REPORTS_PER_HOUR {
+    for _ in 0..Limits::default().reports_per_hour {
         assert_eq!(post_form(&app, "/api/bug-reports", USER, &fields, &[]).await.0, StatusCode::OK);
     }
     let r = post_form(&app, "/api/bug-reports", USER, &fields, &[]).await;
     assert_eq!((r.0, r.1["detail"].clone()), (StatusCode::TOO_MANY_REQUESTS, json!("Too many reports in a short time – try again later")));
-    for _ in 0..=REPORTS_PER_HOUR {
+    for _ in 0..=Limits::default().reports_per_hour {
         assert_eq!(post_form(&app, "/api/bug-reports", ADMIN, &fields, &[]).await.0, StatusCode::OK);
     }
     // 500 MB a user, admins exempt
@@ -408,14 +408,72 @@ fn names_labels_and_checks() {
     assert_eq!(safe_name(".hidden", "jpg"), "hidden.jpg");
     assert_eq!(safe_name(&"é".repeat(200), "png").chars().count(), MAX_NAME);
     assert_eq!(line("  two\t\tspaces \r\n "), "two spaces");
-    assert_eq!(kind_label("crash"), "Crash log");
-    assert_eq!(status_label("anything"), "New");
-    assert_eq!(export_stem("Encore", "2026-11-04"), "encore-bug-reports-2026-11-04");
-    assert_eq!(export_stem("My App", "2026-11-04"), "my-app-bug-reports-2026-11-04");
-    assert_eq!(check_file("notes.log", b"line").unwrap(), ("text/plain", "log"));
-    assert_eq!(check_file("notes.txt", &[0xff, 0xfe]).unwrap_err().detail, "A text file has to be UTF-8");
-    assert!(check_file("notes.md", b"text").is_err());
-    assert_eq!(check_file("ok.png", &huge_png(64, 48)).unwrap(), ("image/png", "png"));
-    assert!(check_file("wide.png", &huge_png(8193, 2)).is_err());
-    assert!(check_file("fine.png", &huge_png(8192, 2)).is_ok());
+    let w = Words::default();
+    assert_eq!(w.kind_label("crash"), "Crash log");
+    assert_eq!(w.kind_label("feature"), "Bug");
+    assert_eq!(w.status_label("anything"), "New");
+    assert_eq!(w.export_stem("Demo", "2026-11-04"), "demo-bug-reports-2026-11-04");
+    assert_eq!(w.export_stem("My App", "2026-11-04"), "my-app-bug-reports-2026-11-04");
+    assert_eq!(fill("{a} {b} {c} {", &[("a", "{b}"), ("b", "2")]), "{b} 2 {c} {");
+    assert_eq!(or_list(["A"].into_iter()), "A");
+    assert_eq!(or_list(["A", "B", "C"].into_iter()), "A, B or C");
+    assert_eq!(Limits::default().upload(), 50 << 20);
+    let lim = Limits::default();
+    assert_eq!(check_file("notes.log", b"line", &lim).unwrap(), ("text/plain", "log"));
+    assert_eq!(check_file("notes.txt", &[0xff, 0xfe], &lim).unwrap_err().detail, "A text file has to be UTF-8");
+    assert!(check_file("notes.md", b"text", &lim).is_err());
+    assert_eq!(check_file("ok.png", &huge_png(64, 48), &lim).unwrap(), ("image/png", "png"));
+    assert!(check_file("wide.png", &huge_png(8193, 2), &lim).is_err());
+    assert!(check_file("fine.png", &huge_png(8192, 2), &lim).is_ok());
+    assert!(check_file("fine.png", &huge_png(64, 48), &Limits { max_side: 32, ..Limits::default() }).is_err());
+}
+
+#[tokio::test]
+async fn paths_limits_and_words_are_the_apps() {
+    let st = TestHost::new();
+    let words = Words {
+        kinds: vec![("idea".into(), "Idea".into()), ("problem".into(), "Problem".into())],
+        export_title: "{app} feedback".into(),
+        export_file: "{app}-feedback".into(),
+        notify_new: "New feedback".into(),
+        mail_subject: "About “{title}”".into(),
+        mail_text: "{who}: {body} ({link})".into(),
+        report_link: "/feedback/{id}".into(),
+        ..Words::default()
+    };
+    let limits = Limits { max_title: 10, max_files: 1, ..Limits::default() };
+    let config = BugReportsConfig { paths: BugReportPaths { base: "/feedback/".into() }, limits, words };
+    let app = router_with(config).with_state(st.clone());
+    let fields = [("title", "Dark mode"), ("body", "Please.")];
+    let (status, body) = post_form(&app, "/feedback", USER, &fields, &[]).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let id = body["id"].as_i64().unwrap();
+    assert!(TOLD.lock().unwrap().contains(&("New feedback".into(), "ana: Dark mode".into())));
+    let r = call(&app, "GET", &format!("/feedback/{id}"), USER, None).await;
+    assert_eq!(r.1["report"]["kind"], json!("idea"));
+    let refused = post_form(&app, "/feedback", USER, &[("kind", "bug"), ("title", "T"), ("body", "x")], &[]).await;
+    assert_eq!(refused.1["detail"], json!("Pick a kind: Idea or Problem"));
+    let refused = post_form(&app, "/feedback", USER, &[("title", "Eleven char"), ("body", "x")], &[]).await;
+    assert_eq!(refused.1["detail"], json!("The title can have at most 10 characters"));
+    let shot = png(2, 2);
+    let two: Vec<Upload> = (0..2).map(|_| ("a.png", "image/png", shot.as_slice())).collect();
+    assert_eq!(post_form(&app, "/feedback", USER, &fields, &two).await.1["detail"], json!("At most 1 files per report"));
+    let (_, f) = post_form(&app, &format!("/feedback/{id}/messages"), USER, &[], &[("a.png", "image/png", &shot)]).await;
+    assert_eq!(f["ok"], json!(true));
+    let r = call(&app, "GET", &format!("/feedback/{id}"), USER, None).await;
+    let url = r.1["messages"][0]["files"][0]["url"].as_str().unwrap().to_string();
+    assert!(url.starts_with(&format!("/feedback/{id}/files/")), "{url}");
+    assert_eq!(send(&app, "GET", &url, USER, "", vec![]).await.0, StatusCode::OK);
+    // the admin's reply mail
+    post_form(&app, &format!("/feedback/{id}/messages"), ADMIN, &[("body", "Soon.")], &[]).await;
+    tokio::task::yield_now().await;
+    assert!(TOLD.lock().unwrap().contains(&("mail ana@example.com: About “Dark mode”".into(), format!("admin: Soon. (/feedback/{id})"))));
+    // the export's title and name
+    let (status, headers, bytes) = send(&app, "GET", &format!("/feedback/export?ids={id}&format=txt"), ADMIN, "", vec![]).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(headers["content-disposition"].to_str().unwrap().starts_with("attachment; filename=\"demo-feedback-"));
+    let txt = String::from_utf8(bytes).unwrap();
+    assert!(txt.starts_with("Demo feedback (1.4.0, exported "), "{txt}");
+    assert!(txt.contains(&format!("#{id} [Idea] Dark mode - Answered")), "{txt}");
+    assert_eq!(call(&app, "GET", "/api/bug-reports", USER, None).await.0, StatusCode::NOT_FOUND);
 }

@@ -1,5 +1,5 @@
 //! [`SqliteDb`]: the kit's own SQLite database, one connection behind a lock, for an app that has no database
-//! layer of its own (the template's apps) and for the crates' tests. Encore passes its own `encore_db::Db`.
+//! layer of its own (the template's apps) and for the crates' tests. An app with its own database implements [`Db`] for it.
 
 use crate::{Db, Error, Result, Row};
 use rusqlite::types::{Value as SqlValue, ValueRef};
