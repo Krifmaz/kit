@@ -9,6 +9,15 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   no commits since.
 
 ### Changed
+- `android/kit-compose` is neutral: no Encore names, music words, routes or fixtures. `KitApp.init` takes the app's
+  `id` (preferences and export names; was the name in lower case) and `routes`, a `KitRoutes` with every server path
+  the kit calls (defaults `/api/health`, `/api/changelog*`, `/api/notices`, `/api/bug-reports`, `/api/diagnostics`,
+  `/api/settings/schema`, `/api/settings`, …), used by `BugReportsApi`, `SchemaApi`, `CrashLog`, `probeHealth` and
+  the new `ApiChangelogBackend`. `UpdateSource.ENCORE` is gone (the app sets `UpdateRules.source`), and
+  `UpdateRules.updatesPlace` names where Updates is. The offline outbox is generic (`OutAction(kind, key, data)`,
+  `OutMerge.Each`/`Latest`, the app's nouns in its words). Settings: `FieldBlock` replaces the VPN block, and
+  `neverShown` replaces the built-in WireGuard key. `KitLook.accent` `""` means the theme's own accent. `KitApi`
+  gains `put` (with a refusing default).
 - The template's release no longer re-uploads the apps under its title. `kit-android.yml` and `kit-desktop.yml` upload as `kit-app-android` / `kit-app-desktop-<OS>`, and `kit-release.yml`
   collects `kit-app-*`, so an app whose name has a space ("Kit Demo") still gets its APK and installers attached;
   the kit's CI checks the three agree.
@@ -57,6 +66,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   keeps the previous release's other files).
 
 ### Added
+- `kit-compose` `dialogs` (`Confirm` with type-to-confirm, `ConfirmDialog`, `Confirms`/`ConfirmHost`), `notices`
+  (`NoticeBanners`, `rememberNotices`, `NoticeRules`) and `uploads` (`DropZone`, `UploadRules`, `FileLimits`).
+- `android/demo` uses every kit-compose feature against an in-memory server (`DemoBackend` behind an OkHttp
+  interceptor), with a settings schema of every field kind and unit tests (`DemoServerTest`) in CI.
 - `template/`: follows the neutral kit: the web app sets no `data-theme` (the default look is `:root`); the
   desktop app uses `theme::default_look()`, kit-iced's confirm dialog and the app's `Logo` (`Logo::KIT` until
   it has one); the release workflow uses kit-desktop's `package` command, and an `apps` job hands the app

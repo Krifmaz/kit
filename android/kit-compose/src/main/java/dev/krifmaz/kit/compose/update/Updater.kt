@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The phone's own update (Settings → This device → Updates; the car follows the phone).
+ * The phone's own update (the app's Updates section, [UpdatesSection]).
  *
  * 1. **Check**: GitHub's newest release (`UpdateRules.LATEST`), at most once a day when the app opens and
  *    "Look for a new version when <app> starts" is on, or by hand with Check for updates. The ETag is kept, so an
@@ -49,15 +49,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  *    person to confirm unless it lets an app update itself without asking (Android 12+). The app closes while it
  *    installs.
  *
- * Debug builds (Encore: `app.encore.client.debug`) can't update themselves: the releases are the other package
+ * Debug builds (`<package>.debug`) can't update themselves: the releases are the other package
  * ([UpdateSource.releasePackage]). The app sets [UpdateRules.source] and [KitApp] at start-up, and declares
  * [UpdateInstallReceiver] and `REQUEST_INSTALL_PACKAGES` in its manifest.
  */
 object Updater {
     private val TAG: String get() = KitApp.name
 
-    /** The app's own preferences file for the updater ("encore_update" for Encore). */
-    private val PREFS: String get() = KitApp.name.lowercase() + "_update"
+    /** The app's own preferences file for the updater ("<app id>_update"). */
+    private val PREFS: String get() = KitApp.id + "_update"
     private const val K_AUTO = "check_updates"
     private const val K_CHECKED_AT = "checked_at"
     private const val K_ETAG = "etag"
@@ -179,7 +179,7 @@ object Updater {
         val prefs = prefs(context)
         if (prefs.getString(K_ANNOUNCED, "") == v) return
         prefs.edit().putString(K_ANNOUNCED, v).apply()
-        Toasts.show("${KitApp.name} $v is available – Settings → This device")
+        Toasts.show(UpdateRules.availableToast(KitApp.name, v))
     }
 
     private suspend fun check(context: Context): Release? {

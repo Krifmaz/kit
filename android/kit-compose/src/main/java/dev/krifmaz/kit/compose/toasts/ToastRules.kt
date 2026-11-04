@@ -22,7 +22,7 @@ data class ToastItem(
 data class AppWindow(val type: Int, val shown: Boolean, val toasts: Boolean = false)
 
 /**
- * Which toasts stay and how they stack (Toasts.kt draws them), as the web's `toast` (web-rs/src/ui.rs):
+ * Which toasts stay and how they stack (Toasts.kt draws them), as the web's `toast`:
  * - an error ("err") stays until its Close and has Copy; "Copy failed – select and copy manually" goes like any
  *   other toast, as on the web;
  * - every other toast goes after [SHOW_MS];
@@ -31,8 +31,7 @@ data class AppWindow(val type: Int, val shown: Boolean, val toasts: Boolean = fa
  *   to [MAX_OTHERS];
  * - the same message again does not pile up: the toast on screen moves to the newest place and its time starts
  *   again.
- * The owner (Oct 20): "Errors show behind all other screens [...] making it really hard to copy the error before it
- * disappears."
+ * Errors must never sit behind another screen or vanish before they can be copied.
  */
 object ToastRules {
     /** The words when the clipboard refuses (that toast says what to do instead, so it has no Copy). */
@@ -110,16 +109,16 @@ object ToastRules {
     }
 
     /**
-     * How high the toasts sit, in dp above the navigation bar: [base] (above the mini player and the tabs), or just
+     * How high the toasts sit, in dp above the navigation bar: [base] (above a bottom bar and the tabs), or just
      * above the keyboard while it is open. [imeDp] and [navDp] are the keyboard's and the navigation bar's bottom
      * insets (the keyboard's counts from the bottom of the screen, the navigation bar included).
      */
     fun lift(base: Float, imeDp: Float, navDp: Float): Float = if (imeDp <= navDp) base else maxOf(base, imeDp - navDp + KEYBOARD_GAP)
 
     /**
-     * How far below the top of the screen the toasts sit when they are at the top (over the full player, whose seek bar
-     * and buttons fill the bottom), in dp: below the status bar ([statusDp], its top inset) and the [header] under it
-     * (the player's ⌄ / "Now playing" row), so neither is covered.
+     * How far below the top of the screen the toasts sit when they are at the top (over a full-screen view whose
+     * controls fill the bottom), in dp: below the status bar ([statusDp], its top inset) and the [header] under it
+     * (the view's own top row), so neither is covered.
      */
     fun drop(header: Float, statusDp: Float): Float = maxOf(0f, statusDp) + maxOf(0f, header)
 

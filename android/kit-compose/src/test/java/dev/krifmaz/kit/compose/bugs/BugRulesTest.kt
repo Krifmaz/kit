@@ -15,14 +15,14 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 class BugRulesTest {
-    /** Encore's name, as the export names are written for it. */
+    /** An app's name, as the export names are written for it. */
     @Before
-    fun encore() {
-        KitApp.init(name = "Encore", versionName = "0.30.0", versionCode = 1, userAgent = "EncoreAndroid/0.30.0")
+    fun app() {
+        KitApp.init(name = "My Notes", versionName = "0.30.0", versionCode = 1)
     }
 
     @Test
-    fun labelsAndBadgesAreTheWebs() {
+    fun labelsAndBadges() {
         assertEquals("Not a bug", BugRules.kindLabel("not_bug"))
         assertEquals("How do I…", BugRules.kindLabel("howto"))
         assertEquals("Bug", BugRules.kindLabel("something else"))
@@ -52,8 +52,8 @@ class BugRulesTest {
         assertEquals("?status=new&kind=bug&format=txt", BugRules.exportQuery(f))
         assertEquals("?format=txt", BugRules.exportQuery(Filter(q = "crash")))
         assertEquals("?ids=12&format=txt", BugRules.exportOneQuery(12))
-        assertEquals("encore-bug-reports-2026-10-19.txt", BugRules.exportName("2026-10-19"))
-        assertEquals("encore-bug-report-12-2026-10-19.txt", BugRules.exportName("2026-10-19", 12))
+        assertEquals("my_notes-bug-reports-2026-10-19.txt", BugRules.exportName("2026-10-19"))
+        assertEquals("my_notes-bug-report-12-2026-10-19.txt", BugRules.exportName("2026-10-19", 12))
     }
 
     @Test
@@ -73,8 +73,8 @@ class BugRulesTest {
         assertEquals("3 replies · 2 files", BugRules.countWords(3, 2))
         assertEquals("by ann · today", BugRules.metaLine("ann", "today", "", "", ""))
         assertEquals(
-            "by ann · today · page Home · app 0.30.0 · EncoreAndroid/0.30.0",
-            BugRules.metaLine("ann", "today", "Home", "0.30.0", "EncoreAndroid/0.30.0"),
+            "by ann · today · page Home · app 0.30.0 · MyNotes-Android/0.30.0",
+            BugRules.metaLine("ann", "today", "Home", "0.30.0", KitApp.userAgent),
         )
         assertEquals(
             "Sent along: the page you came from (Home), the app version (0.30.0) and this phone.",

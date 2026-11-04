@@ -51,7 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// The pieces the Settings pages share (Encore's features/settings/SettingsWidgets.kt): the page frame with its back
+// The pieces the Settings pages share : the page frame with its back
 // arrow, the web's cards and section heads, small muted and monospaced text, status dots, text links, the secure
 // window for secrets shown as text, and a server call run from a button.
 

@@ -1,4 +1,4 @@
-// kit-compose: the Compose library extracted from Encore's Android app (DESIGN.md §11). See README.md.
+// kit-compose: the kit's Jetpack Compose library for Android apps (DESIGN.md §11). See README.md.
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -67,7 +67,7 @@ publishing {
             afterEvaluate { from(components["release"]) }
             pom {
                 name.set("kit-compose")
-                description.set("Encore's look and ease-of-use features for Jetpack Compose apps.")
+                description.set("The kit's look and ease-of-use features for Jetpack Compose apps.")
                 url.set("https://github.com/Krifmaz/kit")
                 licenses {
                     license {

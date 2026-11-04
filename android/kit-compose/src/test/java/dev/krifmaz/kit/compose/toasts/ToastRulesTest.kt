@@ -22,7 +22,7 @@ class ToastRulesTest {
 
     @Test
     fun errorsStayAndOtherToastsGo() {
-        assertTrue(ToastRules.stays("Storage: os error 28 writing /music/a.flac", "err"))
+        assertTrue(ToastRules.stays("Storage: os error 28 writing /data/a.bin", "err"))
         assertFalse(ToastRules.stays("Added to queue", "ok"))
         assertFalse(ToastRules.stays("Saved", "info"))
         assertFalse(ToastRules.stays("Server is slow", "warn"))
@@ -137,7 +137,7 @@ class ToastRulesTest {
 
     @Test
     fun theToastsSitAboveTheKeyboardWhileItIsOpen() {
-        // no keyboard: above the mini player and the tabs
+        // no keyboard: above the bottom bar and the tabs
         assertEquals(150f, ToastRules.lift(150f, 0f, 48f), 0.01f)
         assertEquals(150f, ToastRules.lift(150f, 48f, 48f), 0.01f)
         // a 300 dp keyboard over a 48 dp navigation bar: just above it
@@ -147,12 +147,11 @@ class ToastRulesTest {
     }
 
     /**
-     * Over the full player the toasts sit at the top, below the status bar and the player's header, so they cover
-     * neither the seek bar and buttons at the bottom nor the ⌄ and Up next at the top. The owner (Oct 26): a
-     * "Got it – you won't hear this song…" toast sat over the seek bar and the times.
+     * Over a full-screen view with its own controls at the bottom the toasts sit at the top, below the status bar and
+     * the view's header, so they cover neither its bottom controls nor its header.
      */
     @Test
-    fun overThePlayerTheToastsSitBelowTheStatusBarAndHeader() {
+    fun overAFullScreenViewTheToastsSitBelowTheStatusBarAndHeader() {
         assertEquals(24f + 56f, ToastRules.drop(56f, 24f), 0.01f)
         // no status bar (a TV, a full-screen window): just below the header
         assertEquals(68f, ToastRules.drop(68f, 0f), 0.01f)

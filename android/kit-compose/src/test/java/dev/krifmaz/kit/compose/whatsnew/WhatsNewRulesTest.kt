@@ -46,7 +46,7 @@ class WhatsNewRulesTest {
 
     @Test
     fun popupShowsOnlyWhenTheServerSaysSoAndThereIsSomething() {
-        val r = WhatsNewRelease("0.36.4", "Encore 0.36.4", "", listOf("x"))
+        val r = WhatsNewRelease("0.36.4", "Notes 0.36.4", "", listOf("x"))
         assertTrue(WhatsNewRules.shouldShow(ChangelogNew("0.36.4", true, true, listOf(r))))
         assertFalse(WhatsNewRules.shouldShow(ChangelogNew("0.36.4", true, true, emptyList())))
         // a hotfix (or the popup switched off): the server sends show = false
@@ -58,10 +58,10 @@ class WhatsNewRulesTest {
         val new =
             WhatsNewRules.newOf(
                 parseJsonObject(
-                    """{"version":"0.36.4","popup":true,"show":true,"releases":[{"version":"0.36.4","title":"Encore 0.36.4","summary":"S","highlights":["a","b"]}]}""",
+                    """{"version":"0.36.4","popup":true,"show":true,"releases":[{"version":"0.36.4","title":"Notes 0.36.4","summary":"S","highlights":["a","b"]}]}""",
                 )!!,
             )
-        assertEquals(ChangelogNew("0.36.4", true, true, listOf(WhatsNewRelease("0.36.4", "Encore 0.36.4", "S", listOf("a", "b")))), new)
+        assertEquals(ChangelogNew("0.36.4", true, true, listOf(WhatsNewRelease("0.36.4", "Notes 0.36.4", "S", listOf("a", "b")))), new)
         val all =
             WhatsNewRules.changelogOf(
                 parseJsonObject(
@@ -74,12 +74,12 @@ class WhatsNewRulesTest {
     }
 
     @Test
-    fun wordsAreTheWebs() {
+    fun theWords() {
         assertEquals("What's new will show after updates", WhatsNewRules.popupSaved(true))
         assertEquals("What's new won't show after updates – it stays in Settings", WhatsNewRules.popupSaved(false))
         assertEquals(
-            "This server runs Encore 0.36.4. After an update, a short list of what changed shows once on the website and in the desktop app.",
-            WhatsNewRules.settingsIntro("Encore", "0.36.4"),
+            "This server runs Notes 0.36.4. After an update, a short list of what changed shows once when the app opens.",
+            WhatsNewRules.settingsIntro("Notes", "0.36.4"),
         )
     }
 }

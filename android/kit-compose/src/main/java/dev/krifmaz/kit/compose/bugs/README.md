@@ -1,10 +1,11 @@
 # bugs — bug reports and crash logs
 
-Extracted from Encore's `features/bugs/` and `CrashLog.kt` / `CrashRules.kt`, with the same behaviour and words.
-The server side is `contracts/bug-reports.md` (`/api/bug-reports…`, `/api/diagnostics/client-crash`).
+Bug reports with pictures, and crash logs, for any app with a server that speaks `contracts/bug-reports.md`.
+Every path comes from `KitApp.routes` (`bugReports`, `clientCrash`), so an app mounts them where it likes.
 
 - `BugRules` — kinds, statuses, filters, queries, limits, picture checks, the words (unit-tested).
-- `BugReportsApi` (+ `BugUnread`) — the calls, over the app's `KitApi` and OkHttpClient (which carry the session).
+- `BugReportsApi` (+ `BugUnread`) — the calls, over the app's `KitApi` and OkHttpClient (which carry the session);
+  `BugReportsApi(api, client, base = KitApp.routes.bugReports)`.
 - `BugReportsEntry`, `BugReportsScreen`, `BugReportScreen`, `NewBugReportSheet`, `AttachmentPicker` — the screens.
   They take a `BugReportsHost`: the calls, the image loader, server URLs, whether the viewer is an admin, and the
   app's navigation.
@@ -17,11 +18,14 @@ The server side is `contracts/bug-reports.md` (`/api/bug-reports…`, `/api/diag
 ```kotlin
 // Application.onCreate, first thing
 CrashLog.install(this)
-KitApp.init(...)
+KitApp.init(name = "Notes", versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE)
 CrashLog.uploadPending(this, crashHost)   // crashHost: CrashLogHost (scope, signedIn(), deviceId, api, bugReports)
 // screens
 BugReportsScreen(host, from = "Settings")  // host: BugReportsHost
 ```
 
 Manifest: a FileProvider with authority `<applicationId>.files` and a `cache-path` for `shared/` (Share of exports).
-Preferences files: `<app>_bugs` (the list's filter) and `<app>_crash` ("encore_bugs", "encore_crash" for Encore).
+Preferences files: `<app id>_bugs` (the list's filter) and `<app id>_crash`, where the app id is `KitApp.id`
+("notes" for an app named "Notes"). Exports are named `<app id>-bug-reports-<day>.txt`.
+
+The demo app (`android/demo`) shows all of it against its in-memory server.

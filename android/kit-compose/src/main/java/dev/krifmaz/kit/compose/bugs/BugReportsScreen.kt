@@ -80,10 +80,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ---- Settings → This device → Bug reports ------------------------------------------------------------------------
+// ---- Settings → Bug reports ------------------------------------------------------------------------------------
 
 /**
- * The entry on Settings → This device: "Bug reports" with the count of reports that have something new (the web's
+ * The entry in the app's settings: "Bug reports" with the count of reports that have something new (the web's
  * side bar badge), refreshed whenever Settings shows it.
  */
 @Composable
@@ -112,8 +112,8 @@ fun BugReportsEntry(host: BugReportsHost, modifier: Modifier = Modifier) {
 
 // ---- the list's filter, kept on the phone (the web keeps it in localStorage) --------------------------------------
 
-/** The app's own preferences file for the list's filter ("encore_bugs" for Encore). */
-private val PREFS: String get() = KitApp.name.lowercase() + "_bugs"
+/** The app's own preferences file for the list's filter ("<app id>_bugs"). */
+private val PREFS: String get() = KitApp.id + "_bugs"
 private const val K_FILTER = "filter"
 
 private fun loadFilter(context: Context): BugRules.Filter = try {
@@ -139,7 +139,7 @@ private fun saveFilter(context: Context, f: BugRules.Filter) {
 // ---- Bug reports -------------------------------------------------------------------------------------------------
 
 /**
- * Bug reports (web-rs/src/pages/bugreports.rs `render`): the status tabs, the kind chips, the search, Everyone / Mine
+ * Bug reports: the status tabs, the kind chips, the search, Everyone / Mine
  * and Export for admins, New report, and the list (newest activity first; a dot marks what is new since the last
  * look). Refreshes every minute while open, as the web does. [from] names the page it was opened from, which a new
  * report sends along. [host] gives the calls and the navigation.
