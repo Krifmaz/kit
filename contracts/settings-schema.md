@@ -1,71 +1,134 @@
-> Contract copied from Krifmaz/Encore `docs/contracts/settings-schema.md` at commit `5c0bdcba82307c522e4516d1bc51a81c8efa4026`. The kit's `kit-server-settings` crate serves exactly this answer; Encore-specific examples (cards, keys) stay as examples.
-
 # Settings schema
 
-What `GET /api/admin/settings/schema` answers, where it comes from, and how a client draws the
-Settings → Server pages from it. Written for 0.29.0: the server has one settings table
-(`server/crates/config/settings.toml`); the web app's settings pages render from this answer from 0.29 on,
-and the phone app's full Settings (0.30) reads the same answer.
+What the settings routes answer, where the answer comes from, and how a client draws an app's Settings pages
+from it. The kit's `kit-server-settings` crate serves it; the kit's clients (kit-leptos, kit-compose,
+kit-iced) draw from it.
 
 ## Where it comes from
 
-`server/crates/config/settings.toml` is the one table of server settings. Every setting has its
-environment variable, its default and whether it is secret; the ones shown on the generic settings form
-also have their card, label, help, type, options and visibility rule. The words were copied from the
-web app's static table (`SECTIONS` and `GROUPS` in the old `web-rs/src/pages/settings.rs`), which was the
-source of truth for them until 0.29. Since 0.29 the web app draws the Server pages from this answer
-(`web-rs/src/settings/`) and the static table is gone; this file is the one place the words live.
-
-`server/crates/config/build.rs` turns the file into `settings_gen.rs` when the server is built:
+An app keeps one table of server settings, its `settings.toml`. Every setting has its default and, if it has
+them, its environment variable and whether it is secret; the ones shown on a settings card also have their
+card, label, help, type, options and visibility rule. The app's build script turns the file into Rust with
+`kit_server_settings::file::generate`:
 
 - `Keys`: every setting's name as a constant (`Keys::APP_NAME` is `"app_name"`);
-- `TABLE`: every setting with its environment variable, default, secret flag, type, card, label and help.
-  The loader (`Config::load`) reads it; there is no `defaults.json` any more;
-- `SCHEMA`: the pages, their cards and the fields on each card;
-- a typed accessor per setting on `Config`: `cfg.app_name()` (a `String`), `cfg.session_days()` (an `i64`),
-  `cfg.auto_approve()` (a `bool`), `cfg.musicbrainz_rate()` (an `f64`). They read the value in effect
-  (environment, then saved, then default), like `cfg.str("app_name")`.
+- `TABLE`: every setting with its environment variable, default, secret flag, type, card, label and help, A to Z.
+  The store (`Store`) reads it;
+- `SCHEMA`: the pages, their cards and the fields on each card, in file order;
+- optionally a typed accessor per setting on a type the app names (`settings.app_name()` a `String`,
+  `settings.session_days()` an `i64`, a bool or `f64` likewise), which reads the value in effect.
 
-A file that does not fit stops the build with the reason: an unknown attribute, a type that does not match
-the default, a select without options, a field on a card with no label, a card or page that does not exist,
-a `when` rule that does not parse or names a missing setting or option, an accessor name that a `Config`
-method or a Rust keyword already takes.
+`kit_server_settings::file::parse` gives the same table at run time.
 
-## The request
+### The file
 
-`GET /api/admin/settings/schema`, as an admin (a cookie session, an app token or the API key, like every
-`/api/admin` route). 401 without a session, 403 for a member who is not an admin. The answer holds no
-values: `GET /api/admin/settings` has them (with `_meta` saying where each one comes from), and
-`PUT /api/admin/settings` saves them, both unchanged. Every field in the schema is a key of that answer (the
-old static table drew a field only when the answer had its key).
+```toml
+[sections.general]       # a page, in nav order: title, aliases
+title = "General"
 
-## The answer
+[groups.general]         # a card, in page order: section, title, desc, part, test, test_label
+section = "general"
+title = "General"
+desc = "Your server's name."
+
+[keys.app_name]          # a setting: env, default, secret, group, label, help, type, options, when,
+env = "APP_NAME"         #            unit, min, max, step, full, advanced
+default = "Demo"         # its TOML type is the setting's type
+group = "general"        # shown on that card (then label is needed)
+label = "App name"
+
+[keys.storage]
+default = "local"
+type = "select"
+options = [["local", "This server"], ["s3", "S3 bucket"]]
+group = "general"
+label = "Where files go"
+
+[keys.s3_secret]
+env = "DEMO_S3_SECRET"
+default = ""
+secret = true            # a secret with no type is a password
+group = "general"
+label = "S3 secret key"
+when = "storage=s3"
+```
+
+A file that does not fit stops the build with the reason: an unknown top-level entry or attribute, a page or
+card without a title, a card on a page that does not exist, `test` without `test_label` (or the reverse), a
+name (page id, alias or card id) that would open two different pages, a key that is not lower case letters,
+digits and `_`, a key that a Rust keyword or a method of the accessor type takes, a missing default, an unknown
+type, a type that does not match the default, a password that is not secret, options on a field that is not a
+select or checks (or a select or checks without them), an environment variable name that is not upper case
+letters, digits and `_`, a field on a card with no label, a secret on a card that is not a password or
+textarea, card-only attributes on a key with no card, `unit`/`min`/`max`/`step` on a field that is not a
+number, and a `when` rule that does not parse, names no setting, names one that is not a select, names an
+option it does not have, or names the field itself with `=`.
+
+## The routes
+
+| Route (default) | Who | What |
+|---|---|---|
+| `GET /api/settings` | admin | every value; secrets masked; `_meta` |
+| `PUT /api/settings` | admin | save some values; answers like `GET`, plus `_warnings` |
+| `GET /api/settings/schema` | admin | the pages, cards and fields (below); no values |
+| `GET /api/settings/secret/{key}` | owner | one saved value in plain text: `{"key", "value"}` |
+
+An app may serve them on other paths (`SettingsPaths`); clients take the paths as configuration. Without a
+session: 401 `{"detail": "Not authenticated"}`; a member who is not an admin: 403 `{"detail": "Admin only"}`;
+the secret route for anyone but the owner: 403 `{"detail": "Only the server owner can do this"}`, an unknown
+key 404 `{"detail": "Unknown setting"}`, and a secret the app never shows again 403 with the app's reason.
+Every field in the schema is a key of the values answer.
+
+### Values (`GET /api/settings`)
+
+```json
+{
+  "app_name": "Demo",
+  "s3_secret": "•••• (saved)",
+  "_meta": {
+    "app_name": { "source": "default", "env": "APP_NAME" },
+    "s3_secret": { "source": "env", "env": "DEMO_S3_SECRET" }
+  }
+}
+```
+
+The value in effect is the environment variable's (quotes and spaces around it dropped), then the saved one,
+then the default, each taken to the setting's type. A secret is `"•••• (saved)"` when it has a value and `""`
+when not. `_meta.<key>.source` is `env`, `ui` (saved) or `default`; `env` is the variable's name or `null`.
+
+### Saving (`PUT /api/settings`)
+
+The body is `{key: value}`. Unknown keys, masked values (starting with `••••`), keys an environment variable
+sets and keys the app keeps out of saves are left out; the rest are saved, each taken to its setting's type.
+The app may refuse the whole save (an error, nothing saved) or answer `_warnings: [{"key", "message"}]`.
+
+## The schema answer (`GET /api/settings/schema`)
 
 ```json
 {
   "sections": [
     {
-      "id": "downloads",
-      "title": "Downloads",
-      "aliases": ["apps"],
+      "id": "storage",
+      "title": "Storage",
+      "aliases": [],
       "groups": [
         {
-          "id": "torznab",
-          "title": "Torrents & Usenet (Prowlarr)",
+          "id": "files",
+          "title": "Files",
           "part": "",
-          "desc": "Searches your torrent and Usenet indexers (through Prowlarr) for whole albums …",
-          "test": "torznab",
+          "desc": "Where the server keeps uploaded files.",
+          "test": "files",
           "test_label": "Test connection",
           "fields": [
             {
-              "key": "qbit_password",
-              "label": "qBittorrent password",
+              "key": "s3_secret",
+              "label": "S3 secret key",
               "help": null,
               "type": "password",
               "options": [],
-              "when": "torrent_client=qbittorrent",
+              "when": "storage=s3",
               "secret": true,
-              "env": "QBIT_PASSWORD",
+              "env": "DEMO_S3_SECRET",
               "env_locked": false,
               "default": "",
               "unit": null,
@@ -85,115 +148,80 @@ old static table drew a field only when the answer had its key).
 
 Every attribute is always there; one that does not apply is `null` (or `[]`, `false`, `""` as listed).
 
-### Section (a page under Settings → Server)
+### Section (a page)
 
 | Field | Meaning |
 |---|---|
-| `id` | the page's id in links (`#/settings?s=<id>`) |
+| `id` | the page's id in links |
 | `title` | the nav entry and the page heading |
-| `aliases` | older `?s=` names that open this page (`[]` for none) |
-| `groups` | the cards on the page, in order. **Empty** for a page the web app draws with its own code (Auto-download, Contribute, Blocked): the section is listed so the nav order comes from one place |
+| `aliases` | other names that open this page in a link (`[]` for none) |
+| `groups` | the cards on the page, in order. **Empty** for a page the app draws with its own code: it is listed so the nav order comes from one place |
 
-Sections come in nav order: General, Library, Downloads, Integrations, Server processing, Email &
-notifications, Auto-download, Contribute, Blocked, Scheduled tasks.
-
-Until R2 (October 2026) Library, Downloads, Integrations and Server processing were one page, Apps & sources (`apps`).
-Its old links still work: `apps` is an alias of Downloads, `tagging` of Library and `services` of
-Integrations, and a link that names a card (`?s=cadenza`) opens the page that holds it now, with that card
-open (an alias opens the page's first card, as a plain link to the page does). A name is looked up as a page
-id first, then as an alias, then as a card: Library's own card is also called `library`. The build
-refuses a name (page id, alias or card id) that would open two different pages. A client that also talks
-to older servers finds a page's extras by the cards it holds, not by its id: "How requests are fulfilled"
-goes on the page with the `pipeline` card (Downloads; Apps & sources on an older server). Since 0.32 the cards
-`streamrip`, `torznab`, `slskd`, `ytdlp` and `youtube` (YouTube sign-in, a part of yt-dlp's card) are drawn on
-Settings → Plugins (`GET /api/plugins`, after Downloads in the nav), and their `?s=` links, plus `tools` and
-the catalog ids of the download clients, the translator and the media servers, open that page. An older server
-(no `/api/plugins`) keeps them on Downloads.
+Sections come in nav order. A link name is looked up as a page id first, then as an alias, then as a card id
+(which opens the card's page with that card open); no name opens two different pages.
 
 ### Group (a card)
 
 | Field | Meaning |
 |---|---|
-| `id` | the card's id (also the old `?s=` name of the card, which opens its page) |
-| `title`, `desc` | the card's heading and the line under it |
-| `part` | the heading over a run of cards on the page; `""` for none. A new heading starts where `part` changes. No page uses one since R2 (Apps & sources had "Download sources", "Library & tagging" and "Services" before it was split) |
-| `test` | the card's Test button calls `POST /api/system/test/<test>`; `null`: no button |
-| `test_label` | the button's words; set whenever `test` is (the web app's old default was "Test connection") |
+| `id` | the card's id |
+| `title`, `desc` | the card's heading and the line under it (`""` for none) |
+| `part` | the heading over a run of cards on the page; `""` for none. A new heading starts where `part` changes |
+| `test` | the id of the check the card's Test button runs (the kit's clients save the card, then call `POST /api/diagnostics/<test>/test`); `null`: no button |
+| `test_label` | the button's words; set whenever `test` is |
 | `fields` | the card's fields, in order |
-
-The Scheduled tasks page has one card (`sync`, Playlists & sync) under the task list, which the web app
-draws itself.
 
 ### Field
 
 | Field | Meaning |
 |---|---|
-| `key` | the setting's name in `GET/PUT /api/admin/settings` |
+| `key` | the setting's name in the values answer |
 | `label` | the field's label |
 | `help` | the line under the field; `null` for none |
 | `type` | how to draw it, below |
-| `options` | `[{"value", "label"}]` for `select` and `checks`, in order; `[]` otherwise. Values are always strings, even when the setting is a number (`streamrip_quality` is `2`, its options are `"1"` … `"4"`): compare the setting's value as text |
+| `options` | `[{"value", "label"}]` for `select` and `checks`, in order; `[]` otherwise. Values are always strings, even when the setting is a number: compare the setting's value as text |
 | `when` | visibility rule, below; `null`: always shown |
-| `secret` | the server never sends the value: `GET /api/admin/settings` says `"•••• (saved)"` or `""`. A password field is always secret; a secret textarea (the WireGuard config, pasted cookies) too |
+| `secret` | the server never sends the value (see Values). A password field is always secret; a secret textarea too |
 | `env` | the environment variable that sets it, `null` for none |
-| `env_locked` | that variable is set on this server: the value comes from it, saving it does nothing (the field is shown disabled). Same as `_meta.<key>.source == "env"` in `GET /api/admin/settings` |
+| `env_locked` | that variable is set on this server: the value comes from it, saving it does nothing (the field is shown disabled). Same as `_meta.<key>.source == "env"` |
 | `default` | the value when nothing is saved and no environment variable is set; its JSON type is the setting's type |
-| `unit` | what a number counts (`"minutes"`, `"days"`, `"seconds"`, `"MB"`, `"kbps"`, `"requests per second"`); the label already says it in words, so the web form does not show it again |
+| `unit` | what a number counts (`"days"`, `"MB"`, …) |
 | `min`, `max` | the sensible range of a number (a hint; the server does not refuse other values) |
-| `step` | the number input's step (`0.1`, `0.05`); `null`: whole numbers |
+| `step` | the number input's step (`0.1`); `null`: whole numbers |
 | `full` | the field takes the card's whole width |
-| `advanced` | a field for people who know what they are doing (its label says so too) |
+| `advanced` | a field for people who know what they are doing |
 
 ### Types
 
 | `type` | Drawn as | Value |
 |---|---|---|
 | `text` | text input | string |
-| `path` | text input; the value is a folder inside the container | string |
+| `path` | text input; the value is a folder on the server | string |
 | `url` | text input; the value is an address | string |
-| `password` | password input that starts empty (empty keeps the saved value); placeholder "saved – paste a new value to replace" / "not set" / "set by environment" | string |
+| `password` | password input that starts empty (empty keeps the saved value) | string |
 | `textarea` | text area (always full width) | string |
 | `number` | number input with `step` | number |
 | `bool` | switch | boolean |
 | `select` | drop-down of `options` | string (or a number, see `options`) |
-| `checks` | a row of check boxes, one per option | comma-separated option values (`"Album,EP"`), compared without case and punctuation |
+| `checks` | a row of check boxes, one per option | comma-separated option values (`"a,b"`), compared without case and punctuation |
 
-`path` and `url` are drawn exactly like `text` (an `<input type="text">`): the type tells what the value is,
-for clients that want to offer a folder picker or check an address later.
+A setting's type, when the file does not give one, follows from its default: a boolean is `bool`, a number
+`number`, a string `password` when secret and `text` otherwise. `path` and `url` may be drawn exactly like
+`text`; the type tells what the value is, for clients that want to offer a folder picker or check an address.
 
 ### Visibility rules (`when`)
 
-`"key=value"`: the field is shown only while the select `key` has `value`; `"key!=value"`: only while it
-has any other value. `key` is always a `select` on the same page and `value` one of its options (the build
-checks both). Today every rule is of the first kind and names `torrent_client` or `nzb_client`: the torrent
-and Usenet clients' fields show only for the client chosen. A field hidden by a rule is still saved with
-its card.
+`"key=value"`: the field is shown only while the select `key` has `value`; `"key!=value"`: only while it has
+any other value. `key` is always a `select` and `value` one of its options (the build checks both). A field
+hidden by a rule is still saved with its card.
 
 ## What is not in the schema
 
-Settings that no generic card shows are in the table but not in the answer: the scheduled tasks' switches
-and intervals (drawn by the tasks page), the auto-update switches (each plugin card has its own, since 0.32),
-the Translator's model and background switch (drawn from its manifest, `translator.toml`'s `[[settings]]`),
-the Cadenza engine's own settings (drawn from the engine's description, `GET /api/playback/dsp`), the
-Auto-download page, what a new member gets (People → Users & permissions), the Contribute page, and
-values the server keeps for itself (the API key, the Roon and Plex ids, the managed slskd's key, the
-MusicBrainz sign-in). `settings.toml` says for each where it is edited.
+Settings with no card (`group`) are in the table and the values answer but not in the schema: values the
+server keeps for itself, or that the app edits on a screen of its own.
 
 ## Changing the table
 
-- A new setting is a `[keys.<name>]` entry in `settings.toml`; with `group` it shows on that card, after
-  the card's other fields in file order. Nothing else is needed: the loader, `GET/PUT /api/admin/settings`,
-  the schema and the accessor follow from the file.
-- The diagnostics page lists changed settings in the table's order: A to Z, then the keys in `listed_last`
-  (settings added after the first table, kept in the order they always had). A new key goes A to Z; do not
-  add it to `listed_last`.
-- The tests in `server/crates/config/src/settings_tests.rs` check that every key is listed once and every
-  field is a key, that `when` rules parse and name a select option, that defaults fit their types and
-  options, that the release-type options equal `release_types::KINDS` / `EXTRAS`, the shape of the schema
-  answer, and that every key the server's code reads with `cfg.str("…")` and its siblings is in the table.
-- web-rs keeps the HTML the old static table drew (`web-rs/src/settings/fixtures/settings-cards.html`) and
-  its tests compare the schema renderer with it, using a recorded schema answer
-  (`web-rs/src/settings/fixtures/settings-schema.json`). After an intended change to the table, record
-  both again: the schema answer with `ENCORE_WRITE_SETTINGS_SCHEMA=1 cargo test -p encore-config
-  schema_fixture` in `server/` (a config test fails while the recorded answer is not the table's), then
-  `ENCORE_WRITE_SETTINGS_CARDS=1 cargo test settings::` in `web-rs/`.
+A new setting is a `[keys.<name>]` entry in `settings.toml`; with `group` it shows on that card, after the
+card's other fields in file order. Nothing else is needed: the store, the routes, the schema and the accessors
+follow from the file.

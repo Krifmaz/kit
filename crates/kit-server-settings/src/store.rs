@@ -1,4 +1,4 @@
-//! [`Store`]: the values of a settings table on the app's database (Encore's `Config` loader). The value in
+//! [`Store`]: the values of a settings table on the app's database The value in
 //! effect is the environment variable's, then the saved one, then the default; saved values are the
 //! `settings` table's rows (`key`, `value` as JSON text).
 
@@ -98,7 +98,7 @@ impl<D: Db> Store<D> {
     }
 
     /// Take `stored` as the saved values and read the environment again (an app that changes saved values
-    /// when it starts, as Encore's one-time migrations do, reads [`Store::saved`], changes it, then applies it).
+    /// when it starts, such as a one-time migration, reads [`Store::saved`], changes it, then applies it).
     pub fn apply(&self, stored: &HashMap<String, Value>) {
         let mut cache = self.cache.write().unwrap();
         let mut env = self.env.write().unwrap();
@@ -196,7 +196,7 @@ impl<D: Db> Store<D> {
     }
 
     /// All settings for the admin UI – secrets only say whether they are set, never their value – except the
-    /// secrets in `shown` (Encore: `api_key`, which its own card shows to the owner). `_meta` says for each key
+    /// secrets in `shown` (for example an API key that the app shows to its owner elsewhere). `_meta` says for each key
     /// where its value comes from (`env`, `ui` when saved, `default`) and its environment variable.
     pub fn dump(&self, shown: &[&str]) -> Value {
         let saved: HashSet<String> = self

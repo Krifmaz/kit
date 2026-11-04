@@ -1,7 +1,7 @@
-//! The settings API: `GET /api/admin/settings` (every value, secrets masked, with `_meta`), `PUT
-//! /api/admin/settings` (save), `GET /api/admin/settings/schema` (the pages, cards and fields) and `GET
-//! /api/admin/settings/secret/{key}` (one saved secret, for the owner). The app says where its values are and
-//! what else happens around a save through [`SettingsHost`].
+//! The settings API, on paths an app may change ([`SettingsPaths`]): `GET /api/settings` (every value, secrets
+//! masked, with `_meta`), `PUT /api/settings` (save), `GET /api/settings/schema` (the pages, cards and fields)
+//! and `GET /api/settings/secret/{key}` (one saved secret, for the owner). All of them are for admins. The app
+//! says where its values are and what else happens around a save through [`SettingsHost`].
 
 use crate::schema;
 use crate::values::{is_masked, Values};
@@ -14,13 +14,13 @@ use serde_json::{json, Map, Value};
 use std::future::Future;
 
 /// What the settings routes need from the app, on top of [`Host`]. Only [`SettingsHost::settings`] has no
-/// default; Encore's values are given as the example of each.
+/// default; the others are where an app adds its own behaviour.
 pub trait SettingsHost: Host {
-    /// Where the values are: the app's [`crate::Store`] (or its own [`Values`]; Encore: its `Config`).
+    /// Where the values are: the app's [`crate::Store`] (or its own [`Values`]).
     fn settings(&self) -> &dyn Values;
 
     /// The signed-in owner, who alone may see a saved secret; 403 "Only the server owner can do this" for
-    /// any other account (Encore's words; the default takes the account whose `role` is `owner`).
+    /// any other account (the default takes the account whose `role` is `owner`).
     fn owner(&self, parts: &mut Parts) -> impl Future<Output = Result<Account>> + Send {
         async move {
             let a = self.signed_in(parts).await?;
@@ -31,36 +31,34 @@ pub trait SettingsHost: Host {
         }
     }
 
-    /// `GET /api/admin/settings` and the answer of a save: the values' [`Values::dump`] (Encore adds what its
-    /// plugins credit to themselves).
+    /// `GET /api/settings` and the answer of a save: the values' [`Values::dump`] (an app may add to it).
     fn dump(&self) -> Value {
         self.settings().dump()
     }
 
-    /// Keys a save never changes, whatever it is sent (Encore: `api_key`, which has its own route).
+    /// Keys a save never changes, whatever it is sent (for example an API key that has its own route).
     fn kept(&self) -> &'static [&'static str] {
         &[]
     }
 
-    /// Why a saved secret may not be shown, if it may not (Encore: the WireGuard config, "The WireGuard config
-    /// can't be shown – paste it again to replace it"); answered as 403.
+    /// Why a saved secret may not be shown, if it may not (for example "This key can't be shown – paste it
+    /// again to replace it"); answered as 403.
     fn unrevealed(&self, _key: &str) -> Option<&'static str> {
         None
     }
 
-    /// Before a save, with the values that will be saved: an error refuses the whole save (Encore: 400 for a
-    /// `signup_mode` that is not invite, open or closed); the warnings come back as `_warnings` in the answer
-    /// (Encore: a download folder it cannot write to).
+    /// Before a save, with the values that will be saved: an error refuses the whole save (for example 400
+    /// for a value the app does not accept); the warnings (`{key, message}`) come back as `_warnings` in the
+    /// answer (for example a folder the server cannot write to).
     fn before_save(&self, _values: &Map<String, Value>) -> Result<Vec<Value>> {
         Ok(vec![])
     }
 
-    /// After a save, with the saved keys (Encore: its plugins follow their auto-update switches, Soulseek
-    /// picks up a new login at once).
+    /// After a save, with the saved keys (for example to pick up a new login at once).
     fn after_save(&self, _keys: &[String]) {}
 
     /// A line for the app's activity log ("admin updated settings: app_name", "admin viewed the saved
-    /// smtp_password"); the default logs it with `tracing` (Encore: its activity table).
+    /// smtp_password"); the default logs it with `tracing`.
     fn log(&self, message: &str) {
         tracing::info!("{message}");
     }
@@ -77,27 +75,55 @@ impl<S: SettingsHost> FromRequestParts<S> for Owner {
     }
 }
 
-/// The settings routes, for an app to merge: `.merge(kit_server_settings::router())`.
-pub fn router<S: SettingsHost>() -> Router<S> {
-    Router::new()
-        .route("/api/admin/settings", get(get_settings::<S>).put(put_settings::<S>))
-        .route("/api/admin/settings/schema", get(settings_schema::<S>))
-        .route("/api/admin/settings/secret/{key}", get(reveal_secret::<S>))
+/// Where the settings routes are. [`Default`] gives `/api/settings`, `/api/settings/schema` and
+/// `/api/settings/secret/{key}`; an app that wants others sets them (`secret` must end in `{key}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingsPaths {
+    /// `GET` every value, `PUT` a save
+    pub values: String,
+    /// `GET` the schema answer
+    pub schema: String,
+    /// `GET` one saved secret; ends in `{key}`
+    pub secret: String,
 }
 
-/// GET /api/admin/settings: every setting, secrets masked.
+impl Default for SettingsPaths {
+    fn default() -> Self {
+        SettingsPaths { values: "/api/settings".into(), schema: "/api/settings/schema".into(), secret: "/api/settings/secret/{key}".into() }
+    }
+}
+
+/// The settings routes on [`SettingsPaths::default`], for an app to merge: `.merge(kit_server_settings::router())`.
+pub fn router<S: SettingsHost>() -> Router<S> {
+    router_with(SettingsPaths::default())
+}
+
+/// The settings routes on `paths`.
+///
+/// # Panics
+///
+/// When `paths.secret` does not end in `{key}`, or two paths are the same (axum refuses them).
+pub fn router_with<S: SettingsHost>(paths: SettingsPaths) -> Router<S> {
+    assert!(paths.secret.ends_with("{key}"), "SettingsPaths::secret must end in {{key}}: {}", paths.secret);
+    Router::new()
+        .route(&paths.values, get(get_settings::<S>).put(put_settings::<S>))
+        .route(&paths.schema, get(settings_schema::<S>))
+        .route(&paths.secret, get(reveal_secret::<S>))
+}
+
+/// GET /api/settings: every setting, secrets masked.
 async fn get_settings<S: SettingsHost>(State(st): State<S>, Admin(_): Admin) -> Json<Value> {
     Json(st.dump())
 }
 
-/// The pages, cards and fields of Settings → Server (contracts/settings-schema.md); the values are in
-/// GET /api/admin/settings.
+/// The pages, cards and fields of the Settings screen (contracts/settings-schema.md); the values are in
+/// GET /api/settings.
 async fn settings_schema<S: SettingsHost>(State(st): State<S>, Admin(_): Admin) -> Json<Value> {
     let values = st.settings();
     Json(schema::answer(&values.table(), |k| values.env_locked(k)))
 }
 
-/// PUT /api/admin/settings: change settings (unknown, masked, locked and kept values are left out).
+/// PUT /api/settings: change settings (unknown, masked, locked and kept values are left out).
 async fn put_settings<S: SettingsHost>(
     State(st): State<S>,
     Admin(me): Admin,

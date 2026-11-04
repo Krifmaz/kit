@@ -1,6 +1,6 @@
-//! The answer of `GET /api/admin/settings/schema` (contracts/settings-schema.md): the pages, cards and fields
-//! of Settings → Server, with each field's words, type, options, visibility rule and whether the environment
-//! locks it. Values are not in it (`GET /api/admin/settings` has them).
+//! The answer of `GET /api/settings/schema` (contracts/settings-schema.md): the pages, cards and fields
+//! of the Settings screen, with each field's words, type, options, visibility rule and whether the environment
+//! locks it. Values are not in it (`GET /api/settings` has them).
 
 use crate::table::{Field, Table};
 use serde_json::{json, Value};

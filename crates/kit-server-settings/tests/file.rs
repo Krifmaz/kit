@@ -1,27 +1,27 @@
-//! settings.toml: the checks refuse a file that does not fit with Encore's reasons, and the generated code and
-//! the run-time table are the same table.
+//! settings.toml: the checks refuse a file that does not fit with the reason, and the generated code and the
+//! run-time table are the same table.
 use kit_server_settings::file::{generate, parse, Codegen};
 use kit_server_settings::{schema, DefaultValue};
 use serde_json::json;
 
 const FILE: &str = include_str!("fixtures/settings.toml");
-const GEN: Codegen = Codegen { accessors_on: Some("crate::Config"), methods: &["load", "get", "str"] };
+const GEN: Codegen = Codegen { accessors_on: Some("crate::Settings"), methods: &["load", "get", "str"] };
 
 #[test]
 fn a_file_reads_as_its_table() {
     let t = parse(FILE, &[]).unwrap();
     let keys: Vec<&str> = t.keys.iter().map(|k| k.key).collect();
-    assert_eq!(keys, ["api_key", "app_name", "auto_approve", "qbit_password", "rate", "session_days", "torrent_client", "late_key"]);
-    let pw = t.def("qbit_password").unwrap();
-    assert_eq!((pw.kind, pw.secret, pw.env, pw.group), ("password", true, Some("QBIT_PASSWORD"), Some("torznab")));
+    assert_eq!(keys, ["api_key", "app_name", "auto_approve", "rate", "s3_secret", "session_days", "storage", "zz_limit"]);
+    let pw = t.def("s3_secret").unwrap();
+    assert_eq!((pw.kind, pw.secret, pw.env, pw.group), ("password", true, Some("DEMO_S3_SECRET"), Some("files")));
     assert_eq!(t.def("rate").unwrap().default, DefaultValue::Float(1.0));
     assert_eq!(t.def("auto_approve").unwrap().kind, "bool");
     let ids: Vec<&str> = t.sections.iter().map(|s| s.id).collect();
-    assert_eq!(ids, ["general", "downloads", "blocked"]);
+    assert_eq!(ids, ["general", "storage", "extras"]);
     assert!(t.sections[2].groups.is_empty());
     let fields: Vec<&str> = t.sections[0].groups[0].fields.iter().map(|f| f.key).collect();
     assert_eq!(fields, ["app_name", "session_days", "rate"], "a card's fields are in file order");
-    assert_eq!(t.sections[1].groups[0].fields[1].when, Some("torrent_client=qbittorrent"));
+    assert_eq!(t.sections[1].groups[0].fields[1].when, Some("storage=s3"));
 }
 
 #[test]
@@ -40,8 +40,8 @@ fn the_schema_answer_has_every_attribute() {
                 "full": false, "advanced": false })
     );
     assert_eq!((f[0]["env_locked"].clone(), f[2]["step"].clone()), (json!(true), json!(0.1)));
-    let qbit = &v["sections"][1]["groups"][0]["fields"][0];
-    assert_eq!(qbit["options"], json!([{ "value": "qbittorrent", "label": "qBittorrent" }, { "value": "deluge", "label": "Deluge" }]));
+    let storage = &v["sections"][1]["groups"][0]["fields"][0];
+    assert_eq!(storage["options"], json!([{ "value": "local", "label": "This server" }, { "value": "s3", "label": "S3 bucket" }]));
     assert_eq!(v["sections"][2]["groups"], json!([]));
 }
 
@@ -54,25 +54,25 @@ fn the_generated_code_is_the_table() {
     assert!(code.contains("    KeyDef { key: \"rate\", env: None, default: DefaultValue::Float(1.0), secret: false, kind: \"number\", group: Some(\"general\"), label: Some(\"Rate\"), help: None },\n"));
     assert!(code.contains("    Section { id: \"general\", title: \"General\", aliases: &[\"main\"], groups: &[\n"));
     assert!(code.contains("            Field { key: \"session_days\", label: \"Days signed in\", help: None, kind: \"number\", options: &[], when: None, unit: Some(\"days\"), min: Some(1.0), max: Some(365.0), step: None, full: false, advanced: false },\n"));
-    assert!(code.contains("impl crate::Config {\n"));
+    assert!(code.contains("impl crate::Settings {\n"));
     assert!(code.contains("    #[doc = \"`session_days`: Days signed in\"]\n    pub fn session_days(&self) -> i64 {\n        self.int(Keys::SESSION_DAYS)\n    }\n"));
     assert!(code.contains("    pub fn api_key(&self) -> String {\n        self.str(Keys::API_KEY)\n    }\n"));
     let bare = generate(FILE, &Codegen { accessors_on: None, methods: &[] }).unwrap();
     assert!(!bare.contains("impl ") || bare.contains("impl Keys {") && !bare.contains("impl crate"));
 }
 
-/// Each change to the fixture and the reason it is refused with (Encore's words).
+/// Each change to the fixture and the reason it is refused with.
 #[test]
 fn a_file_that_does_not_fit_is_refused_with_the_reason() {
     let cases: &[(&str, &str, &str)] = &[
         ("[sections.general]", "[sections.general]\ncolour = 1", "sections.general: unknown attribute colour"),
-        ("title = \"Torrents\"", "", "groups.torznab: title is missing"),
-        ("section = \"downloads\"", "section = \"nowhere\"", "groups.torznab: no section nowhere"),
-        ("test_label = \"Test connection\"", "", "groups.torznab: test and test_label go together"),
-        ("aliases = [\"main\"]", "aliases = [\"torznab\"]", "?s=torznab would open both general and downloads"),
+        ("title = \"Files\"", "", "groups.files: title is missing"),
+        ("section = \"storage\"", "section = \"nowhere\"", "groups.files: no section nowhere"),
+        ("test_label = \"Test connection\"", "", "groups.files: test and test_label go together"),
+        ("aliases = [\"main\"]", "aliases = [\"files\"]", "the name files would open both general and storage"),
         ("[keys.auto_approve]", "[keys.Auto]", "keys.Auto: a key is lower case letters, digits and _"),
-        ("[keys.auto_approve]", "[keys.match]", "keys.match: the name is taken by a Config method or a Rust keyword"),
-        ("[keys.auto_approve]", "[keys.get]", "keys.get: the name is taken by a Config method or a Rust keyword"),
+        ("[keys.auto_approve]", "[keys.match]", "keys.match: the name is taken by a method of the settings type or a Rust keyword"),
+        ("[keys.auto_approve]", "[keys.get]", "keys.get: the name is taken by a method of the settings type or a Rust keyword"),
         (
             "[keys.auto_approve]\ndefault = false",
             "[keys.auto_approve]\ndefault = false\nshade = 1",
@@ -95,38 +95,25 @@ fn a_file_that_does_not_fit_is_refused_with_the_reason() {
             "keys.api_key: a password field is secret",
         ),
         (
-            "type = \"select\"\noptions = [[\"qbittorrent\", \"qBittorrent\"], [\"deluge\", \"Deluge\"]]",
+            "type = \"select\"\noptions = [[\"local\", \"This server\"], [\"s3\", \"S3 bucket\"]]",
             "type = \"select\"",
-            "keys.torrent_client: options are for select and checks fields, and those need them",
+            "keys.storage: options are for select and checks fields, and those need them",
         ),
         ("env = \"APP_NAME\"", "env = \"app name\"", "keys.app_name: env must be an environment variable name"),
         ("label = \"App name\"", "", "keys.app_name: a field on a card needs a label"),
         ("group = \"general\"\nlabel = \"App name\"", "group = \"nowhere\"\nlabel = \"App name\"", "keys.app_name: no group nowhere"),
         (
-            "[keys.late_key]\ndefault = 1",
-            "[keys.late_key]\ndefault = 1\nunit = \"MB\"",
-            "keys.late_key: unit is for fields on a card (set group)",
+            "[keys.zz_limit]\ndefault = 1",
+            "[keys.zz_limit]\ndefault = 1\nunit = \"MB\"",
+            "keys.zz_limit: unit is for fields on a card (set group)",
         ),
         ("label = \"App name\"", "label = \"App name\"\nunit = \"MB\"", "keys.app_name: unit is for number fields"),
-        (
-            "when = \"torrent_client=qbittorrent\"",
-            "when = \"torrent_client\"",
-            "keys.qbit_password: when \"torrent_client\": expected key=value or key!=value",
-        ),
-        ("when = \"torrent_client=qbittorrent\"", "when = \"nzb_client=sab\"", "keys.qbit_password: when names no setting nzb_client"),
-        (
-            "when = \"torrent_client=qbittorrent\"",
-            "when = \"app_name=x\"",
-            "keys.qbit_password: when names app_name, which is not a select",
-        ),
-        (
-            "when = \"torrent_client=qbittorrent\"",
-            "when = \"torrent_client=rtorrent\"",
-            "keys.qbit_password: when torrent_client=rtorrent: torrent_client has no option rtorrent",
-        ),
-        ("listed_last = [\"late_key\"]", "listed_last = [\"nope\"]", "listed_last: no key nope"),
-        ("listed_last = [\"late_key\"]", "listed_last = [\"late_key\", \"late_key\"]", "listed_last: late_key twice"),
-        ("listed_last = [\"late_key\"]", "listed_last = [\"late_key\"]\nextra = 1", "unknown top-level entry extra"),
+        ("when = \"storage=s3\"", "when = \"storage\"", "keys.s3_secret: when \"storage\": expected key=value or key!=value"),
+        ("when = \"storage=s3\"", "when = \"mail_mode=smtp\"", "keys.s3_secret: when names no setting mail_mode"),
+        ("when = \"storage=s3\"", "when = \"app_name=x\"", "keys.s3_secret: when names app_name, which is not a select"),
+        ("when = \"storage=s3\"", "when = \"storage=ftp\"", "keys.s3_secret: when storage=ftp: storage has no option ftp"),
+        ("[sections.general]", "extra = 1\n[sections.general]", "unknown top-level entry extra"),
+        ("[sections.general]", "listed_last = [\"zz_limit\"]\n[sections.general]", "unknown top-level entry listed_last"),
     ];
     for (from, to, reason) in cases {
         assert!(FILE.contains(from), "the fixture has {from:?}");
