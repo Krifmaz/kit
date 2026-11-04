@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: Krifmaz Kit shared endpoints
+  version: 0.1.0
+  license: { name: MIT }
+  description: >
+    The endpoints every kit server speaks, matching Encore's current API. The prose files next to this one
+    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md)
+    say what the fields mean. Apps may add fields; clients ignore fields they do not know.
+components:
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string, description: a plain sentence, shown in full and copyable } }
+    Ok:
+      type: object
+      required: [ok]
+      properties: { ok: { type: boolean } }
+    ReleaseSummary:
+      type: object
+      required: [version, title, summary, highlights]
+      properties:
+        version: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        highlights: { type: array, items: { type: string }, maxItems: 6 }
+    Block:
+      type: object
+      required: [k]
+      properties:
+        k: { type: string, enum: [h, p, li, row] }
+        text: { type: string }
+        lead: { type: string }
+        cells: { type: array, items: { type: string } }
+        head: { type: boolean }
+    Notice:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        text: { type: string }
+        checking: { type: boolean }
+        id: { type: string }
+        severity: { type: string, enum: [info, warn, err] }
+    BugFile:
+      type: object
+      properties: { id: { type: integer }, name: { type: string }, mime: { type: string }, size: { type: integer }, url: { type: string } }
+    BugReportRow:
+      type: object
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [bug, not_bug, howto, crash] }
+        title: { type: string }
+        status: { type: string, enum: [new, looking, fixed, wontfix, answered] }
+        username: { type: string }
+        user_id: { type: integer }
+        created_at: { type: number }
+        updated_at: { type: number }
+        message_count: { type: integer }
+        file_count: { type: integer }
+        unread: { type: boolean }
+    Check:
+      type: object
+      required: [name, ok]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [service, path, tool] }
+        request: { type: string }
+        ok: { type: boolean }
+        detail: { type: string }
+        status: { type: string, enum: [ok, warn, fail] }
+        fix: { type: string }
+paths:
+  /api/health:
+    get:
+      summary: Server version and web build
+      responses:
+        "200":
+          description: up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, version, web]
+                properties:
+                  ok: { type: boolean, const: true }
+                  version: { type: string }
+                  server: { type: string }
+                  web: { type: [string, "null"] }
+  /api/changelog:
+    get:
+      summary: Every release with notes, newest first
+      responses:
+        "200":
+          description: the changelog
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  popup: { type: boolean }
+                  releases:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/ReleaseSummary"
+                        - type: object
+                          properties: { blocks: { type: array, items: { $ref: "#/components/schemas/Block" } } }
+  /api/changelog/new:
+    get:
+      summary: Releases this account has not seen
+      responses:
+        "200":
+          description: what the popup shows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, popup, show, releases]
+                properties:
+                  version: { type: string }
+                  popup: { type: boolean }
+                  show: { type: boolean }
+                  releases: { type: array, maxItems: 4, items: { $ref: "#/components/schemas/ReleaseSummary" } }
+  /api/changelog/seen:
+    post:
+      summary: Mark this server's version seen
+      responses:
+        "200":
+          description: marked
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, seen: { type: string } } }
+  /api/notices:
+    get:
+      summary: Every notice (kit default path; Encore serves its notice inside GET /api/requests/storage)
+      responses:
+        "200":
+          description: notices
+          content:
+            application/json:
+              schema: { type: object, properties: { notices: { type: array, items: { $ref: "#/components/schemas/Notice" } } } }
+  /api/notices/check:
+    post:
+      summary: Check every notice again now
+      responses:
+        "200":
+          description: notices after the check
+          content:
+            application/json:
+              schema: { type: object, properties: { notices: { type: array, items: { $ref: "#/components/schemas/Notice" } } } }
+  /api/bug-reports:
+    get:
+      summary: List reports (a non-admin sees their own)
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: mine, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: reports
+          content:
+            application/json:
+              schema: { type: object, properties: { reports: { type: array, items: { $ref: "#/components/schemas/BugReportRow" } } } }
+    post:
+      summary: File a report
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                kind: { type: string }
+                title: { type: string, maxLength: 200 }
+                body: { type: string, maxLength: 20000 }
+                page: { type: string }
+                app_version: { type: string }
+                device: { type: string }
+                file: { type: array, maxItems: 6, items: { type: string, format: binary } }
+      responses:
+        "200":
+          description: filed
+          content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, id: { type: integer } } } } }
+  /api/bug-reports/unread:
+    get:
+      summary: Reports with unread answers
+      responses:
+        "200": { description: count, content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } } }
+  /api/bug-reports/export:
+    get:
+      summary: Export reports (admin) as a zip, or as one .txt with format=txt
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: ids, in: query, schema: { type: string } }
+        - { name: format, in: query, schema: { type: string, enum: [txt] } }
+      responses:
+        "200":
+          description: the export
+          content:
+            application/zip: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string } }
+  /api/bug-reports/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+    get:
+      summary: One report with its thread
+      responses:
+        "200": { description: the report, content: { application/json: { schema: { type: object, properties: { report: { type: object }, messages: { type: array, items: { type: object } } } } } } }
+        "404": { description: missing or someone else's, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      summary: Delete a report (admin)
+      responses:
+        "200": { description: deleted, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+  /api/bug-reports/{id}/messages:
+    parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+    post:
+      summary: Reply in a report's thread
+      responses:
+        "200": { description: sent, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, id: { type: integer } } } } } }
+  /api/bug-reports/{id}/status:
+    parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+    post:
+      summary: Set a report's status (admin)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { status: { type: string } } } } } }
+      responses:
+        "200": { description: set, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } }
+  /api/bug-reports/{id}/files/{fid}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+      - { name: fid, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: An attached file
+      responses: { "200": { description: the file } }
+  /api/diagnostics/client-crash:
+    post:
+      summary: An app's crash report
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string }
+                device: { type: string }
+                device_id: { type: string }
+                app_version: { type: string }
+                os: { type: string }
+                time: { type: number }
+                summary: { type: string }
+                text: { type: string }
+                key: { type: string }
+      responses:
+        "200": { description: kept, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, id: { type: integer }, duplicate: { type: boolean } } } } } }
+    get:
+      summary: The newest 50 crash reports (admin)
+      responses: { "200": { description: crashes, content: { application/json: { schema: { type: object, properties: { crashes: { type: array, items: { type: object } } } } } } } }
+    delete:
+      summary: Clear crash reports (admin)
+      responses: { "200": { description: cleared, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/system/diagnostics:
+    get:
+      summary: Every check at once (admin)
+      responses:
+        "200": { description: checks, content: { application/json: { schema: { type: object, properties: { checks: { type: array, items: { $ref: "#/components/schemas/Check" } } } } } } }
+  /api/system/test/{service}:
+    parameters: [{ name: service, in: path, required: true, schema: { type: string } }]
+    post:
+      summary: Run one settings card's check (admin)
+      responses: { "200": { description: result, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, detail: { type: string } } } } } } }
+  /api/admin/settings/schema:
+    get:
+      summary: The settings described as data (admin); see settings-schema.md
+      responses: { "200": { description: the schema, content: { application/json: { schema: { type: object, properties: { sections: { type: array, items: { type: object } } } } } } } }
+  /api/admin/settings:
+    get:
+      summary: The settings' values with _meta (admin)
+      responses: { "200": { description: values, content: { application/json: { schema: { type: object } } } } }
+    put:
+      summary: Save settings (admin); unknown, masked, locked and api_key values are left out
+      requestBody: { content: { application/json: { schema: { type: object } } } }
+      responses: { "200": { description: saved, content: { application/json: { schema: { type: object } } } } }
+  /api/system/update:
+    get:
+      summary: The server's own update (admin); see update-feed.md
+      parameters: [{ name: force, in: query, schema: { type: string } }]
+      responses: { "200": { description: update state, content: { application/json: { schema: { type: object } } } } }
+    post:
+      summary: Pull and start the new image (admin)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { tag: { type: string } } } } } }
+      responses: { "202": { description: started } }
+  /api/system/restart:
+    post:
+      summary: Restart gracefully, exit code 75 (admin)
+      responses: { "202": { description: restarting } }
