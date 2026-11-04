@@ -17,7 +17,7 @@ axum = { version = "0.8", features = ["multipart", "macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.39", features = ["bundled"] }
 # kit-server-bugreports: attachments are sniffed and decoded, exports are zips, file names go into headers
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 zip = { version = "9.0.1", default-features = false, features = ["deflate"] }
