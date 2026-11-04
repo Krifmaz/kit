@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-changelog"
-description = "TODO"
+description = "What's new: an app's release notes (docs/releases/<version>.md) for the popup after an update and the full changelog, with per-account seen tracking, the popup switch and the hotfix rule."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,16 +8,20 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-kit-server-core.workspace = true
-axum.workspace = true
+kit-server-core = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
 serde.workspace = true
-serde_json.workspace = true
-tracing.workspace = true
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 kit-server-core = { workspace = true, features = ["testing"] }
 tokio.workspace = true
 tower.workspace = true
+
+[features]
+default = ["server"]
+# the routes; without it the crate is only the notes parser and `build::embed`, for an app's build script
+server = ["dep:kit-server-core", "dep:axum", "dep:serde_json"]
 
 [lints]
 workspace = true

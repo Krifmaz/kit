@@ -11,8 +11,8 @@ components:
   schemas:
     Error:
       type: object
-      required: [error]
-      properties: { error: { type: string, description: a plain sentence, shown in full and copyable } }
+      required: [detail]
+      properties: { detail: { type: string, description: a plain sentence, shown in full and copyable } }
     Ok:
       type: object
       required: [ok]
