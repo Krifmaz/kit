@@ -262,7 +262,7 @@ pub enum Btn {
     SegOn,
     /// Invisible: rows and tiles that are buttons.
     Row,
-    /// The round play button of the player bar and tile overlays.
+    /// A round accent button (a start or play button on a bottom bar or over a tile).
     Play,
 }
 
@@ -548,7 +548,7 @@ pub fn panel2(_: &Theme) -> container::Style {
     boxed(p.panel2, p.border, 12.0)
 }
 
-/// A square frame around covers (`.thumb`, `.tile .art`).
+/// A square frame around pictures (`.thumb`, `.tile .art`).
 pub fn art(_: &Theme) -> container::Style {
     let p = look();
     boxed(p.panel2, Color::TRANSPARENT, 10.0)

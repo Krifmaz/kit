@@ -1,4 +1,4 @@
-//! `.tabs` (the framed tab row of Library, the full player) and `.seg` (the segmented control
+//! `.tabs` (the framed tab row of a list page) and `.seg` (the segmented control
 //! of settings).
 
 use super::{t, El};
