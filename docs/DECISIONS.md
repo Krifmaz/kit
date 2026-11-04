@@ -7,7 +7,7 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · The generated CSS is only the theme-variable blocks of Encore's app.css (lines 1–72); the rest of the stylesheet stays Encore's and is reused unchanged by kit-leptos.
 - 2026-11-04 · The notice contract keeps Encore's object ({ok, text, checking}) and adds `id` and `severity`; Encore keeps its paths, other apps get `/api/notices`.
 - 2026-11-04 · Diagnostics keeps Encore's check shape ({name, kind, ok, detail, request}) and adds optional `status` and `fix`.
-- 2026-11-04 · The kit's release workflow makes no release until docs/releases/0.1.0.md exists, so the first tag is v0.1.0 once §18 passes.
+- 2026-11-04 · The kit's release workflow makes no release until docs/releases/0.1.0.md exists, so the first tag is v0.1.0 once §16 passes.
 - 2026-11-04 · rustfmt max_width 140 (Encore's code is written to long lines; fmt is now enforced in CI).
 - 2026-11-04 · Package names: Rust crates `kit-*`; Android `dev.krifmaz.kit:kit-compose` (as DESIGN.md §15).
 - 2026-11-04 · kit-release.yml is called twice per run (`stage: prepare` → version, web app, server; `stage: publish` → notes, SHA256SUMS, release) instead of nesting kit-docker/-android/-desktop inside it: a `./` call inside a workflow used from another repo is not reliably resolved to the kit, and the version must be known before the image and apps build.
@@ -169,3 +169,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · The bug report stores share their list and unread SQL in one place and differ only in placeholders and LIKE vs ILIKE, so filters behave the same on SQLite and Postgres.
 - 2026-11-04 · The `--player`/`--player-h` tokens keep their names (apps' stylesheets use them); they are documented as the room for a bar along the bottom, 0 by default.
 - 2026-11-04 · Merged branches are deleted by a kit workflow (cleanup-branches.yml, GITHUB_TOKEN) because this environment's proxy refuses ref deletes; it only deletes a branch with no open PR whose head is a merged PR's head.
+- 2026-11-04 · CHANGELOG.md: the long Unreleased list (written while the kit was still being lifted from one app) is replaced by one v0.1.0 section describing the neutral kit as released; the per-PR detail stays in the merged pull requests.

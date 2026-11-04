@@ -5,7 +5,7 @@ name: release
 #   Version: PATCH of the newest v-release + 1 by default. A PR raises MINOR or MAJOR by adding
 #   docs/releases/<version>.md for that version; the file is also the release's notes (otherwise the commit
 #   list since the previous release).
-#   First release: none is made until docs/releases/0.1.0.md exists (added once DESIGN.md §18 passes); then v0.1.0.
+#   First release: none is made until docs/releases/0.1.0.md exists (added once DESIGN.md §16 passes); then v0.1.0.
 on:
   push:
     branches: [main]
