@@ -20,20 +20,30 @@ path = "src/lib.rs"
 # The kit, pinned to one release tag. To update: read the kit's CHANGELOG.md, bump the tag here and in
 # web/Cargo.toml, run the tests.
 [dependencies]
+kit-server-core = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}", features = ["sqlite"] }
 kit-server-health = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
 kit-server-changelog = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
 kit-server-notices = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
 kit-server-bugreports = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
 kit-server-diagnostics = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
 kit-server-settings = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}" }
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+cookie = "0.18"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs", "compression-gzip", "set-header"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+bcrypt = "0.17"
+rand = "0.9"
+base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
+
+[build-dependencies]
+kit-server-settings = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}", default-features = false, features = ["toml"] }
+kit-server-changelog = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}", default-features = false }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
