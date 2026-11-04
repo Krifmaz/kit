@@ -1,0 +1,386 @@
+name: kit-release
+
+# An app's release, taken from Encore's release.yml: a normal GitHub release tagged vMAJOR.MINOR.PATCH (never a
+# pre-release), its notes, the server and web app as Linux tarballs and SHA256SUMS over every file. The tag is
+# created through the release (the API may create tags; a git push from the Actions token may not).
+#
+# An app calls it twice in one run, around kit-docker, kit-android and kit-desktop:
+#   stage: prepare   the version (outputs `version` and `code`), the web app and the server tarballs
+#   stage: publish   collects every file the run built, writes the notes and SHA256SUMS, publishes the release
+#
+#   jobs:
+#     test:    { uses: Krifmaz/kit/.github/workflows/kit-ci.yml@v0.1.0 }
+#     prepare: { needs: test, uses: Krifmaz/kit/.github/workflows/kit-release.yml@v0.1.0, with: { app-name: Notes, stage: prepare } }
+#     docker:  { needs: prepare, uses: …/kit-docker.yml@v0.1.0, with: { version: "${{ needs.prepare.outputs.version }}" } }
+#     publish: { needs: [prepare, docker], uses: …/kit-release.yml@v0.1.0, with: { stage: publish, version: … } }
+#
+# Version: the newest v-release's PATCH + 1 by default ("auto"). A pull request raises MINOR or MAJOR by adding
+# <releases-dir>/<version>.md for that version; the file is also the release's notes (otherwise the commit list
+# since the previous release). A run started by hand may pick patch/minor/major or type the version; a run on a
+# v-tag takes the tag's version. The first release is `first-version`.
+#
+# Apps: a run that builds no app installers attaches the ones of the previous release (`carry-over`), so every
+# release offers the apps; `only: android` builds just the APK and keeps the previous release's other files.
+on:
+  workflow_call:
+    inputs:
+      stage:
+        description: "prepare (version, web app, server) or publish (notes, SHA256SUMS, the release)"
+        type: string
+        required: true
+      app-name:
+        description: "The app's name in release titles (\"Encore 0.42.16\") and artifact names"
+        type: string
+        required: true
+      # --- version (prepare) ---
+      bump:
+        description: "auto (PATCH, or MINOR/MAJOR from <releases-dir>/<version>.md), patch, minor or major"
+        type: string
+        required: false
+        default: auto
+      version:
+        description: "prepare: a version typed by hand (overrides bump); publish: the version prepare chose"
+        type: string
+        required: false
+        default: ""
+      first-version:
+        description: "The version of the first release"
+        type: string
+        required: false
+        default: "0.1.0"
+      releases-dir:
+        description: "Where the release notes live (<releases-dir>/<version>.md)"
+        type: string
+        required: false
+        default: docs/releases
+      code-base:
+        description: "Android versionCode = code-base + MAJOR*1000000 + MINOR*10000 + PATCH*10"
+        type: number
+        required: false
+        default: 0
+      # --- web app (prepare) ---
+      web-dir:
+        description: "The Rust web app built with trunk (empty: none)"
+        type: string
+        required: false
+        default: ""
+      trunk-version:
+        type: string
+        required: false
+        default: "0.21.14"
+      web-files:
+        description: "Files the dist must have (space-separated, relative to dist/)"
+        type: string
+        required: false
+        default: index.html
+      # --- server (prepare) ---
+      server-dir:
+        description: "The server's Cargo workspace (empty: no server tarballs)"
+        type: string
+        required: false
+        default: ""
+      server-bin:
+        description: "The server binary's name; also the tarball's name and folder (<bin>-<version>-linux-<arch>.tar.gz)"
+        type: string
+        required: false
+        default: ""
+      version-env:
+        description: "The environment variable the server build reads its version from"
+        type: string
+        required: false
+        default: APP_VERSION
+      server-arches:
+        description: "JSON list of {arch, target} to build the server for"
+        type: string
+        required: false
+        default: '[{"arch":"x86_64","target":"x86_64-unknown-linux-gnu"},{"arch":"aarch64","target":"aarch64-unknown-linux-gnu"}]'
+      bench:
+        description: "A speed table command run on the x86_64 release build into the job summary ($TARGET is set; never fails the release)"
+        type: string
+        required: false
+        default: ""
+      # --- publish ---
+      only:
+        description: "all, or android: the APK with the server and image, the other files kept from the previous release"
+        type: string
+        required: false
+        default: all
+      apps-result:
+        description: "success when every app job built, skipped when none ran, anything else when some failed"
+        type: string
+        required: false
+        default: skipped
+      files:
+        description: "Bash run before the notes to add files to out/ ($V is the version, $OUT the folder)"
+        type: string
+        required: false
+        default: ""
+      notes:
+        description: "Bash run after the notes' Changes part to append to $NOTES (also gets $V, $OUT, $APPS, $ONLY)"
+        type: string
+        required: false
+        default: ""
+      app-files:
+        description: "Globs (space-separated) of the app installers; none in out/ means this run built no apps"
+        type: string
+        required: false
+        default: ""
+      carry-over:
+        description: "Globs of the previous release's files attached again when this run built no apps"
+        type: string
+        required: false
+        default: ""
+      carry-over-drop:
+        description: "Globs removed from those carried-over files (old installers, files built fresh)"
+        type: string
+        required: false
+        default: ""
+      keep-drop:
+        description: "only = android: globs removed from the previous release's files before they are kept"
+        type: string
+        required: false
+        default: ""
+    outputs:
+      version:
+        description: "The version (MAJOR.MINOR.PATCH)"
+        value: ${{ jobs.version.outputs.version }}
+      code:
+        description: "The Android versionCode for it"
+        value: ${{ jobs.version.outputs.code }}
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    if: inputs.stage == 'prepare'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        env:
+          BUMP: ${{ inputs.bump }}
+          WANT: ${{ inputs.version }}
+          FIRST: ${{ inputs.first-version }}
+          DIR: ${{ inputs.releases-dir }}
+          CODE_BASE: ${{ inputs.code-base }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semver() { echo "$1" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; }
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          elif [ -n "$WANT" ]; then
+            V="${WANT#v}"
+          else
+            # the newest version so far: release tags (v0.20.1 …)
+            LAST=$(gh release list --limit 200 --json tagName -q '.[].tagName' 2>/dev/null | sed -n 's/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+                    | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            if [ -z "$LAST" ]; then
+              V="$FIRST"
+            else
+              IFS=. read -r A B C <<< "$LAST"
+              case "$BUMP" in
+                major) V="$((A + 1)).0.0" ;;
+                minor) V="$A.$((B + 1)).0" ;;
+                patch) V="$A.$B.$((C + 1))" ;;
+                *)
+                  # auto: a pull request asks for MINOR or MAJOR by adding that version's notes
+                  if [ -f "$DIR/$((A + 1)).0.0.md" ]; then V="$((A + 1)).0.0"
+                  elif [ -f "$DIR/$A.$((B + 1)).0.md" ]; then V="$A.$((B + 1)).0"
+                  else V="$A.$B.$((C + 1))"; fi ;;
+              esac
+            fi
+          fi
+          semver "$V" || { echo "bad version $V (want MAJOR.MINOR.PATCH)"; exit 1; }
+          IFS=. read -r A B C <<< "$V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          # Android versionCode, always increasing: code-base + major*1000000 + minor*10000 + patch*10
+          echo "code=$(( CODE_BASE + A * 1000000 + B * 10000 + C * 10 ))" >> "$GITHUB_OUTPUT"
+          echo "Version $V (previous: ${LAST:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # the web app in Rust/WebAssembly → static/, packed into the Linux tarballs
+  ui:
+    if: inputs.stage == 'prepare' && inputs.web-dir != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ inputs.web-dir }}
+      - env:
+          TRUNK: ${{ inputs.trunk-version }}
+        run: curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v$TRUNK/trunk-x86_64-unknown-linux-gnu.tar.gz" | tar -xz -C /usr/local/bin trunk
+      - run: trunk build --release
+        working-directory: ${{ inputs.web-dir }}
+      - name: The dist has everything the server serves by name
+        working-directory: ${{ inputs.web-dir }}
+        env:
+          FILES: ${{ inputs.web-files }}
+        run: |
+          read -ra want <<< "$FILES"
+          for f in "${want[@]}"; do test -f "dist/$f" || { echo "dist/$f missing"; exit 1; }; done
+          ls dist/*_bg.wasm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: ${{ inputs.web-dir }}/dist
+
+  server:
+    needs: [version, ui]
+    if: always() && inputs.stage == 'prepare' && inputs.server-dir != '' && needs.version.result == 'success' && needs.ui.result != 'failure' && needs.ui.result != 'cancelled'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJSON(inputs.server-arches) }}
+    env:
+      V: ${{ needs.version.outputs.version }}
+      BIN: ${{ inputs.server-bin }}
+      VERSION_ENV: ${{ inputs.version-env }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ inputs.server-dir }}
+          key: ${{ matrix.target }}
+      - if: matrix.arch == 'aarch64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        working-directory: ${{ inputs.server-dir }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+        run: |
+          export "$VERSION_ENV=$V"
+          cargo build --release --locked --target "$TARGET"
+      - uses: actions/download-artifact@v4
+        if: inputs.web-dir != ''
+        with:
+          name: ui-dist
+          path: ui-dist
+      - name: Package
+        env:
+          SERVER_DIR: ${{ inputs.server-dir }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # static/ is the web app (trunk's dist)
+          mkdir -p "out/$BIN" && cp "$SERVER_DIR/target/$TARGET/release/$BIN" "out/$BIN/"
+          if [ -d ui-dist ]; then cp -r ui-dist "out/$BIN/static"; fi
+          tar -C out -czf "$BIN-$V-linux-$ARCH.tar.gz" "$BIN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.arch }}
+          path: "*.tar.gz"
+      # The speed table on this release build, in the job summary. A GitHub runner is another machine with other
+      # neighbours, so compare its numbers only with other runs here. Only the x86_64 build can run on the runner;
+      # a failed bench does not hold the release back.
+      - name: Speed table
+        if: matrix.arch == 'x86_64' && inputs.bench != ''
+        continue-on-error: true
+        working-directory: ${{ inputs.server-dir }}
+        env:
+          BENCH: ${{ inputs.bench }}
+          APP: ${{ inputs.app-name }}
+        run: |
+          # the same version as the build above, so the crates it compiled are reused
+          export "$VERSION_ENV=$V"
+          bash -c "$BENCH" > perf.md
+          { echo "## Speed table, $APP $V (release build, GitHub runner)"; cat perf.md; } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: inputs.stage == 'publish'
+    runs-on: ubuntu-latest
+    env:
+      V: ${{ inputs.version }}
+      APP: ${{ inputs.app-name }}
+      APPS: ${{ inputs.apps-result }}
+      ONLY: ${{ inputs.only }}
+      OUT: out
+      NOTES: notes.md
+      DIR: ${{ inputs.releases-dir }}
+      APP_FILES: ${{ inputs.app-files }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Version
+        run: echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::bad version '$V' (pass prepare's version output)"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # only our files (the Docker build record artifact can't be downloaded this way)
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: server-*
+          path: out
+          merge-multiple: true
+      # the apps that did build, also when one of them didn't (a Mac build that never got a machine): the notes
+      # name what is attached and what is not
+      - uses: actions/download-artifact@v4
+        if: inputs.apps-result != 'skipped'
+        continue-on-error: true
+        with:
+          pattern: ${{ inputs.app-name }}-*
+          path: out
+          merge-multiple: true
+      - name: Files and notes
+        env:
+          KEEP_DROP: ${{ inputs.keep-drop }}
+          FILES: ${{ inputs.files }}
+          NOTES_SCRIPT: ${{ inputs.notes }}
+        run: |
+          mkdir -p out
+          if [ "$ONLY" = android ]; then
+            # Android only: keep the other files of the newest full release, with this run's APK and server
+            # (SHA256SUMS is written again when publishing)
+            PREV=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            mkdir -p keep && [ -n "$PREV" ] && gh release download "$PREV" --dir keep 2>/dev/null || true
+            read -ra drop <<< "$KEEP_DROP"
+            # shellcheck disable=SC2086
+            (cd keep && rm -f SHA256SUMS && for g in "${drop[@]}"; do rm -f -- $g; done)
+            mv keep/* out/ 2>/dev/null || true
+          fi
+          if [ -n "$FILES" ]; then bash -c "$FILES"; fi
+          ls -la out
+          if [ -f "$DIR/$V.md" ]; then cp "$DIR/$V.md" notes.md; else
+            PREV=$(git tag -l 'v[0-9]*' --sort=-creatordate | head -1)
+            { echo "## Changes"; git log --no-merges --pretty='- %s' ${PREV:+$PREV..}HEAD | head -60; } > notes.md
+          fi
+          if [ -n "$NOTES_SCRIPT" ]; then bash -c "$NOTES_SCRIPT"; fi
+          cat notes.md
+      - name: Publish
+        env:
+          CARRY: ${{ inputs.carry-over }}
+          CARRY_DROP: ${{ inputs.carry-over-drop }}
+        run: |
+          read -ra apps <<< "$APP_FILES"
+          built=false
+          for g in "${apps[@]}"; do compgen -G "out/$g" >/dev/null && built=true; done
+          # app installers from the previous release when this run built none of them (a run with some of the apps
+          # attaches only those: an older build beside a newer one would offer two versions)
+          if [ "$APPS" != success ] && [ "$built" = false ] && [ -n "$CARRY" ]; then
+            read -ra carry <<< "$CARRY"
+            read -ra drop <<< "$CARRY_DROP"
+            args=(); for g in "${carry[@]}"; do args+=(--pattern "$g"); done
+            PREV=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vx "v$V" | sort -V | tail -1)
+            mkdir -p prev && [ -n "$PREV" ] && gh release download "$PREV" --dir prev "${args[@]}" 2>/dev/null || true
+            # shellcheck disable=SC2086
+            (cd prev && for g in "${drop[@]}"; do rm -f -- $g; done)
+            mv prev/* out/ 2>/dev/null || true
+          fi
+          # SHA256SUMS over every file, written last so it covers them all (an app's updater installs an update only
+          # when its file is listed here with the same hash)
+          if compgen -G "out/*" >/dev/null; then (cd out && rm -f SHA256SUMS && sha256sum -- * > SHA256SUMS && cat SHA256SUMS); fi
+          gh release delete "v$V" --yes --cleanup-tag 2>/dev/null || true
+          shopt -s nullglob
+          gh release create "v$V" out/* --title "$APP $V" --notes-file notes.md --target "$GITHUB_SHA" --latest
