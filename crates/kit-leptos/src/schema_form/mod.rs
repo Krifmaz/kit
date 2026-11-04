@@ -10,9 +10,9 @@
 //! cleared). A field with a `when` rule shows only while its select has the value. Fields marked `advanced` fold
 //! under "Show advanced". The markup is Encore's; the tests hold it to Encore's recorded fixture of every page.
 //!
-//! [`SettingsCards`] draws a page's cards and wires Save (`PUT /api/admin/settings`), Test
-//! (`POST /api/system/test/<test>` after a quiet save), clear and the eye and copy buttons
-//! (`GET /api/admin/settings/secret/<key>`); [`SchemaFields`] is the fields alone.
+//! [`SettingsCards`] draws a page's cards and wires Save (`PUT /api/settings`), Test
+//! (`POST /api/diagnostics/<test>/test` after a quiet save), clear and the eye and copy buttons
+//! (`GET /api/settings/secret/<key>`); [`SchemaFields`] is the fields alone.
 
 pub mod schema;
 
@@ -33,7 +33,7 @@ use web_sys::Element;
 
 pub use schema::{visible_cards, Schema, Section, When};
 
-/// What `GET /api/admin/settings` sends for a saved secret ("•••• (saved)"). From `schema_form.rs` `MASK`.
+/// What `GET /api/settings` sends for a saved secret ("•••• (saved)"). From `schema_form.rs` `MASK`.
 pub const MASK: &str = "••••";
 /// The fold of the advanced fields. From `schema_form.rs` `fields_html`.
 pub const SHOW_ADVANCED: &str = "Show advanced";
@@ -66,7 +66,7 @@ fn is_masked(v: &str) -> bool {
     v.starts_with(MASK)
 }
 
-/// Whether an environment variable sets `key` (`meta`: the `_meta` of `GET /api/admin/settings`): the value is
+/// Whether an environment variable sets `key` (`meta`: the `_meta` of `GET /api/settings`): the value is
 /// shown locked and Save leaves it out. From `schema_form.rs` `env_locked`.
 pub fn env_locked(meta: &Value, key: &str) -> bool {
     meta.o(key).s("source") == "env"
@@ -111,7 +111,7 @@ fn source_note(f: &Field, v: &Value, meta: &Value) -> AnyView {
 /// The values of the `when` selects of a run of fields, as they change.
 pub type Selects = ArcRwSignal<HashMap<String, String>>;
 
-/// One field: `v` its value from `GET /api/admin/settings`, `meta` that answer's `_meta`, `reveal` whether the
+/// One field: `v` its value from `GET /api/settings`, `meta` that answer's `_meta`, `reveal` whether the
 /// server lets admins see saved secrets. From `schema_form.rs` `field_html` and `show_when`: the same elements,
 /// attributes in the same order (a `when` rule's `data-when`, `data-when-in` or `data-when-not` and `hidden` before
 /// `class`) and the same text nodes, so the page is Encore's node for node.
@@ -246,7 +246,7 @@ pub struct FieldBlock {
 pub fn SchemaFields(
     /// The fields to draw (those the values hold, [`visible_cards`]).
     fields: Vec<Field>,
-    /// `GET /api/admin/settings` (with `_meta`).
+    /// `GET /api/settings` (with `_meta`).
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -338,7 +338,7 @@ pub fn SettingsCard(
     group: Arc<Group>,
     /// Its fields that this server has.
     fields: Vec<Field>,
-    /// `GET /api/admin/settings`.
+    /// `GET /api/settings`.
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -463,7 +463,7 @@ fn set_value(el: &Element, v: &str) {
 /// A saved secret, asked for when the eye or copy button is pressed. From `groups.rs` `secret_of`.
 async fn secret_of(key: &str) -> Result<String, ApiError> {
     let enc: String = js_sys::encode_uri_component(key).into();
-    Ok(api::get(&format!("/admin/settings/secret/{enc}")).await?.s("value"))
+    Ok(api::get(&format!("/settings/secret/{enc}")).await?.s("value"))
 }
 
 /// The eye and copy buttons of saved secrets in `card` (asked for from the server only when pressed). From
@@ -550,7 +550,7 @@ pub fn bind_secret_buttons(card: &Element) {
 pub fn SettingsCards(
     /// The page's cards with their fields.
     cards: Vec<(Arc<Group>, Vec<Field>)>,
-    /// `GET /api/admin/settings`.
+    /// `GET /api/settings`.
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -603,7 +603,7 @@ pub fn SettingsCards(
                 crate::rt::spawn(async move {
                     let failed = |e: ApiError| serde_json::json!({ "ok": false, "message": if e.message.is_empty() { TEST_FAILED.to_string() } else { e.message } });
                     let r = match save(&g, true, &card, values, line.clone()).await {
-                        Ok(()) => match api::post_empty(&format!("/system/test/{}", g.test.as_deref().unwrap_or(""))).await {
+                        Ok(()) => match api::post_empty(&format!("/diagnostics/{}/test", g.test.as_deref().unwrap_or(""))).await {
                             Ok(r) => r,
                             Err(e) => failed(e),
                         },
@@ -645,7 +645,7 @@ fn bind_page(values: ArcRwSignal<Value>, drawn: ArcRwSignal<u32>) {
                 crate::rt::spawn(async move {
                     let mut body = Map::new();
                     body.insert(key, Value::String(String::new()));
-                    match api::put("/admin/settings", Value::Object(body)).await {
+                    match api::put("/settings", Value::Object(body)).await {
                         Ok(v) => {
                             values.set(v);
                             toast(CLEARED, "ok");
@@ -659,13 +659,13 @@ fn bind_page(values: ArcRwSignal<Value>, drawn: ArcRwSignal<u32>) {
     }
 }
 
-/// Save of a card (and the quiet save before Test): `PUT /api/admin/settings` with what the card's fields hold;
+/// Save of a card (and the quiet save before Test): `PUT /api/settings` with what the card's fields hold;
 /// the answer becomes the values, and a folder the server cannot write to comes back as a warning under the card.
 /// From `groups.rs` `Hub::save`.
 async fn save(g: &Group, quiet: bool, card: &Element, values: ArcRwSignal<Value>, line: ArcRwSignal<Out>) -> Result<(), ApiError> {
     let meta = values.get_untracked().o("_meta");
     let body = form_values(g, card, &meta);
-    match api::put("/admin/settings", Value::Object(body)).await {
+    match api::put("/settings", Value::Object(body)).await {
         Ok(mut v) => {
             let warnings: Vec<String> = v
                 .g("_warnings")

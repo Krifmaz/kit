@@ -24,7 +24,8 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
     reads its version from the file name; `GET/POST /api/update`, `POST /api/restart` (`UpdatePaths`);
     `MAX_APK_BYTES` → `DEFAULT_MAX_DOWNLOAD_BYTES`; `HOTFIX_PREFIX` removed.
   - `kit-server-core`: neutral docs and tests, no API change.
-  - `contracts/` and the template's server, web and Android calls use the new routes.
+  - `contracts/`, the template's server, web and Android calls, and the clients in kit-leptos (settings form,
+    Diagnostics, demo), kit-iced (docs) and kit-compose (settings, Diagnostics, crash log) use the new routes.
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its

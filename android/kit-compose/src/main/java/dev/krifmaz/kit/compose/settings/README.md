@@ -5,7 +5,7 @@ Settings drawn from the server's schema, and the Diagnostics page (DESIGN.md §6
 
 | File | What it is | From Encore |
 | --- | --- | --- |
-| `SchemaModels.kt` | The schema answer (`GET /api/admin/settings/schema`, contracts/settings-schema.md) and `SchemaApi`, the calls behind the cards. | `SchemaModels.kt` |
+| `SchemaModels.kt` | The schema answer (`GET /api/settings/schema`, contracts/settings-schema.md) and `SchemaApi`, the calls behind the cards. | `SchemaModels.kt` |
 | `SchemaRules.kt` | Pure rules: visibility (`when`), what Save sends, number checks, where a value comes from. | `SchemaRules.kt` |
 | `SchemaForm.kt` | `SchemaFormState`, `SchemaPage`, `SchemaCard`, the fields, Test and Save, `CardSlots` for a card's own extras. | `SchemaForm.kt` |
 | `DiagnosticsRules.kt` | The check groups, Copy report's text, app crash kinds and text. | `SettingsRules.kt` (diagnostics part) |
@@ -21,7 +21,7 @@ SchemaPage(state, schemaApi, state.schema.section("general")!!)
 
 DiagnosticsScreen(
     title = "Diagnostics", subtitle = "…", onBack = onBack,
-    load = { api.get("/api/system/diagnostics") as JsonObject },
+    load = { api.get("/api/diagnostics") as JsonObject },
     report = { DiagnosticsRules.report(it) },
     bottom = { AppCrashesSection(load = { … }, clear = { … }) },
 )

@@ -244,11 +244,11 @@ private fun CheckItem(c: JsonObject) {
 }
 
 /**
- * "App crashes": the crash reports the phone app sent (`GET /api/diagnostics/client-crash`, newest 50), each with
+ * "App crashes": the crash reports the phone app sent (`GET /api/crash-reports`, newest 50), each with
  * its first line (opens the whole report with Copy), kind, device, version, OS, user and time; Clear removes them all.
  *
  * @param load asks for the reports (`{crashes: [...]}`); blocking, run on Dispatchers.IO.
- * @param clear removes them all (`DELETE /api/diagnostics/client-crash`); blocking.
+ * @param clear removes them all (`DELETE /api/crash-reports`); blocking.
  */
 @Composable
 fun AppCrashesSection(load: () -> JsonObject, clear: () -> Unit) {

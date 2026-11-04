@@ -55,7 +55,7 @@ class SchemaRulesTest {
     private val card: SchemaGroup = schema.group("torznab")!!
     private fun f(key: String): SchemaField = card.field(key)!!
 
-    // GET /api/admin/settings: values with `_meta`
+    // GET /api/settings: values with `_meta`
     private val values: JsonObject = KitJson.parseToJsonElement(
         """
         {"torrent_client":"qbittorrent","qbit_password":"•••• (saved)","transmission_url":"","soulseek_port":2234,
@@ -332,7 +332,7 @@ class SchemaRulesTest {
         assertEquals("deluge", SchemaRules.optionLabel(f("torrent_client"), "deluge")) // not an option: as it is
     }
 
-    /** The answer the web's tests use, recorded from GET /api/admin/settings/schema (read when the repo is there). */
+    /** The answer the web's tests use, recorded from GET /api/settings/schema (read when the repo is there). */
     @Test
     fun theRecordedServerAnswerDecodes() {
         val file = listOf("src/test/fixtures/web-rs", "../../../web-rs", "../../web-rs", "web-rs", "../web-rs")

@@ -3,7 +3,7 @@
 //! Ported from Encore's `web-rs/src/settings/form_tests.rs` and `schema_form.rs` tests. `fixtures/` holds
 //! Encore's own fixtures, copied unchanged from Krifmaz/Encore at commit
 //! `5c0bdcba82307c522e4516d1bc51a81c8efa4026` (`web-rs/src/settings/fixtures/`):
-//! `settings-schema.json` is the answer of `GET /api/admin/settings/schema` saved from Encore's server, and
+//! `settings-schema.json` is the answer of `GET /api/settings/schema` saved from Encore's server, and
 //! `settings-cards.html` is what Encore's web app draws for every Server page, for two sets of values (the
 //! defaults, and a case with locked, saved, secret, escaped and missing values), with and without the eye and
 //! copy buttons; icons are shortened to `<svg/>` and the cards' own extra blocks to a marker. The kit draws every
@@ -44,7 +44,7 @@ fn field_mut<'a>(v: &'a mut Value, key: &str) -> &'a mut Value {
         .expect("a field of the schema")
 }
 
-/// `GET /admin/settings` for the cases: (name, values with `_meta`). From `form_tests.rs` `cases`.
+/// `GET /settings` for the cases: (name, values with `_meta`). From `form_tests.rs` `cases`.
 fn cases() -> Vec<(&'static str, Value)> {
     let mut values = Map::new();
     let mut meta = Map::new();

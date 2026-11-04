@@ -2,7 +2,7 @@
 //! setting comes from, and Copy report.
 //!
 //! From Encore's `web-rs/src/settings/diagnostics.rs` (`render`, `run`, `check_item`, `copy_report`) and
-//! `contracts/diagnostics.md` (`GET /api/system/diagnostics`). The grouping, words and report are kit-rules'
+//! `contracts/diagnostics.md` (`GET /api/diagnostics`). The grouping, words and report are kit-rules'
 //! [`kit_rules::diagnostics`]. What Encore's page has of its own (the Updates card, the Server block, the download
 //! folders, Backups, App crashes, the VPN row) comes in through [`DiagHooks`] and the page's children, so the kit
 //! draws the shared part and Encore keeps its own.
@@ -129,7 +129,7 @@ pub fn DiagnosticsView(
     /// The app's name ("Encore 0.36.4 · running as uid …").
     #[prop(into)]
     app: String,
-    /// The answer of `GET /api/system/diagnostics`.
+    /// The answer of `GET /api/diagnostics`.
     data: Value,
     /// What the app adds.
     #[prop(optional)]
@@ -215,7 +215,7 @@ pub fn DiagnosticsPage(
         running.set(true);
         let (adjust, loaded) = (adjust.clone(), loaded.clone());
         crate::rt::spawn(async move {
-            match api::get("/system/diagnostics").await {
+            match api::get("/diagnostics").await {
                 Ok(mut d) => {
                     if let Some(f) = &adjust {
                         d = f(d).await;

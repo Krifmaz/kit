@@ -1,7 +1,7 @@
 # bugs — bug reports and crash logs
 
 Extracted from Encore's `features/bugs/` and `CrashLog.kt` / `CrashRules.kt`, with the same behaviour and words.
-The server side is `contracts/bug-reports.md` (`/api/bug-reports…`, `/api/diagnostics/client-crash`).
+The server side is `contracts/bug-reports.md` (`/api/bug-reports…`, `/api/crash-reports`).
 
 - `BugRules` — kinds, statuses, filters, queries, limits, picture checks, the words (unit-tested).
 - `BugReportsApi` (+ `BugUnread`) — the calls, over the app's `KitApi` and OkHttpClient (which carry the session).

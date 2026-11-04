@@ -1,5 +1,5 @@
 //! The diagnostics page, as Encore's desktop app draws it (`clients/desktop/src/pages/settings/diagnostics.rs`):
-//! every check the server ran (`GET /api/system/diagnostics`, see `contracts/diagnostics.md`) in groups
+//! every check the server ran (`GET /api/diagnostics`, see `contracts/diagnostics.md`) in groups
 //! by kind, each with its status dot, name, HTTP badge, time, request, what it said, how to fix it and
 //! its folded raw answer; Copy on a check that failed, the "N problems" / "All good" summary, the
 //! copyable whole report and Run checks / Checking….
@@ -243,7 +243,7 @@ pub enum Msg {
 /// What the app does after a message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Run the checks (Encore: `GET /system/diagnostics` and `/system/vpn`) and hand the answer to
+    /// Run the checks (Encore: `GET /diagnostics` and `/system/vpn`) and hand the answer to
     /// [`State::checked`].
     Run,
     /// Build the [`report`] (with the app's sections) from [`State::answer`] and [`State::all`],

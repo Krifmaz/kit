@@ -104,7 +104,7 @@ pub struct Group {
     pub desc: String,
     /// The heading over a run of cards ("" for none).
     pub part: String,
-    /// `POST /api/system/test/<test>`.
+    /// `POST /api/diagnostics/<test>/test`.
     pub test: Option<String>,
     /// The Test button's words ("Test connection" when missing).
     pub test_label: Option<String>,
@@ -145,7 +145,7 @@ pub struct Section {
     pub groups: Vec<Arc<Group>>,
 }
 
-/// The whole answer of `GET /api/admin/settings/schema`. From `fields.rs` `Schema`.
+/// The whole answer of `GET /api/settings/schema`. From `fields.rs` `Schema`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Schema {
     /// The pages.

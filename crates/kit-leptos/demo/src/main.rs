@@ -89,11 +89,11 @@ impl Backend for Fake {
             match (method.as_str(), path.as_str()) {
                 ("GET", "/changelog/new") => Ok(json!({ "show": true, "releases": releases() })),
                 ("GET", "/changelog") => Ok(json!({ "version": "0.36.4", "popup": true, "releases": releases() })),
-                ("GET", "/system/diagnostics") => Ok(diagnostics()),
+                ("GET", "/diagnostics") => Ok(diagnostics()),
                 ("GET", "/requests/storage") | ("POST", "/requests/storage/check") => {
                     Ok(json!({ "downloads": { "ok": false, "text": NOTICE, "waiting": 3 } }))
                 }
-                (_, p) if p.starts_with("/system/test/") => Ok(json!({ "ok": true, "detail": "Connected (demo)" })),
+                (_, p) if p.starts_with("/diagnostics/") && p.ends_with("/test") => Ok(json!({ "ok": true, "detail": "Connected (demo)" })),
                 _ => Ok(json!({})),
             }
         })

@@ -11,13 +11,13 @@ import java.math.BigDecimal
  * What the schema-drawn cards need without Android: the `when` rules, the text a field starts with, the number
  * parsing, the note under a field, the cards a server has, and what Save sends (only the keys that changed, in the
  * web's body shape). The web's renderer is web-rs/src/settings/schema_form.rs and fields.rs; the server's side is
- * server/crates/config (settings.toml, when.rs, `Config::schema`) and PUT /api/admin/settings.
+ * server/crates/config (settings.toml, when.rs, `Config::schema`) and PUT /api/settings.
  *
- * `values` is the answer of GET (or PUT) /api/admin/settings; `drafts` holds what the person typed and has not
+ * `values` is the answer of GET (or PUT) /api/settings; `drafts` holds what the person typed and has not
  * saved yet, as text per key ([textFor] says how each type is written).
  */
 object SchemaRules {
-    /** What GET /api/admin/settings sends for a saved secret ("•••• (saved)"). */
+    /** What GET /api/settings sends for a saved secret ("•••• (saved)"). */
     const val MASK = "••••"
 
     /** The secret that is never shown again, not even to the owner (the server refuses it too). */
@@ -329,7 +329,7 @@ object SchemaRules {
     fun invalid(fields: List<SchemaField>, values: JsonObject, drafts: Map<String, String>): List<SchemaField> =
         fields.filter { f -> f.kind == "number" && !isLocked(f, values) && drafts[f.key]?.let { numberError(it) } != null }
 
-    /** The answer of PUT /api/admin/settings without its `_warnings`: the values from now on. */
+    /** The answer of PUT /api/settings without its `_warnings`: the values from now on. */
     fun withoutWarnings(answer: JsonObject): JsonObject = JsonObject(answer.filterKeys { it != "_warnings" })
 
     /** The `_warnings` of a PUT answer, as lines under the card (a folder the server can't write to, with the chown line). */

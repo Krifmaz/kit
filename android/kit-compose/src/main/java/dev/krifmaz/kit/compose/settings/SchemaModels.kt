@@ -36,11 +36,11 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-// The answer of GET /api/admin/settings/schema (docs/contracts/settings-schema.md; made by Config::schema in
+// The answer of GET /api/settings/schema (docs/contracts/settings-schema.md; made by Config::schema in
 // server/crates/config/src/settings.rs from server/crates/config/settings.toml): the Settings → Server pages
 // (sections), the cards on each page (groups) and the fields on each card. Every attribute is always sent; one that
 // does not apply is null (read here as "" for words and null for numbers), [] or false. The values are not in it:
-// GET /api/admin/settings has them, with `_meta.<key>.source` ("env", "ui" or "default") and `_meta.<key>.env`.
+// GET /api/settings has them, with `_meta.<key>.source` ("env", "ui" or "default") and `_meta.<key>.env`.
 
 /** A number that may be null (a field's `min`, `max`, `step`): null for null, a missing key or anything not a number. */
 @OptIn(ExperimentalSerializationApi::class)
@@ -64,7 +64,7 @@ data class SchemaOption(val value: LString = "", val label: LString = "")
 /** One field of a card. [kind] is the schema's `type`; [rule] its `when`. */
 @Serializable
 data class SchemaField(
-    /** the setting's name in GET/PUT /api/admin/settings */
+    /** the setting's name in GET/PUT /api/settings */
     val key: LString = "",
     /** The field's label. */
     val label: LString = "",
@@ -111,7 +111,7 @@ data class SchemaGroup(
     val part: LString = "",
     /** the line under the title */
     val desc: LString = "",
-    /** POST /api/system/test/<test>; "" for no Test button */
+    /** POST /api/diagnostics/<test>/test; "" for no Test button */
     val test: LString = "",
     /** the Test button's words */
     @SerialName("test_label") val testLabel: LString = "",
@@ -137,7 +137,7 @@ data class SchemaSection(
     override fun checked(): SchemaSection? = if (id.isEmpty()) null else this
 }
 
-/** The whole answer of GET /api/admin/settings/schema, the pages in nav order. */
+/** The whole answer of GET /api/settings/schema, the pages in nav order. */
 @Serializable
 data class SettingsSchema(@Serializable(with = Items::class) val sections: List<SchemaSection> = emptyList()) {
     /** The page with this [id], or null. */
@@ -175,36 +175,36 @@ class SchemaApi(private val api: KitApi, private val client: OkHttpClient) {
     /** A Test can take a while (Test all signs in to every service in turn; Send test email waits for the mail server). */
     private val slow: OkHttpClient by lazy { client.newBuilder().readTimeout(120, TimeUnit.SECONDS).build() }
 
-    /** GET /api/admin/settings/schema. */
-    fun schema(): SettingsSchema = (api.get("/api/admin/settings/schema") as? JsonObject)?.decodeModel(SettingsSchema.serializer())
+    /** GET /api/settings/schema. */
+    fun schema(): SettingsSchema = (api.get("/api/settings/schema") as? JsonObject)?.decodeModel(SettingsSchema.serializer())
         ?: throw IOException("Unexpected reply from the server")
 
-    /** GET /api/admin/settings: every value (secrets as "•••• (saved)" or ""), and `_meta` saying where each comes from. */
-    fun values(): JsonObject = api.get("/api/admin/settings") as? JsonObject ?: throw IOException("Unexpected reply from the server")
+    /** GET /api/settings: every value (secrets as "•••• (saved)" or ""), and `_meta` saying where each comes from. */
+    fun values(): JsonObject = api.get("/api/settings") as? JsonObject ?: throw IOException("Unexpected reply from the server")
 
     /**
-     * PUT /api/admin/settings with the keys to change: the answer is every value again, plus `_warnings`
+     * PUT /api/settings with the keys to change: the answer is every value again, plus `_warnings`
      * (`[{key, message}]`) when a folder that was saved can't be written to.
      */
     fun save(body: JsonObject): JsonObject {
         val text = KitJson.encodeToString(JsonObject.serializer(), body)
-        val req = Request.Builder().url(api.url("/api/admin/settings")).put(text.toRequestBody(jsonType))
+        val req = Request.Builder().url(api.url("/api/settings")).put(text.toRequestBody(jsonType))
         return send(client, req)
     }
 
     /**
-     * GET /api/admin/settings/secret/{key}: one saved secret in plain text (the server's owner only; the server logs
+     * GET /api/settings/secret/{key}: one saved secret in plain text (the server's owner only; the server logs
      * it). Never kept in the app's HTTP cache, also when a proxy rewrites the server's no-store.
      */
     fun secret(key: String): String {
-        val req = Request.Builder().url(api.url("/api/admin/settings/secret/" + enc(key))).cacheControl(CacheControl.Builder().noStore().build()).get()
+        val req = Request.Builder().url(api.url("/api/settings/secret/" + enc(key))).cacheControl(CacheControl.Builder().noStore().build()).get()
         val o = send(client, req)
         return o["value"].textOf()
     }
 
-    /** POST /api/system/test/{service}: `{ok, message}`. */
+    /** POST /api/diagnostics/{id}/test: `{ok, message}`. */
     fun test(service: String): JsonObject {
-        val req = Request.Builder().url(api.url("/api/system/test/" + enc(service))).post("".toRequestBody(jsonType))
+        val req = Request.Builder().url(api.url("/api/diagnostics/" + enc(service) + "/test")).post("".toRequestBody(jsonType))
         return send(slow, req)
     }
 

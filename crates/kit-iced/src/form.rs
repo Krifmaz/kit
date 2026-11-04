@@ -4,7 +4,7 @@
 //! about where its value comes from, and the card's Save and Test buttons.
 //!
 //! The fields come either from a table written in the app ([`field`], [`Field`]'s `const` builders and
-//! [`Card::new`], like Encore's `SECTIONS`) or from the server's answer to `GET /api/admin/settings/schema`
+//! [`Card::new`], like Encore's `SECTIONS`) or from the server's answer to `GET /api/settings/schema`
 //! ([`Schema::from_json`], `contracts/settings-schema.md`).
 //!
 //! [`Form`] keeps what was typed and what is open; it holds no network code. [`Form::update`] applies a
@@ -155,7 +155,7 @@ impl When {
 /// One setting of the form: the web's `S(key, label, type, extra)`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field {
-    /// The setting's name in `GET/PUT /api/admin/settings`.
+    /// The setting's name in `GET/PUT /api/settings`.
     pub key: Str,
     /// The field's label.
     pub label: Str,
@@ -287,7 +287,7 @@ pub fn type_key(s: &str) -> String {
 }
 
 /// One card of the form (a `<details>` on the web): a titled group of fields with an optional Test
-/// button (`POST /api/system/test/<test>`).
+/// button (`POST /api/diagnostics/<test>/test`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Card {
     /// The card's id (also its old `?s=` name).
@@ -409,7 +409,7 @@ impl Section {
     }
 }
 
-/// The answer of `GET /api/admin/settings/schema`: the pages, their cards and the fields on each card.
+/// The answer of `GET /api/settings/schema`: the pages, their cards and the fields on each card.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Schema {
     /// The pages, in nav order.
@@ -541,7 +541,7 @@ pub fn test_words(r: &Value) -> (bool, String) {
 /// `Values`, `Saved`, `Tested`, `Revealed`, `Copied` and `Cleared`, with the error's words on failure.
 #[derive(Clone, Debug)]
 pub enum Msg {
-    /// `GET /api/admin/settings` answered (with `_meta`).
+    /// `GET /api/settings` answered (with `_meta`).
     Values(Result<Value, String>),
     /// Fold a card open or shut.
     Toggle(String),
@@ -582,14 +582,14 @@ pub enum Msg {
 /// What the app does after a message.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Out {
-    /// `PUT /api/admin/settings` with `body`, then send [`Msg::Saved`] with `card`.
+    /// `PUT /api/settings` with `body`, then send [`Msg::Saved`] with `card`.
     Save {
         /// The card's id.
         card: String,
         /// The settings to save.
         body: Map<String, Value>,
     },
-    /// `PUT /api/admin/settings` with `body`, then `POST /api/system/test/<test>`, then send [`Msg::Tested`].
+    /// `PUT /api/settings` with `body`, then `POST /api/diagnostics/<test>/test`, then send [`Msg::Tested`].
     Test {
         /// The card's id.
         card: String,
@@ -598,19 +598,19 @@ pub enum Out {
         /// The settings to save first.
         body: Map<String, Value>,
     },
-    /// `PUT /api/admin/settings` with `body` (`{key: ""}`), then send [`Msg::Cleared`].
+    /// `PUT /api/settings` with `body` (`{key: ""}`), then send [`Msg::Cleared`].
     Clear {
         /// The setting cleared.
         key: String,
         /// The settings to save.
         body: Map<String, Value>,
     },
-    /// `GET /api/admin/settings/secret/<key>`, then send [`Msg::Revealed`].
+    /// `GET /api/settings/secret/<key>`, then send [`Msg::Revealed`].
     Reveal {
         /// The secret's setting.
         key: String,
     },
-    /// `GET /api/admin/settings/secret/<key>`, then send [`Msg::Copied`].
+    /// `GET /api/settings/secret/<key>`, then send [`Msg::Copied`].
     CopySecret {
         /// The secret's setting.
         key: String,
@@ -644,7 +644,7 @@ impl<M> Default for Slots<'_, M> {
 /// The form's state: the values, what was typed, which cards are open and busy.
 #[derive(Debug, Default)]
 pub struct Form {
-    /// `/api/admin/settings` (with `_meta`).
+    /// `/api/settings` (with `_meta`).
     values: Option<Value>,
     error: String,
     /// Text typed into inputs, by key (absent = the saved value shows).

@@ -87,18 +87,18 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * What the Server pages share while Settings is open (the web's `Hub`): the schema, the values of
- * GET /api/admin/settings, and what was typed and not saved yet. Make it once for the Settings screen
+ * GET /api/settings, and what was typed and not saved yet. Make it once for the Settings screen
  * ([SchemaApi.loadState]) so edits on a card survive going to another page and back.
  *
- * [canReveal]: Show and Copy for saved secrets. The route (GET /api/admin/settings/secret/{key}) is the server
+ * [canReveal]: Show and Copy for saved secrets. The route (GET /api/settings/secret/{key}) is the server
  * owner's: pass `"reveal" in /api/auth/info features && the account's role is "owner"`.
  *
- * [target]: where Save and clear send the keys instead of PUT /api/admin/settings, answering the values from then
+ * [target]: where Save and clear send the keys instead of PUT /api/settings, answering the values from then
  * on (a plugin's own settings: PUT /api/plugins/{id}/settings, PluginsScreen.kt). Blocking; run on Dispatchers.IO.
  */
 @Stable
 class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canReveal: Boolean, private val target: ((JsonObject) -> JsonObject)? = null) {
-    /** GET /api/admin/settings, then each Save's answer. */
+    /** GET /api/settings, then each Save's answer. */
     var values: JsonObject by mutableStateOf(SchemaRules.withoutWarnings(values))
         private set
 
@@ -156,7 +156,7 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
     }
 
     /**
-     * Save of a card, and the quiet save before Test (groups.rs `Hub::save`): PUT /api/admin/settings with the keys
+     * Save of a card, and the quiet save before Test (groups.rs `Hub::save`): PUT /api/settings with the keys
      * that changed, plus [extra] (a card's own keys, like Cadenza's engine settings). The answer becomes the values;
      * a folder the server can't write to comes back as a line under the card. Errors are toasted. Returns null when it
      * saved (or there was nothing to save), else the error's words. [onSaved] runs after a PUT that carried [extra]
@@ -196,10 +196,10 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
         }
     }
 
-    /** The keys of a Save or a clear, to [target] or PUT /api/admin/settings: the values from then on. */
+    /** The keys of a Save or a clear, to [target] or PUT /api/settings: the values from then on. */
     private fun send(api: SchemaApi, body: JsonObject): JsonObject = target?.invoke(body) ?: api.save(body)
 
-    /** Test (groups.rs): saves the card quietly, then POST /api/system/test/<test>; the answer is the line under it. */
+    /** Test (groups.rs): saves the card quietly, then POST /api/diagnostics/<test>/test; the answer is the line under it. */
     suspend fun test(api: SchemaApi, group: SchemaGroup, extra: JsonObject? = null, onSaved: (() -> Unit)? = null) {
         if (group.test.isEmpty() || testing[group.id] == true) return
         testing[group.id] = true
