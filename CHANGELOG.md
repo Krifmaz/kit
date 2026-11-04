@@ -4,6 +4,23 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.2.0 — 2026-11-04
+
+Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
+
+### Added
+- `kit_server_changelog::prefs_router(path)`: the account's preferences (`GET`, and `PUT` to merge; a null removes a
+  key), where the What's new popup switch lives, for apps without a preferences route of their own. The template
+  uses it instead of its own copy.
+- kit-leptos: `HttpBackend::with_headers(|method, path| …)` adds an app's own headers to every call (a CSRF token,
+  `If-Match`); a failed answer's sentence also comes from a `message` or `error` text when there is no `detail`;
+  `api::patch` sends `PATCH`.
+- kit-leptos: `crash::install` sends the web app's crash logs (panics, uncaught errors, unhandled
+  rejections) to the server's crash reports, keeping them until it can.
+
+### Fixed
+- kit-server-bugreports: the same crash sent twice at once is kept once instead of failing with a 500.
+
 ## v0.1.3 — 2026-11-04
 
 ### Changed

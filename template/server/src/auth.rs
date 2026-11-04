@@ -8,7 +8,6 @@
 //!                        (`Authorization: Bearer <token>`), kept as its SHA-256 only
 //! POST /api/auth/logout  → {ok}, the cookie (or the app token) removed
 //! GET  /api/auth/me      → the signed-in account (401 "Not authenticated")
-//! GET  /api/auth/prefs   → the account's preferences; PUT merges into them (a null removes a key)
 //! ```
 
 use crate::AppState;
@@ -240,7 +239,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/auth/login", post(login))
         .route("/api/auth/logout", post(logout))
         .route("/api/auth/me", get(me))
-        .route("/api/auth/prefs", get(get_prefs).put(put_prefs))
 }
 
 /// `POST /api/auth/login` body.
@@ -342,30 +340,3 @@ async fn me(State(st): State<AppState>, headers: HeaderMap) -> Result<Json<Value
     Ok(Json(public_user(&st, &u).await?))
 }
 
-/// `GET /api/auth/prefs`: the account's preferences.
-async fn get_prefs(State(st): State<AppState>, kit_server_core::SignedIn(u): kit_server_core::SignedIn) -> Result<Json<Value>> {
-    Ok(Json(st.prefs.prefs(u.id).await?))
-}
-
-/// `PUT /api/auth/prefs`: merge preferences into the account's (a null removes a key).
-async fn put_prefs(
-    State(st): State<AppState>,
-    kit_server_core::SignedIn(u): kit_server_core::SignedIn,
-    Json(b): Json<Value>,
-) -> Result<Json<Value>> {
-    let mut prefs = st.prefs.prefs(u.id).await?;
-    if let (Some(p), Some(n)) = (prefs.as_object_mut(), b.as_object()) {
-        for (k, v) in n {
-            if v.is_null() {
-                p.remove(k);
-            } else {
-                p.insert(k.clone(), v.clone());
-            }
-        }
-    }
-    if prefs.to_string().len() > 20_000 {
-        return Err(err(400, "Preferences too large"));
-    }
-    st.prefs.save_prefs(u.id, &prefs).await?;
-    Ok(Json(prefs))
-}

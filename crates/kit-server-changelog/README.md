@@ -35,6 +35,10 @@ impl kit_server_changelog::ChangelogHost for AppState {
 let app = app.merge(kit_server_changelog::router());
 ```
 
+The popup switch lives in the account's preferences. An app without a preferences route of its own merges
+`kit_server_changelog::prefs_router("/api/auth/prefs")` (the path kit clients use by default): `GET` answers the
+account's object, `PUT` merges a JSON object into it (a null removes a key).
+
 Preferences are kept by the app's `ChangelogHost::prefs()`, a `kit_server_core::PrefsStore`: the kit's
 `SqlitePrefs` or `pg::PgPrefs` (table `kit_account_prefs`, one JSON object per account id), or the app's own.
 The kit never reads the app's accounts table.

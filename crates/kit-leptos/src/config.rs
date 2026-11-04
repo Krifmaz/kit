@@ -54,6 +54,8 @@ pub struct Paths {
     pub notices_check: String,
     /// Where a new bug report is posted (`/bug-reports`).
     pub bug_reports: String,
+    /// Where a crash log is posted (`/crash-reports`).
+    pub crash_reports: String,
     /// The Diagnostics page's checks (`/diagnostics`).
     pub diagnostics: String,
     /// A settings card's Test button (`/diagnostics/{name}/test`).
@@ -81,6 +83,7 @@ impl Default for Paths {
             notices: "/notices".into(),
             notices_check: "/notices/check".into(),
             bug_reports: "/bug-reports".into(),
+            crash_reports: "/crash-reports".into(),
             diagnostics: "/diagnostics".into(),
             test: "/diagnostics/{name}/test".into(),
             settings: "/settings".into(),

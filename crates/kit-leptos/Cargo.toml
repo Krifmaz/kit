@@ -30,7 +30,7 @@ gloo-net = { version = "0.6", default-features = false, features = ["http", "jso
 web-sys = { version = "0.3", features = [
   "Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement",
   "HtmlCollection", "Node", "NodeList", "DomTokenList", "CssStyleDeclaration", "DomRect",
-  "Event", "EventTarget", "EventInit", "KeyboardEvent", "MouseEvent", "MessageEvent", "CustomEvent", "CustomEventInit",
+  "Event", "EventTarget", "EventInit", "ErrorEvent", "PromiseRejectionEvent", "KeyboardEvent", "MouseEvent", "MessageEvent", "CustomEvent", "CustomEventInit",
   "Navigator", "Clipboard", "Screen", "Selection", "Storage", "Location", "History",
   "File", "FileList", "Blob", "DataTransfer", "DataTransferItem", "DataTransferItemList", "FormData", "Url",
   "AbortController", "AbortSignal", "RequestCache", "RequestCredentials", "Headers",
