@@ -57,6 +57,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   - `kit-server-core`: neutral docs and tests, no API change.
   - `contracts/`, the template's server, web and Android calls, and the clients in kit-leptos (settings form,
     Diagnostics, demo), kit-iced (docs) and kit-compose (settings, Diagnostics, crash log) use the new routes.
+- No app's words in the kit's comments and data (first pass): the template web's `app.css` keeps only the rules its
+  pages and kit-leptos draw (the copied player, lyrics, library, request and group listening rules are gone);
+  kit-iced and kit-tokens doc comments and package descriptions no longer name an app or a media player.
+- kit-compose and the Android demo: the last music and VPN words in comments and test data are neutral.
 - `android/kit-compose` is neutral: no Encore names, music words, routes or fixtures. `KitApp.init` takes the app's
   `id` (preferences and export names; was the name in lower case) and `routes`, a `KitRoutes` with every server path
   the kit calls (defaults `/api/health`, `/api/changelog*`, `/api/notices`, `/api/bug-reports`, `/api/diagnostics`,

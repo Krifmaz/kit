@@ -39,7 +39,8 @@ pub struct Tokens {
     pub theme_picker: Vec<Choice>,
     /// The faded background's mix amounts.
     pub fade: Fade,
-    /// Layout sizes (`--content`, `--sidebar`, `--player`, `--player-h`).
+    /// Layout sizes (`--content`, `--sidebar`, `--player`, `--player-h`; `--player` is the room an app keeps for a
+    /// bar along the bottom, 0 when it has none).
     pub layout: Layout,
     /// Corner radii by use.
     pub radius: BTreeMap<String, String>,
@@ -159,9 +160,9 @@ pub struct Layout {
     pub content_note: String,
     /// `--sidebar`.
     pub sidebar: String,
-    /// `--player`.
+    /// `--player`: the room kept under the page for a bar along the bottom (0 for none).
     pub player: String,
-    /// `--player-h`.
+    /// `--player-h`: that bar's height when it shows.
     #[serde(rename = "player-h")]
     pub player_h: String,
 }
@@ -523,7 +524,7 @@ pub fn compose(t: &Tokens) -> String {
         let _ = writeln!(o, "    {k} = RoundedCornerShape({}.dp),", t.compose.shapes.get(k).copied().unwrap_or(0));
     }
     o.push_str(")\n\nprivate val Sans = FontFamily.SansSerif\n\n");
-    o.push_str("/** The web player's type scale as Material roles. */\nval KitTypography: Typography = Typography(\n");
+    o.push_str("/** The web's type scale as Material roles. */\nval KitTypography: Typography = Typography(\n");
     for r in &t.compose.typography {
         let tracking = if r.tracking < 0.0 { format!("({})", num(r.tracking)) } else { num(r.tracking) };
         let _ = writeln!(o, "    {} = TextStyle(fontFamily = Sans, fontSize = {}.sp, lineHeight = {}.sp, fontWeight = FontWeight.{}, letterSpacing = {tracking}.sp),",

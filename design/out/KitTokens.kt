@@ -149,7 +149,7 @@ val KitShapes: Shapes = Shapes(
 
 private val Sans = FontFamily.SansSerif
 
-/** The web player's type scale as Material roles. */
+/** The web's type scale as Material roles. */
 val KitTypography: Typography = Typography(
     displaySmall = TextStyle(fontFamily = Sans, fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
     headlineLarge = TextStyle(fontFamily = Sans, fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
