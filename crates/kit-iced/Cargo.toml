@@ -1,0 +1,22 @@
+[package]
+name = "kit-iced"
+description = "Encore's desktop building blocks as Iced 0.14 components: theme, toasts, details, What's new, update notice, notice banner, drop zones, settings form, bug report sheet, diagnostics and the offline banner."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version = "1.88"
+
+[dependencies]
+iced = { version = "0.14", features = ["image", "svg"] }
+serde.workspace = true
+serde_json.workspace = true
+kit-rules = { path = "../kit-rules" }
+semver = "1"
+sha2 = "0.10"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+iced_test = "0.14"
