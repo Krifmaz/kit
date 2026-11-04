@@ -4,7 +4,8 @@ name: ci
 # change also proves it): fmt, clippy, tests (the token tests prove the generated themes equal Encore's), that
 # design/out is up to date and the contracts parse; the web components (kit-leptos) and their demo are checked
 # and linted for wasm32. `template` generates an app from template/ against this checkout and proves it builds,
-# runs, shows every kit feature in a browser and ships a healthy read-only Docker image (scripts/template-check.sh);
+# runs, shows every kit feature in a browser, packages its desktop app, walks the desktop app's requests and ships a
+# healthy read-only Docker image (scripts/template-check.sh);
 # `template-android` builds and tests the generated app's Android part on kit-compose from source. `workflows` lints every workflow file with actionlint (and
 # shellcheck on their scripts). Required to pass before a merge.
 on:
@@ -62,6 +63,9 @@ jobs:
           workspaces: |
             ${{ runner.temp }}/template/kit-demo/server
             ${{ runner.temp }}/template/kit-demo/web
+            ${{ runner.temp }}/template/kit-demo/desktop
+      - name: System packages (the desktop app's Iced build)
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-generate@0.26.0
@@ -70,6 +74,8 @@ jobs:
       - name: Playwright (the browser walk)
         run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
       - name: Generate an app, build it, run it, walk every feature, ship its image
+        env:
+          DESKTOP_PACKAGE: "1"
         run: scripts/template-check.sh "$RUNNER_TEMP/template"
       - name: Screenshots
         if: always()

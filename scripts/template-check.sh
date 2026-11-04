@@ -5,9 +5,12 @@
 #   3. checks its copies of the kit's stylesheets are the kit's;
 #   4. server/: fmt, clippy -D warnings, tests (every kit endpoint);
 #   5. web/: wasm32 check and clippy, tests, trunk build;
-#   6. runs the server with the web app, asks its health check, and walks every feature in a browser
-#      (scripts/template-smoke.cjs, when node and Playwright are there);
-#   7. unless NO_DOCKER=1: builds the Docker image, runs it read-only and waits for its health check.
+#   6. desktop/: fmt, clippy -D warnings, tests (the pages drawn headless with iced_test), and the package
+#      script's Linux file when DESKTOP_PACKAGE=1;
+#   7. runs the server with the web app, asks its health check, walks every feature in a browser
+#      (scripts/template-smoke.cjs, when node and Playwright are there) and walks the desktop app's requests
+#      (desktop/examples/walk.rs: connect, app-token sign-in, every page's calls);
+#   8. unless NO_DOCKER=1: builds the Docker image, runs it read-only and waits for its health check.
 #
 #   scripts/template-check.sh [work dir]        (default: a new temporary folder)
 # Needs cargo-generate, the wasm32-unknown-unknown target and trunk on PATH.
@@ -50,6 +53,16 @@ step "web/: wasm32 check, clippy, tests, trunk build"
   && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings \
   && cargo test --locked && trunk build --release --locked)
 
+step "desktop/: fmt, clippy, tests"
+(cd "$APP/desktop" && cargo generate-lockfile && cargo fmt --all --check \
+  && cargo clippy --all-targets --locked -- -D warnings && cargo test --locked && cargo build --locked --examples)
+if [ "${DESKTOP_PACKAGE:-}" = 1 ]; then
+  step "desktop/: the package script's Linux file"
+  (cd "$APP" && bash scripts/desktop-package.sh --version 0.0.1 --stamp --out "$WORK/desktop-out")
+  test -s "$WORK/desktop-out/KitDemo-0.0.1-linux-x86_64.tar.gz"
+  tar -tzf "$WORK/desktop-out/KitDemo-0.0.1-linux-x86_64.tar.gz" | grep -qx "KitDemo-0.0.1/$NAME-desktop"
+fi
+
 step "Run it and walk every feature"
 DATA="$WORK/data"
 rm -rf "$DATA"
@@ -66,6 +79,7 @@ if command -v node > /dev/null && node -e "require('playwright')" 2> /dev/null; 
 else
   echo "Playwright is not installed here: the browser walk is skipped."
 fi
+(cd "$APP/desktop" && cargo run --locked --example walk -- "http://127.0.0.1:$PORT" admin kit-demo-password)
 kill $SERVER
 
 if [ "${NO_DOCKER:-}" != 1 ]; then

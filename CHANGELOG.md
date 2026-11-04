@@ -17,6 +17,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
 
 ### Added
+- `template/desktop/`: the generated app's desktop app (Iced 0.14 on kit-iced and kit-rules): connect to a server
+  (remembered in the config folder, `<PROJECT>_SERVER` overrides it), sign in for an app token, then Home (a
+  button for every kit feature), Bug reports (list, thread with the reply box, New report with the file dialog
+  and drag and drop), Settings (the server's form from its schema, the look, Updates), Diagnostics and What's new
+  (popup once per release and the page), with toasts, the details dialog, a confirm dialog, the offline banner
+  and the notice banner; the update notice reads the app's own GitHub releases. Unit tests for its rules,
+  headless iced_test tests for every page, and `examples/walk.rs`, which makes every request against a running
+  server. `template/scripts/desktop-package.sh` makes the Linux tarball, the Windows zip and the macOS dmg the
+  update notice looks for; the template's release workflow builds them through `kit-desktop.yml` with "apps",
+  its CI tests `desktop/`, and the kit's `template` job checks, packages and walks it.
 - `template/`: the new-app starter (`cargo generate krifmaz/kit template`): an Axum server with every kit server
   crate wired in (health, What's new, notices with a data folder notice, bug reports and crash logs, diagnostics,
   settings from a settings.toml) and Encore's sign-in (owner at first start, session cookie with the CSRF rule,

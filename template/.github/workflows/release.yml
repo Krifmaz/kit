@@ -3,9 +3,12 @@ name: release
 # Every push to main makes a normal GitHub release vMAJOR.MINOR.PATCH (never a pre-release) through the kit's
 # shared workflows: PATCH by default, MINOR or MAJOR when the merged pull request added docs/releases/<version>.md
 # (also the release notes and What's new). It ships the server and web app as Linux tarballs, the Docker image
-# {{image}}:<version> and :latest, and SHA256SUMS.{% if android %}
-# Actions → release → Run workflow with "apps" ticked also builds the signed APK (secrets ANDROID_KEYSTORE_BASE64,
-# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD); a release without it keeps the previous APK.{% endif %}
+# {{image}}:<version> and :latest, and SHA256SUMS.
+# Actions → release → Run workflow with "apps" ticked also builds the desktop app for Linux, Windows and macOS
+# (scripts/desktop-package.sh; optional signing secrets WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD,
+# MACOS_CERT_P12_BASE64, MACOS_CERT_PASSWORD, MACOS_SIGN_IDENTITY, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD){% if android %}
+# and the signed APK (secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+# ANDROID_KEY_PASSWORD){% endif %}; a release without them keeps the previous release's app files.
 on:
   push:
     branches: [main]
@@ -21,7 +24,7 @@ on:
         type: string
         default: ""
       apps:
-        description: "Also build the apps{% if android %} (the Android APK){% endif %}"
+        description: "Also build the apps (the desktop app{% if android %} and the Android APK{% endif %})"
         type: boolean
         default: false
 
@@ -37,7 +40,9 @@ jobs:
   test:
     uses: Krifmaz/kit/.github/workflows/kit-ci.yml@{{kit_tag}}
     with:
-      rust-dirs: server
+      rust-dirs: |
+        server
+        desktop
       wasm-dirs: web
 
   prepare:
@@ -77,14 +82,40 @@ jobs:
       android-key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
       android-key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}{% endraw %}
 {% endif %}
+  desktop:
+    needs: prepare
+    if: inputs.apps
+    uses: Krifmaz/kit/.github/workflows/kit-desktop.yml@{{kit_tag}}
+    with:
+      # the artifacts are <app-name>-desktop-<OS>; publish attaches the ones named after its own app-name
+      app-name: {{app_title}}
+{% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}
+      project-dir: desktop
+      linux-files: "{{app_file}}-{V}-linux-x86_64.tar.gz"
+      windows-files: "{{app_file}}-{V}-windows-x86_64.zip"
+      macos-files: "{{app_file}}-{V}-macos-universal.dmg"
+      nsis: false
+{% raw %}    secrets:
+      windows-cert-pfx-base64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+      windows-cert-password: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      macos-cert-p12-base64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+      macos-cert-password: ${{ secrets.MACOS_CERT_PASSWORD }}
+      macos-sign-identity: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+      apple-app-password: ${{ secrets.APPLE_APP_PASSWORD }}{% endraw %}
+
   publish:
-    needs: [prepare, docker{% if android %}, android{% endif %}]
+    needs: [prepare, docker, desktop{% if android %}, android{% endif %}]
 {% raw %}    if: always() && needs.prepare.result == 'success' && needs.docker.result == 'success'{% endraw %}
     uses: Krifmaz/kit/.github/workflows/kit-release.yml@{{kit_tag}}
     with:
       stage: publish
       app-name: {{app_title}}
-{% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}{% if android %}
-{% raw %}      apps-result: ${{ needs.android.result }}{% endraw %}
-      app-files: "{{app_file}}-android-*.apk"
-      carry-over: "{{app_file}}-android-*.apk"{% endif %}
+{% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}
+      # success when every app built, skipped when none ran, failure when only some did
+{% if android %}{% raw %}      apps-result: ${{ needs.desktop.result == needs.android.result && needs.desktop.result || 'failure' }}{% endraw %}
+      app-files: "{{app_file}}-*-linux-x86_64.tar.gz {{app_file}}-*-windows-x86_64.zip {{app_file}}-*-macos-universal.dmg {{app_file}}-android-*.apk"
+      carry-over: "{{app_file}}-*-linux-x86_64.tar.gz {{app_file}}-*-windows-x86_64.zip {{app_file}}-*-macos-universal.dmg {{app_file}}-android-*.apk"{% else %}{% raw %}      apps-result: ${{ needs.desktop.result }}{% endraw %}
+      app-files: "{{app_file}}-*-linux-x86_64.tar.gz {{app_file}}-*-windows-x86_64.zip {{app_file}}-*-macos-universal.dmg"
+      carry-over: "{{app_file}}-*-linux-x86_64.tar.gz {{app_file}}-*-windows-x86_64.zip {{app_file}}-*-macos-universal.dmg"{% endif %}
