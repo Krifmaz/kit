@@ -29,6 +29,12 @@ interface KitApi {
     /** POST [body] as JSON to [path]; the JSON answer (null for an empty one). */
     fun post(path: String, body: JsonElement): JsonElement?
 
+    /**
+     * PUT [body] as JSON to [path]; the JSON answer (null for an empty one). Apps whose kit parts never PUT may leave
+     * it out: the default refuses with an [IOException] the caller shows as it is.
+     */
+    fun put(path: String, body: JsonElement): JsonElement? = throw IOException("This app can't send PUT $path")
+
     /** GET [path] as it comes (the caller reads and closes the response). */
     fun rawGet(path: String): Response
 }

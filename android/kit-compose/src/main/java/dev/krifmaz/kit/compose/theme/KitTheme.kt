@@ -16,18 +16,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
 /**
- * The themes of Settings → Appearance (the web's `data-theme`): Encore (charcoal and cream, the default), Dark (the
- * original blue-black), OLED black, Light, and System (Dark or Light, following the device).
+ * The themes of Settings → Appearance (`data-theme` on the web): Encore (charcoal and cream, the default), Dark
+ * (blue-black with a violet accent), OLED black, Light, and System (Dark or Light, following the device).
  *
  * Also the name of the theme composable: `KitTheme(theme = KitTheme.Encore) { App() }` (DESIGN.md §15).
  *
  * @property id the id the web and the account prefs use ("encore", "dark", "oled", "light", "system").
  */
 enum class KitTheme(val id: String) {
-    /** Charcoal and cream, the logo's colours (`:root[data-theme="encore"]`). */
+    /** Charcoal and cream, the default (`:root`). */
     Encore("encore"),
 
-    /** The original blue-black dark theme (`:root`). */
+    /** Blue-black with a violet accent (`:root[data-theme="dark"]`). */
     Dark("dark"),
 
     /** True black, so OLED pixels switch off (`:root[data-theme="oled"]`). */
@@ -48,16 +48,17 @@ enum class KitTheme(val id: String) {
 }
 
 /**
- * The account's look (the web's appearance keys, Settings → Appearance).
+ * The account's look (Settings → Appearance).
  *
  * @property theme the theme.
- * @property accent an accent id of [KitAppearance.ACCENTS] (logo, violet, encore, …) or "custom".
+ * @property accent "" for the theme's own accent, an accent id of [KitAppearance.ACCENTS] (cream, violet, pastel, …),
+ *   or "custom".
  * @property custom the custom accent colour, "#rrggbb" (used when [accent] is "custom").
  * @property background "solid", or "fade" (a faint wash of the accent in the page colours).
  */
-data class KitLook(val theme: KitTheme = KitTheme.Encore, val accent: String = "cream", val custom: String = KitAppearance.DEFAULT_CUSTOM, val background: String = "solid")
+data class KitLook(val theme: KitTheme = KitTheme.Encore, val accent: String = "", val custom: String = KitAppearance.DEFAULT_CUSTOM, val background: String = "solid")
 
-/** The colour maths of Settings → Appearance (web-rs/src/appearance.rs), shared by every app. */
+/** The colour maths of Settings → Appearance, shared by every app (the same as kit-rules' and kit-iced's). */
 object AppearanceRules {
     /** "#abc" / "abc" / "#aabbcc" as "#aabbcc"; null when it is not a hex colour (the web's /^#([0-9a-f]{3}|[0-9a-f]{6})$/i). */
     fun cleanHex(input: String): String? {
@@ -91,7 +92,7 @@ object AppearanceRules {
         return lin(r) * 0.2126 + lin(g) * 0.7152 + lin(b) * 0.0722
     }
 
-    /** A custom colour gets a partner shifted around the colour wheel for the gradient (appearance.rs partner). */
+    /** A custom colour gets a partner shifted around the colour wheel for the gradient. */
     fun partner(hex: String): String {
         val (ri, gi, bi) = rgb(hex)
         val r = ri / 255.0
@@ -139,7 +140,7 @@ object AppearanceRules {
         return a to partner(a)
     }
 
-    /** Dark text on light accents, white on dark ones (appearance.rs apply: `--on-accent`). */
+    /** Dark text on light accents, white on dark ones (`--on-accent`). */
     fun onAccent(a: String, b: String): Color = if ((luminance(a) + luminance(b)) / 2 > 0.45) Color(0xFF16161F) else Color.White
 }
 
@@ -153,13 +154,13 @@ fun basePaletteOf(theme: KitTheme, systemDark: Boolean): KitPalette = when (them
 }
 
 /**
- * The palette for a look: the theme's tokens, the accent's colours (the logo's cream and gold keep the theme's own
- * accent, charcoal on Light) and, for the faded background, a faint wash of the accent in the page colours.
+ * The palette for a look: the theme's tokens, the accent's colours (none chosen: the theme's own) and, for the faded
+ * background, a faint wash of the accent in the page colours.
  */
 fun kitPaletteOf(look: KitLook, systemDark: Boolean): KitPalette {
     val base = basePaletteOf(look.theme, systemDark)
     val accented =
-        if (look.accent == "cream") {
+        if (look.accent.isEmpty() || look.accent == "theme") {
             base
         } else {
             val (a, b) = AppearanceRules.accentHex(look.accent, look.custom)
@@ -172,7 +173,7 @@ fun kitPaletteOf(look: KitLook, systemDark: Boolean): KitPalette {
     )
 }
 
-/** Material 3's colour scheme for a palette: the palette's tokens in Material's roles (Encore's mapping). */
+/** Material 3's colour scheme for a palette: the palette's tokens in Material's roles. */
 fun kitColorScheme(p: KitPalette): ColorScheme {
     val base = if (p.dark) darkColorScheme() else lightColorScheme()
     return base.copy(
@@ -242,7 +243,7 @@ fun KitTheme(palette: KitPalette, content: @Composable () -> Unit) {
  * The theme for a look: `KitTheme(theme = KitTheme.Encore) { App() }`.
  *
  * @param theme the theme ([KitTheme.System] follows the device).
- * @param accent the accent id, or "custom" with [custom].
+ * @param accent "" for the theme's own accent, an accent id, or "custom" with [custom].
  * @param custom the custom accent colour.
  * @param background "solid" or "fade".
  * @param content the app's UI.
@@ -250,7 +251,7 @@ fun KitTheme(palette: KitPalette, content: @Composable () -> Unit) {
 @Composable
 fun KitTheme(
     theme: KitTheme = KitTheme.Encore,
-    accent: String = "cream",
+    accent: String = "",
     custom: String = KitAppearance.DEFAULT_CUSTOM,
     background: String = "solid",
     content: @Composable () -> Unit,

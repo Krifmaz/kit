@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
+        android:name=".DemoApp"
         android:label="Kit demo"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <!-- the benchmarks and the profile generator start and measure the app in release builds -->

@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
 import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.details.CopyIconButton
 import dev.krifmaz.kit.compose.theme.KitStatusColors
@@ -77,7 +78,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 // Settings → Server, drawn from the server's settings schema (SchemaModels.kt) like the web's renderer
-// (web-rs/src/settings/schema_form.rs for the fields, groups.rs for the cards): each page's cards in the schema's
+// (kit-leptos' schema form): each page's cards in the schema's
 // order under the heading of their part, each card with its title, description and Test button, the result line,
 // the fields and Save. A switch for `bool`, check boxes for `checks`, a drop-down for `select`, a text area, a
 // password input that starts empty (Show and Copy for the server's owner), and a text or number input for the rest
@@ -86,19 +87,27 @@ import kotlinx.serialization.json.JsonPrimitive
 // Save sends only the keys that changed (SchemaRules.changes); Test saves first, then asks the server.
 
 /**
- * What the Server pages share while Settings is open (the web's `Hub`): the schema, the values of
- * GET /api/settings, and what was typed and not saved yet. Make it once for the Settings screen
- * ([SchemaApi.loadState]) so edits on a card survive going to another page and back.
+ * What the settings pages share while Settings is open: the schema, the values of GET [KitRoutes.settings], and
+ * what was typed and not saved yet. Make it once for the Settings screen ([SchemaApi.loadState]) so edits on a card
+ * survive going to another page and back.
  *
- * [canReveal]: Show and Copy for saved secrets. The route (GET /api/settings/secret/{key}) is the server
- * owner's: pass `"reveal" in /api/auth/info features && the account's role is "owner"`.
+ * [canReveal]: Show and Copy for saved secrets. The route (GET [KitRoutes.settingsSecret]/{key}) is the server
+ * owner's: pass whether the server offers it and the account is the owner.
  *
- * [target]: where Save and clear send the keys instead of PUT /api/settings, answering the values from then
- * on (a plugin's own settings: PUT /api/plugins/{id}/settings, PluginsScreen.kt). Blocking; run on Dispatchers.IO.
+ * [target]: where Save and clear send the keys instead of PUT [KitRoutes.settings], answering the values from then
+ * on (a section of the app's own with its own save call). Blocking; run on Dispatchers.IO.
+ *
+ * [neverShown]: keys of secrets that are never shown again, not even to the owner (the server refuses them too).
  */
 @Stable
-class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canReveal: Boolean, private val target: ((JsonObject) -> JsonObject)? = null) {
-    /** GET /api/settings, then each Save's answer. */
+class SchemaFormState(
+    val schema: SettingsSchema,
+    values: JsonObject,
+    val canReveal: Boolean,
+    private val target: ((JsonObject) -> JsonObject)? = null,
+    val neverShown: Set<String> = emptySet(),
+) {
+    /** GET <settings>, then each Save's answer. */
     var values: JsonObject by mutableStateOf(SchemaRules.withoutWarnings(values))
         private set
 
@@ -140,7 +149,7 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
     /** What Save would send for [group] now. */
     fun changes(group: SchemaGroup): JsonObject = SchemaRules.changes(fieldsOf(group), values, drafts, revealed)
 
-    /** Values that changed elsewhere (a card's extras saved something, a plugin card, a reload): unsaved edits stay. */
+    /** Values that changed elsewhere (a card's extras saved something, another form, a reload): unsaved edits stay. */
     fun replaceValues(answer: JsonObject) {
         values = SchemaRules.withoutWarnings(answer)
     }
@@ -156,8 +165,8 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
     }
 
     /**
-     * Save of a card, and the quiet save before Test (groups.rs `Hub::save`): PUT /api/settings with the keys
-     * that changed, plus [extra] (a card's own keys, like Cadenza's engine settings). The answer becomes the values;
+     * Save of a card, and the quiet save before Test: PUT [KitRoutes.settings] with the keys
+     * that changed, plus [extra] (a card's own keys). The answer becomes the values;
      * a folder the server can't write to comes back as a line under the card. Errors are toasted. Returns null when it
      * saved (or there was nothing to save), else the error's words. [onSaved] runs after a PUT that carried [extra]
      * worked (the card's extras take what they sent as saved).
@@ -196,10 +205,10 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
         }
     }
 
-    /** The keys of a Save or a clear, to [target] or PUT /api/settings: the values from then on. */
+    /** The keys of a Save or a clear, to [target] or PUT <settings>: the values from then on. */
     private fun send(api: SchemaApi, body: JsonObject): JsonObject = target?.invoke(body) ?: api.save(body)
 
-    /** Test (groups.rs): saves the card quietly, then POST /api/diagnostics/<test>/test; the answer is the line under it. */
+    /** Test: saves the card quietly, then POST [KitRoutes.settingsTest] with its `{test}`; the answer is the line under it. */
     suspend fun test(api: SchemaApi, group: SchemaGroup, extra: JsonObject? = null, onSaved: (() -> Unit)? = null) {
         if (group.test.isEmpty() || testing[group.id] == true) return
         testing[group.id] = true
@@ -295,7 +304,7 @@ class SchemaFormState(val schema: SettingsSchema, values: JsonObject, val canRev
 }
 
 /** Loads the schema and the values (the web asks for both when Settings opens). Blocking: run it on Dispatchers.IO. */
-fun SchemaApi.loadState(canReveal: Boolean): SchemaFormState = SchemaFormState(schema(), values(), canReveal)
+fun SchemaApi.loadState(canReveal: Boolean, neverShown: Set<String> = emptySet()): SchemaFormState = SchemaFormState(schema(), values(), canReveal, neverShown = neverShown)
 
 /** Puts a secret on the clipboard, marked sensitive so the keyboard's clipboard preview hides it (Android 13+). */
 private fun copySecret(context: Context, text: String) {
@@ -314,24 +323,24 @@ private fun copySecret(context: Context, text: String) {
 // ---- what a card shows besides its fields ----------------------------------------------------------------------
 
 /**
- * A card's own extras, drawn by the Settings sections and not by the schema (the web's apps.rs `card_body`): the
- * YouTube block above the fields, Tidal sign-in and the streamrip config under streamrip's, the pre-render cache
- * and engine settings under Cadenza's, the engine's status under Soulseek's.
+ * A card's own extras, drawn by the app and not by the schema: a sign-in block above a service's fields, a status
+ * line under them, keys of the app's own that Save sends along.
  *
  * - [above] / [below]: drawn above the fields / between the fields and Save;
- * - [vpnFooter]: under the VPN block's fields (the tunnel's state and Test VPN; [SchemaCardScope.save] saves first);
- * - [extraBody]: more keys for Save and the save before Test (Cadenza's `cadenza_engine_settings`), null for none;
+ * - [block]: the fields whose key starts with a prefix, in a framed block of their own with a title and a footer
+ *   (a tunnel's settings with its state and a Test button; [SchemaCardScope.save] saves first);
+ * - [extraBody]: more keys for Save and the save before Test, null for none;
  * - [afterSave]: runs after a Save that carried [extraBody]'s keys worked (what was sent is saved now);
- * - [hide]: hides a field by a rule of the card's own, read live from the unsaved values (Soulseek's listen port
- *   while the VPN is on: the VPN's forwarded port is used then).
+ * - [hide]: hides a field by a rule of the card's own, read live from the unsaved values (a port that another
+ *   setting makes unused).
  */
 class CardSlots(
     /** Drawn above the fields. */
     val above: (@Composable ColumnScope.(SchemaCardScope) -> Unit)? = null,
     /** Drawn between the fields and Save. */
     val below: (@Composable ColumnScope.(SchemaCardScope) -> Unit)? = null,
-    /** Drawn under the VPN block's fields. */
-    val vpnFooter: (@Composable ColumnScope.(SchemaCardScope) -> Unit)? = null,
+    /** The fields of one key prefix in a framed block; null for none. */
+    val block: FieldBlock? = null,
     /** More keys for Save and the save before Test; null for none. */
     val extraBody: (() -> JsonObject?)? = null,
     /** Runs after a Save that carried [extraBody]'s keys worked. */
@@ -374,11 +383,11 @@ class SchemaCardScope(
 // ---- a page ------------------------------------------------------------------------------------------------------
 
 /**
- * The cards of one Server page ([section]) that this server has, under the heading of their part, as groups.rs
- * `cards_html`: the first card starts open (or [focus], the card a link asked for; a page with one card has it open).
+ * The cards of one Server page ([section]) that this server has, under the heading of their part: the first card
+ * starts open (or [focus], the card a link asked for; a page with one card has it open).
  * [partTop] draws what a part starts with under its heading; [slots]
  * gives a card's extras. The caller scrolls (put it in a scrolling Column) and draws what the page has of its own
- * (the task list, How requests are fulfilled, the API key and About).
+ * (an API key, About).
  */
 @Composable
 fun SchemaPage(
@@ -433,7 +442,7 @@ fun SchemaPage(
 }
 
 /**
- * One card (groups.rs `card_html`): a drop-down with its title, description and Test button, then the result
+ * One card: a drop-down with its title, description and Test button, then the result
  * line, the extras above, the fields, Show advanced, the extras below and Save.
  */
 @Composable
@@ -497,9 +506,8 @@ fun SchemaCard(
 }
 
 /**
- * The fields of a card (or of one run of a plugin card, PluginsScreen.kt), each shown by its rules: advanced ones
- * after Show advanced, `when` rules, the card's own [CardSlots.hide]; the `vpn_` fields in the VPN block with the
- * card's [CardSlots.vpnFooter].
+ * The fields of a card, each shown by its rules: advanced ones after Show advanced, `when` rules, the card's own
+ * [CardSlots.hide]; the fields of the card's [CardSlots.block] in their framed block with its footer.
  */
 @Composable
 fun ColumnScope.SchemaFields(state: SchemaFormState, api: SchemaApi, group: SchemaGroup, fields: List<SchemaField>, slots: CardSlots, cardScope: SchemaCardScope) {
@@ -507,13 +515,14 @@ fun ColumnScope.SchemaFields(state: SchemaFormState, api: SchemaApi, group: Sche
     val shown = { f: SchemaField ->
         (!f.advanced || showAdvanced) && SchemaRules.isShown(f) { k -> state.current(k) } && slots.hide?.invoke(f) { k -> state.current(k) } != true
     }
-    val layout = SchemaRules.layout(fields)
+    val block = slots.block
+    val layout = SchemaRules.layout(fields, block?.prefix)
     // keyed, so a field's own state (an open drop-down) stays with it when a rule hides the one above
     for (f in layout.before) if (shown(f)) key(f.key) { SchemaFieldView(state, api, f) }
-    if (layout.vpn.isNotEmpty()) {
-        VpnBlock {
-            for (f in layout.vpn) if (shown(f)) key(f.key) { SchemaFieldView(state, api, f) }
-            slots.vpnFooter?.invoke(this, cardScope)
+    if (block != null && layout.block.isNotEmpty()) {
+        FieldBlockBox(block.title) {
+            for (f in layout.block) if (shown(f)) key(f.key) { SchemaFieldView(state, api, f) }
+            block.footer?.invoke(this, cardScope)
         }
     }
     for (f in layout.after) if (shown(f)) key(f.key) { SchemaFieldView(state, api, f) }
@@ -536,20 +545,30 @@ fun AdvancedToggle(state: SchemaFormState, group: SchemaGroup, fields: List<Sche
     )
 }
 
-/** The VPN for Soulseek block around the `vpn_` fields (apps.rs `vpn_block`). */
+/**
+ * A framed block of a card's fields: the ones whose key starts with [prefix], under [title], with an optional
+ * [footer] after them (a status line, a Test button).
+ *
+ * @property prefix the keys' common start ("tunnel_").
+ * @property title the block's title.
+ * @property footer drawn under the block's fields; null for none.
+ */
+class FieldBlock(val prefix: String, val title: String, val footer: (@Composable ColumnScope.(SchemaCardScope) -> Unit)? = null)
+
+/** The frame of a [FieldBlock]: a panel with its title above the fields. */
 @Composable
-private fun VpnBlock(content: @Composable ColumnScope.() -> Unit) {
+private fun FieldBlockBox(title: String, content: @Composable ColumnScope.() -> Unit) {
     val p = MaterialTheme.palette
     val shape = RoundedCornerShape(10.dp)
     Column(
         Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(shape).background(p.panel2).border(1.dp, p.border, shape).padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
-        Text("VPN for Soulseek", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         content()
     }
 }
 
-/** The lines under a card's title: "Testing…" while a Test runs, then its result (mod.rs `test_result`). */
+/** The lines under a card's title: "Testing…" while a Test runs, then its result. */
 @Composable
 fun ResultLines(testing: Boolean, lines: List<ResultLine>) {
     val p = MaterialTheme.palette
@@ -589,7 +608,7 @@ fun ResultLines(testing: Boolean, lines: List<ResultLine>) {
 
 // ---- a field -----------------------------------------------------------------------------------------------------
 
-/** One field with its help line and the note on where its value comes from (schema_form.rs `field_html`). */
+/** One field with its help line and the note on where its value comes from. */
 @Composable
 fun SchemaFieldView(state: SchemaFormState, api: SchemaApi, field: SchemaField, modifier: Modifier = Modifier) {
     val values = state.values
@@ -734,7 +753,7 @@ private fun TextLikeField(state: SchemaFormState, api: SchemaApi, field: SchemaF
         SchemaRules.rangeNote(field, text)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = KitStatusColors.Warn, modifier = Modifier.padding(top = 4.dp)) }
     }
     // Show and Copy for a saved secret (the web's eye and copy buttons; "Show saved" on a text area)
-    if (SchemaRules.canShow(field, values, state.canReveal)) {
+    if (SchemaRules.canShow(field, values, state.canReveal, state.neverShown)) {
         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val showWord = if (isArea) "Show saved" else "Show"
             SmallButton(if (shown) "Hide" else showWord) { scope.launch { state.toggleShown(api, field) } }
@@ -743,7 +762,7 @@ private fun TextLikeField(state: SchemaFormState, api: SchemaApi, field: SchemaF
     }
 }
 
-/** Where a value comes from (schema_form.rs `source_note`). */
+/** Where a value comes from. */
 @Composable
 private fun SourceNote(state: SchemaFormState, api: SchemaApi, field: SchemaField) {
     val p = MaterialTheme.palette

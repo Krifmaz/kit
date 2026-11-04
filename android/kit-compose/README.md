@@ -1,26 +1,50 @@
 # kit-compose
 
-Encore's look and ease-of-use features for Jetpack Compose apps, extracted from Encore's Android app
-(`clients/android/app/src/main/java/app/encore/android/`) with the same behaviour and the same words.
-Maven coordinates: `dev.krifmaz.kit:kit-compose`.
+The kit's look and ease-of-use features for Jetpack Compose apps: a neutral base, with every name, path, route and
+release source an input the app gives (`KitApp.init`). Maven coordinates: `dev.krifmaz.kit:kit-compose`.
 
-| Package | What it gives an app | From Encore |
-| --- | --- | --- |
-| [`theme`](src/main/java/dev/krifmaz/kit/compose/theme/README.md) | `KitTheme(theme = KitTheme.Encore) { App() }`, the palettes (generated from `design/tokens.json`), accents, focus ring | `ui/theme/` |
-| [`widgets`](src/main/java/dev/krifmaz/kit/compose/widgets/README.md) | Buttons, badges, cards, fields, error box, empty state, menus | `ui/components/Common.kt`, shared screen widgets |
-| [`toasts`](src/main/java/dev/krifmaz/kit/compose/toasts/README.md) | Toasts above every sheet and dialog; errors stay with Copy; Undo; stack rules | `Toasts.kt`, `ToastRules.kt` |
-| [`details`](src/main/java/dev/krifmaz/kit/compose/details/README.md) | Read the whole of a cut-off text, selectable, with Copy | `Details.kt` |
-| [`core`](src/main/java/dev/krifmaz/kit/compose/core/README.md) | Lenient JSON, the web's formatting, saving to Downloads | `core/` |
-| `whatsnew` | What's new popup and changelog screen | web-rs `whats_new.rs` |
-| `update` | In-app updates: release check, download, signature + SHA256SUMS check, PackageInstaller | `features/update/` |
-| `bugs` | Bug reports with attachments, crash logs, "Send crash log" | `features/bugs/`, `CrashLog.kt` |
-| `offline` | Offline banner, reasons, per-account outbox | `features/offline/` |
-| `settings` | Settings forms from the server's schema, the diagnostics screen | `SchemaForm.kt`, `DiagnosticsScreen.kt` |
-| `images` | Encore's Coil setup: memory + disk cache, de-duplicated requests, preloading | `CoverImages.kt` |
-| `perf` | JankStats and StrictMode in debug builds; the smoothness rules | — |
+| Package | What it gives an app |
+| --- | --- |
+| [`theme`](src/main/java/dev/krifmaz/kit/compose/theme/README.md) | `KitTheme(theme, accent) { App() }`: the palettes (`KitPalettes.Encore`, the default, `Dark`, `Oled`, `Light`, generated from `design/tokens.json`), accents, focus ring |
+| [`widgets`](src/main/java/dev/krifmaz/kit/compose/widgets/README.md) | Buttons, badges, cards, fields, error box, empty state, menus |
+| [`dialogs`](src/main/java/dev/krifmaz/kit/compose/dialogs/README.md) | Confirm dialogs, with a word to type for the ones that can't be undone |
+| [`toasts`](src/main/java/dev/krifmaz/kit/compose/toasts/README.md) | Toasts above every sheet and dialog; errors stay with Copy; Undo; stack rules |
+| [`details`](src/main/java/dev/krifmaz/kit/compose/details/README.md) | Read the whole of a cut-off text, selectable, with Copy |
+| [`core`](src/main/java/dev/krifmaz/kit/compose/core/README.md) | `KitApi`, lenient JSON, the web's formatting, saving to Downloads |
+| [`whatsnew`](src/main/java/dev/krifmaz/kit/compose/whatsnew/README.md) | What's new popup and changelog screen |
+| [`update`](src/main/java/dev/krifmaz/kit/compose/update/README.md) | In-app updates from the app's own GitHub releases: check, download, SHA256SUMS + signature check, PackageInstaller |
+| [`notices`](src/main/java/dev/krifmaz/kit/compose/notices/README.md) | Banners for a problem the server found, with Check again |
+| [`bugs`](src/main/java/dev/krifmaz/kit/compose/bugs/README.md) | Bug reports with pictures, crash logs, "Send crash log" |
+| [`offline`](src/main/java/dev/krifmaz/kit/compose/offline/README.md) | Offline banner, reasons, per-account outbox |
+| [`settings`](src/main/java/dev/krifmaz/kit/compose/settings/README.md) | Settings forms from the server's schema, the diagnostics screen |
+| [`uploads`](src/main/java/dev/krifmaz/kit/compose/uploads/README.md) | Drag and drop and the file picker, with accept and size checks |
+| [`images`](src/main/java/dev/krifmaz/kit/compose/images/README.md) | Coil setup: memory + disk cache, de-duplicated requests, preloading |
+| [`perf`](src/main/java/dev/krifmaz/kit/compose/perf/README.md) | JankStats and StrictMode in debug builds; the smoothness rules |
 
-Each package has its own README. Start-up: call `KitApp.init(...)` once in `Application.onCreate` (the app's name,
-version and User-Agent, used in the kit's words and requests).
+## Start-up
+
+```kotlin
+// Application.onCreate
+CrashLog.install(this)
+KitApp.init(name = "Notes", versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE)
+UpdateRules.source = UpdateSource("acme", "notes", "notes-android-", "com.acme.notes")
+```
+
+`KitApp.init` takes the app's name (in the kit's words), version, User-Agent (`<Name>-Android/<version>` by
+default), `id` (preferences and export file names; the name in lower case by default) and `routes`: a `KitRoutes`
+with the server path of every call the kit makes. The defaults:
+
+| Route | Default |
+| --- | --- |
+| `health` | `/api/health` |
+| `changelog`, `changelogNew`, `changelogSeen` | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` |
+| `prefs` | `/api/auth/prefs` |
+| `notices` | `/api/notices` (Check again: `/api/notices/check`) |
+| `bugReports` | `/api/bug-reports` |
+| `diagnostics`, `clientCrash` | `/api/diagnostics`, `/api/crash-reports` |
+| `settingsSchema`, `settings`, `settingsSecret`, `settingsTest` | `/api/settings/schema`, `/api/settings`, `/api/settings/secret`, `/api/diagnostics/{test}/test` |
 
 The theme's Kotlin source is `design/out/KitTokens.kt` (generated by `cargo run -p kit-tokens`), compiled straight
 from there, so the library can't drift from the tokens.
+
+The [demo app](../demo/README.md) uses every package against a server kept in memory.

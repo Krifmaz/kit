@@ -1,8 +1,8 @@
 name: android
 
-# kit-compose (android/): ktlint, unit tests and builds on every pull request and push to main. Required to pass
-# before a merge, like ci.yml. Builds use the Gradle the wrapper properties name (no wrapper jar is committed,
-# as in Encore), the same JDK and SDK packages as Encore's Android build.
+# kit-compose and the demo app (android/): ktlint, unit tests and builds on every pull request and push to main.
+# Required to pass before a merge, like ci.yml. Builds use the Gradle the wrapper properties name (no wrapper jar
+# is committed).
 on:
   pull_request:
   push:
@@ -48,7 +48,7 @@ jobs:
         with:
           gradle-version: ${{ steps.gradle.outputs.version }}
       - name: Unit tests
-        run: gradle -p android --no-daemon --stacktrace :kit-compose:testDebugUnitTest
+        run: gradle -p android --no-daemon --stacktrace :kit-compose:testDebugUnitTest :demo:testDebugUnitTest
       - name: Build the library and the demo app
         run: gradle -p android --no-daemon --stacktrace :kit-compose:assembleRelease :demo:assembleDebug
       - name: Test reports
@@ -56,5 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kit-compose-test-reports
-          path: android/kit-compose/build/reports/tests/
+          path: |
+            android/kit-compose/build/reports/tests/
+            android/demo/build/reports/tests/
           if-no-files-found: ignore
