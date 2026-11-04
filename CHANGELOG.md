@@ -1,0 +1,13 @@
+# Changelog
+
+All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps pin a tag.
+
+## Unreleased
+
+### Added
+- `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
+  type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
+  theme and Flutter ThemeData; tests prove the output equals Encore's current CSS, Compose and desktop themes.
+- `contracts/`: the shared APIs (health, changelog, notices, bug reports, diagnostics, settings schema,
+  update feed) as prose and OpenAPI, matching Encore's current API.
+- CI (fmt, clippy, tests, generated files up to date) and the release workflow.

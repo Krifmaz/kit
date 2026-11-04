@@ -1,0 +1,71 @@
+name: release
+
+# Every push to main makes a normal GitHub release tagged vMAJOR.MINOR.PATCH (never a pre-release, rc, beta or
+# edge), created through the release API (which creates the tag). The kit ships nothing but its tags.
+#   Version: PATCH of the newest v-release + 1 by default. A PR raises MINOR or MAJOR by adding
+#   docs/releases/<version>.md for that version; the file is also the release's notes (otherwise the commit
+#   list since the previous release).
+#   First release: none is made until docs/releases/0.1.0.md exists (added once DESIGN.md §18 passes); then v0.1.0.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Version
+        id: v
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LAST=$(gh release list --limit 200 --json tagName -q '.[].tagName' | sed -n 's/^v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$/\1/p' \
+                 | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+          if [ -z "$LAST" ]; then
+            if [ -f docs/releases/0.1.0.md ]; then V=0.1.0; else
+              echo "No release yet: the first one (v0.1.0) waits for docs/releases/0.1.0.md." | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "version=" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          else
+            IFS=. read -r A B C <<< "$LAST"
+            if [ -f "docs/releases/$((A + 1)).0.0.md" ]; then V="$((A + 1)).0.0"
+            elif [ -f "docs/releases/$A.$((B + 1)).0.md" ]; then V="$A.$((B + 1)).0"
+            else V="$A.$B.$((C + 1))"; fi
+          fi
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "bad version $V"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Version $V (previous: ${LAST:-none})" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Notes
+        if: steps.v.outputs.version != ''
+        env:
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          if [ -f "docs/releases/$V.md" ]; then cp "docs/releases/$V.md" notes.md; else
+            PREV=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)
+            { echo "## Changes"; git log --no-merges --pretty='- %s' ${PREV:+$PREV..}HEAD | head -60; } > notes.md
+          fi
+          cat >> notes.md <<EOT
+
+          ---
+          Use it: \`kit-server-health = { git = "https://github.com/Krifmaz/kit", tag = "v$V" }\` · see [CHANGELOG.md](https://github.com/Krifmaz/kit/blob/v$V/CHANGELOG.md).
+          EOT
+          sed -i 's/^          //' notes.md
+      - name: Publish
+        if: steps.v.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          if gh release view "v$V" >/dev/null 2>&1; then echo "v$V exists already"; exit 0; fi
+          gh release create "v$V" --title "Krifmaz Kit $V" --notes-file notes.md --target "$GITHUB_SHA" --latest

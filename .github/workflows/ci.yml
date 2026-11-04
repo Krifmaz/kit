@@ -1,0 +1,38 @@
+name: ci
+
+# The kit's own checks on every pull request and push to main: fmt, clippy, tests (the token tests prove the
+# generated themes equal Encore's), and that design/out is up to date. Required to pass before a merge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --locked
+      - name: Generated themes are up to date
+        run: cargo run -p kit-tokens --locked -- --check
+      - name: Contracts parse
+        run: python3 -c "import yaml; yaml.safe_load(open('contracts/openapi.yaml'))"
