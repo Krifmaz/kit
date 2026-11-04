@@ -1,6 +1,6 @@
 name: kit-docker
 
-# An app's Docker image, taken from Encore's release.yml `docker` job: built with buildx for amd64 and arm64 and
+# An app's Docker image: built with buildx for amd64 and arm64 and
 # pushed to GHCR as ghcr.io/<owner>/<image>:<version> and :latest (the release's version, so an app's in-app
 # updater can pull :<version> of every release). With push: false it only proves the image builds (pull requests).
 #
