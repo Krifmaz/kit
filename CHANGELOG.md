@@ -24,6 +24,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   templates are gone.
 - The template's web app sets its kit configuration (its server's settings and diagnostics paths), loads the
   kit's `kit.css`, and `scripts/template-check.sh` compares that copy instead of Encore's stylesheet.
+- Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
+  carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
+  `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
+  overrides are gone. `docs/DESIGN.md` and `CLAUDE.md` describe the kit as a neutral base.
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its
@@ -34,6 +38,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   `quiet_errors` for Encore's own Diagnostics parts.
 - `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
+- Shared workflows are app-neutral: no app names, file names or app-specific defaults. `kit-desktop.yml` runs the
+  app's own `package` command (with `$V`, `$RELEASE`, `$FEATURES`, `$ARGS`, `$OUT`) instead of a fixed script and
+  its flags, takes `linux-args`/`windows-args`/`macos-args`, and defaults to `ubuntu-latest`/`macos-latest`, no
+  extra Mac arguments and no NSIS; `kit-release.yml`'s `only: android` is now `keep-previous` (a partial release
+  keeps the previous release's other files).
 
 ### Added
 - `crates/kit-leptos/style/kit.css` (also `kit_leptos::CSS`): the kit's own stylesheet for every component,

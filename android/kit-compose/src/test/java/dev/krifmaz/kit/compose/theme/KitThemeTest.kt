@@ -24,16 +24,16 @@ class KitThemeTest {
         assertEquals(Color(0xFF77725F), p.faint)
         assertEquals(Color(0xFFF0EAD6), p.accent)
         assertEquals(Color(0xFFD6C49A), p.accent2)
-        assertEquals(Color(0xFF161617), p.onAccent)
+        assertEquals(Color(0xFF16161F), p.onAccent)
     }
 
     @Test
     fun themesResolveLikeEncore() {
         assertSame(KitPalettes.Encore, basePaletteOf(KitTheme.Encore, systemDark = false))
-        assertSame(KitPalettes.Default, basePaletteOf(KitTheme.Dark, systemDark = false))
+        assertSame(KitPalettes.Dark, basePaletteOf(KitTheme.Dark, systemDark = false))
         assertSame(KitPalettes.Oled, basePaletteOf(KitTheme.Oled, systemDark = true))
         assertSame(KitPalettes.Light, basePaletteOf(KitTheme.Light, systemDark = true))
-        assertSame(KitPalettes.Default, basePaletteOf(KitTheme.System, systemDark = true))
+        assertSame(KitPalettes.Dark, basePaletteOf(KitTheme.System, systemDark = true))
         assertSame(KitPalettes.Light, basePaletteOf(KitTheme.System, systemDark = false))
         assertEquals(KitTheme.Encore, KitTheme.of("nonsense"))
         assertEquals(KitTheme.Oled, KitTheme.of("oled"))
