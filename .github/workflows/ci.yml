@@ -2,7 +2,8 @@ name: ci
 
 # The kit's own checks on every pull request and push to main, run through the kit's shared kit-ci.yml (so every
 # change also proves it): fmt, clippy, tests (the token tests prove the generated themes equal Encore's), that
-# design/out is up to date and the contracts parse. `workflows` lints every workflow file with actionlint (and
+# design/out is up to date and the contracts parse; the web components (kit-leptos) and their demo are checked
+# and linted for wasm32. `workflows` lints every workflow file with actionlint (and
 # shellcheck on their scripts). Required to pass before a merge.
 on:
   pull_request:
@@ -22,6 +23,9 @@ jobs:
     uses: ./.github/workflows/kit-ci.yml
     with:
       rust-dirs: .
+      wasm-dirs: |
+        crates/kit-leptos
+        crates/kit-leptos/demo
       fmt: true
       check: |
         set -e

@@ -13,6 +13,7 @@
 //! | Module | Decides |
 //! | --- | --- |
 //! | [`toasts`] | errors stay with Copy; duplicates merge; Undo; stack caps; how long each kind stays |
+//! | [`dialogs`] | the words every dialog shares |
 //! | [`details`] | the "read the whole error" dialog: its title, what Copy copies, whether a copy took |
 //! | [`changelog`] | release notes into blocks, blocks into lists and tables, when What's new pops up |
 //! | [`version`] | versions compared by their numbers; a hotfix's release |
@@ -20,12 +21,17 @@
 //! | [`notices`] | which notice banner shows, Check again's toast, how often to ask |
 //! | [`offline`] | why the server can't be reached, offline mode's rules, the per-account outbox |
 //! | [`uploads`] | the accept checks shared by the file picker and drag & drop, and upload limits |
+//! | [`bugs`] | bug reports: kinds, statuses, the New report sheet's words and checks |
+//! | [`diagnostics`] | the Diagnostics page's groups, words and copied report |
 //!
 //! The user-visible words are `pub const`s (or small functions where Encore fills in a number or a name),
 //! so a kit-wide parity test can check that every interface says the same thing.
 
+pub mod bugs;
 pub mod changelog;
 pub mod details;
+pub mod diagnostics;
+pub mod dialogs;
 pub mod notices;
 pub mod offline;
 pub mod toasts;
