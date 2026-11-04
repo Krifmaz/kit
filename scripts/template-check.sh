@@ -59,7 +59,9 @@ if [ "${DESKTOP_PACKAGE:-}" = 1 ]; then
   step "desktop/: the package script's Linux file"
   (cd "$APP" && bash scripts/desktop-package.sh --version 0.0.1 --stamp --out "$WORK/desktop-out")
   test -s "$WORK/desktop-out/KitDemo-0.0.1-linux-x86_64.tar.gz"
-  tar -tzf "$WORK/desktop-out/KitDemo-0.0.1-linux-x86_64.tar.gz" | grep -qx "KitDemo-0.0.1/$NAME-desktop"
+  # the whole listing first: grep -q stops reading at its match, and tar would then fail on the closed pipe
+  listing=$(tar -tzf "$WORK/desktop-out/KitDemo-0.0.1-linux-x86_64.tar.gz")
+  grep -qx "KitDemo-0.0.1/$NAME-desktop" <<< "$listing"
 fi
 
 step "Run it and walk every feature"
