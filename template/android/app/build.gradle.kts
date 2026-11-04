@@ -1,4 +1,4 @@
-// {{app_title}}: the Android app, built on kit-compose (Encore's look and ease-of-use features). See README.md.
+// {{app_title}}: the Android app, built on kit-compose (the kit's look and ease-of-use features). See README.md.
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,7 +13,7 @@ val appVersionCode: Int = providers.gradleProperty("appVersionCode").orElse("1")
 // The server suggested on first start: -PappServerUrl=… (10.0.2.2 is the computer the emulator runs on).
 val appServerUrl: String = providers.gradleProperty("appServerUrl").orElse("http://10.0.2.2:8080").get()
 
-// Release signing from the environment (CI decodes ANDROID_KEYSTORE_BASE64 to a file and sets the path, as Encore's).
+// Release signing from the environment (CI decodes ANDROID_KEYSTORE_BASE64 to a file and sets the path).
 // Without a keystore the release build is signed with the debug key; CI decides whether that is allowed (a release
 // fails when any of the four secrets is missing).
 val keystorePath: String? = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }

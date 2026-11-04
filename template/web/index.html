@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="encore">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,13 +7,15 @@
   <!-- the app's name: the web app reads it from here (toasts, What's new, the X-Requested-With header) -->
   <meta name="application-name" content="{{app_title}}">
   <title>{{app_title}}</title>
-  <!-- the kit's colour tokens (the kit's design/out/tokens.css), then Encore's rules (static/css/app.css) -->
+  <!-- the kit's colour tokens (design/out/tokens.css), the kit's components (crates/kit-leptos/style/kit.css),
+       then the app's own rules (static/css/app.css) -->
   <link data-trunk rel="css" href="static/css/tokens.css">
+  <link data-trunk rel="css" href="static/css/kit.css">
   <link data-trunk rel="css" href="static/css/app.css">
   <link data-trunk rel="rust" data-wasm-opt="z" data-bin="{{project-name}}-web">
 </head>
 <body>
-  <!-- Encore's shell: the app, the toasts and the dialogs (the notice slot is inside the shell's main) -->
+  <!-- the kit's shell: the app, the toasts and the dialogs (the notice slot is inside the shell's main) -->
   <div id="app"></div>
   <div id="toasts"></div>
   <div id="modal-root"></div>

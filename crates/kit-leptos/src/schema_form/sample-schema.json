@@ -1,0 +1,56 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "General",
+      "aliases": ["app"],
+      "groups": [
+        {
+          "id": "app",
+          "title": "App",
+          "desc": "The name people see and where the app is reached.",
+          "fields": [
+            { "key": "app_name", "label": "App name", "type": "text", "default": "Kit Demo", "env": "APP_NAME" },
+            { "key": "base_url", "label": "Public address", "type": "url", "help": "Used in links the app sends out.", "default": "", "env": "APP_BASE_URL" },
+            { "key": "session_days", "label": "Stay signed in (days)", "type": "number", "step": 1, "default": 30, "env": null },
+            { "key": "signups", "label": "Let people sign up", "type": "bool", "default": false, "env": null }
+          ]
+        },
+        {
+          "id": "storage",
+          "title": "Storage",
+          "desc": "Where uploaded files are kept.",
+          "part": "Files",
+          "fields": [
+            { "key": "storage", "label": "Keep files", "type": "select", "options": [{ "value": "local", "label": "On this server" }, { "value": "s3", "label": "In an S3 bucket" }], "default": "local", "env": "APP_STORAGE" },
+            { "key": "data_path", "label": "Data folder", "type": "path", "when": "storage=local", "default": "/data", "env": "APP_DATA_DIR" },
+            { "key": "s3_bucket", "label": "Bucket", "type": "text", "when": "storage=s3", "default": "", "env": null },
+            { "key": "s3_secret", "label": "Secret key", "type": "password", "when": "storage!=local", "default": "", "env": "APP_S3_SECRET" },
+            { "key": "upload_limit_mb", "label": "Largest upload (MB)", "type": "number", "step": 0.5, "advanced": true, "default": 64, "env": null }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mail",
+      "title": "Mail",
+      "aliases": ["email", "smtp"],
+      "groups": [
+        {
+          "id": "smtp",
+          "title": "Outgoing mail",
+          "desc": "",
+          "test": "mail",
+          "test_label": "Send a test mail",
+          "fields": [
+            { "key": "smtp_host", "label": "Server", "type": "text", "default": "", "env": "APP_SMTP_HOST" },
+            { "key": "smtp_password", "label": "Password", "type": "password", "default": "", "env": "APP_SMTP_PASSWORD" },
+            { "key": "notify", "label": "Mail me about", "type": "checks", "options": [{ "value": "signups", "label": "New accounts" }, { "value": "reports", "label": "Bug reports" }, { "value": "read-only", "label": "Read only" }], "default": "reports", "env": null },
+            { "key": "footer", "label": "Footer", "type": "textarea", "default": "", "env": null },
+            { "key": "dkim_key", "label": "DKIM key", "type": "textarea", "secret": true, "full": true, "default": "", "env": null }
+          ]
+        }
+      ]
+    }
+  ]
+}

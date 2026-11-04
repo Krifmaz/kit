@@ -1,5 +1,5 @@
 # {{app_title}} (server + web app, one Rust binary). Builds for linux/amd64 and linux/arm64; the arm64 binary is
-# cross-compiled on the build machine (fast), not emulated – the same build as Encore's Dockerfile.
+# cross-compiled on the build machine (fast), not emulated.
 FROM --platform=$BUILDPLATFORM rust:1-slim-trixie AS build
 ARG TARGETARCH
 RUN if [ "$TARGETARCH" = "arm64" ]; then \

@@ -8,6 +8,25 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `kit-android.yml` and `kit-desktop.yml` upload as `kit-app-android` / `kit-app-desktop-<OS>`, and `kit-release.yml`
   collects `kit-app-*`, so an app whose name has a space ("Kit Demo") still gets its APK and installers attached;
   the kit's CI checks the three agree.
+- `crates/kit-rules` and `crates/kit-leptos` are neutral and configured per app: no Encore names, music concepts,
+  routes or words. kit-rules gains `app::App { id, name, version }` (the id prefixes storage keys, events and
+  service worker names) and a `Words` struct with the kit's `DEFAULT` per module (`ToastWords`, `DialogWords`,
+  `ChangelogWords`, `UpdateWords`, `CheckWords`, `OfflineWords`, `BugWords`, `DiagWords`); the offline outbox holds
+  the app's own actions (`Outbox<A: Action, O>`); the update toast's wait reasons come from the app
+  (`waiting_for(&[(held, words)])`); `build_in` takes the script's stem; notices are a list (`parse`, `find`);
+  diagnostics group the app's own check kinds after the kit's three (`groups` returns `String` headings,
+  `groups_with`); a toast stack takes an app's failed-copy words (`with_copy_failed`); the changelog page's line
+  reads "This is {app} {version}. After an update, a short list of what changed shows once."
+- `crates/kit-leptos`: `config::AppConfig` (app, logo, script stem, `Paths`, `Routes`, `Words`, toast policy;
+  `config::set`/`get`) is used by every component; the default paths are `/api/health`, `/api/changelog/*`,
+  `/api/notices`, `/api/bug-reports`, `/api/diagnostics`, `/api/settings/*`; the notice banner shows every failing
+  notice of `GET /api/notices` (class `notice-banner`, per-notice Check again words); `UpdateConfig::hold` names
+  what holds the page; `watch_connection()` reads the configured app; the `app` prop of `ChangelogPage`,
+  `ChangelogView`, `DiagnosticsPage` and `DiagnosticsView` is optional; the settings form's words are
+  `FormWords`; markup tests compare with the kit's own markup; the white space text nodes that copied Encore's
+  templates are gone.
+- The template's web app sets its kit configuration (its server's settings and diagnostics paths), loads the
+  kit's `kit.css`, and `scripts/template-check.sh` compares that copy instead of Encore's stylesheet.
 - Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
   carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
   `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
@@ -27,8 +46,6 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   `quiet_errors` for Encore's own Diagnostics parts.
 - `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
-
-### Changed
 - Shared workflows are app-neutral: no app names, file names or app-specific defaults. `kit-desktop.yml` runs the
   app's own `package` command (with `$V`, `$RELEASE`, `$FEATURES`, `$ARGS`, `$OUT`) instead of a fixed script and
   its flags, takes `linux-args`/`windows-args`/`macos-args`, and defaults to `ubuntu-latest`/`macos-latest`, no
@@ -36,6 +53,30 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   keeps the previous release's other files).
 
 ### Added
+- `template/`: follows the neutral kit: the web app sets no `data-theme` (the default look is `:root`); the
+  desktop app uses `theme::default_look()`, kit-iced's confirm dialog and the app's `Logo` (`Logo::KIT` until
+  it has one); the release workflow uses kit-desktop's `package` command, and an `apps` job hands the app
+  artifacts to kit-release under the title, so a title with spaces still gets its APK and desktop files attached.
+- `template/android`: Sign out asks first in kit-compose's `ConfirmDialog`, as on the web and the desktop.
+- `template/web`: Sign out asks first in the kit's confirm dialog (the desktop app asks the same), and the kit's
+  browser walk (`scripts/template-smoke.cjs`) checks that Cancel keeps the session and OK signs out.
+- `template/desktop/`: the generated app's desktop app (Iced 0.14 on kit-iced and kit-rules): connect to a server
+  (remembered in the config folder, `<PROJECT>_SERVER` overrides it), sign in for an app token, then Home (a
+  button for every kit feature), Bug reports (list, thread with the reply box, New report with the file dialog
+  and drag and drop), Settings (the server's form from its schema, the look, Updates), Diagnostics and What's new
+  (popup once per release and the page), with toasts, the details dialog, a confirm dialog, the offline banner
+  and the notice banner; the update notice reads the app's own GitHub releases. Unit tests for its rules,
+  headless iced_test tests for every page, and `examples/walk.rs`, which makes every request against a running
+  server. `template/scripts/desktop-package.sh` makes the Linux tarball, the Windows zip and the macOS dmg the
+  update notice looks for; the template's release workflow builds them through `kit-desktop.yml` with "apps",
+  its CI tests `desktop/`, and the kit's `template` job checks, packages and walks it.
+- `crates/kit-leptos/style/kit.css` (also `kit_leptos::CSS`): the kit's own stylesheet for every component,
+  built only on `design/out/tokens.css`, so all four themes draw it.
+- A confirm dialog: `kit_rules::dialogs::{Confirm, Answer, DialogWords}`, `kit_leptos::modal::confirm(Confirm)
+  -> bool` and the `<ConfirmDialog>` component.
+- `kit_leptos::schema_form::SAMPLE_SCHEMA`, a neutral settings schema for demos and tests.
+- The kit-leptos demo shows every component for a neutral "Kit Demo" app with a theme switcher (encore, dark,
+  oled, light) and checks its DOM against the kit's own markup.
 - `template/`: the new-app starter (`cargo generate krifmaz/kit template`): an Axum server with every kit server
   crate wired in (health, What's new, notices with a data folder notice, bug reports and crash logs, diagnostics,
   settings from a settings.toml) and Encore's sign-in (owner at first start, session cookie with the CSRF rule,
@@ -104,3 +145,13 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `kit-server-bugreports`: Encore's bug reports (threads, statuses, unread counts, screenshot and log
   uploads, zip / plain text export) and app crash reports (`/api/diagnostics/client-crash`), behind a
   `BugReportsHost` trait for the app's folder, rate limiter, log, notifications, mail and enrichment.
+
+### Removed
+- `crates/kit-leptos/demo/encore-app.css` and `crates/kit-leptos/src/schema_form/fixtures/` (Encore's stylesheet
+  and settings fixtures) and the tests that compared with Encore's HTML builders (each replaced by a test of the
+  kit's own markup).
+- Encore-only API: `NoticeSource::encore_downloads`, `CheckWords::DOWNLOADS`, `changelog::SETTINGS_PATH`,
+  `update::{WAITS_FOR_MUSIC, WAITS_FOR_UPLOAD, WAITS_FOR_DOWNLOAD}`, the outbox's `Play`/`Like`/`plays_body`/
+  `play_seconds`/`like_gone`/`DROP_UNKNOWN_TRACKS`, `offline::mode::{PAGE, likes_key}` and the settings form's
+  WireGuard special case.
+

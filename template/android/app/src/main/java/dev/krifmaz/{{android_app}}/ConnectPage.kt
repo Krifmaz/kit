@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The first start (and Change server): the server's address, suggested from the build ([BuildConfig.DEFAULT_SERVER])
- * or the last one used (Encore's server page). Continue checks the address ([ServerApi.probe]) and keeps it;
+ * or the last one used. Continue checks the address ([ServerApi.probe]) and keeps it;
  * [SignInPage] comes next. The field and button carry resource ids ("connect-address", "connect-continue") for the
  * benchmarks.
  */

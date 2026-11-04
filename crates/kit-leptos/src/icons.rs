@@ -1,17 +1,13 @@
-//! Encore's inline SVG icons, the same markup byte for byte.
-//!
-//! From Encore's `web-rs/src/ui.rs` (`icon`, `p`, `EYE`, `EYE_OFF`): only the icons the kit's components draw.
-//! [`icon`] gives the SVG as a string (for `inner_html` and for hand-written pages), [`Icon`] draws it as a
-//! Leptos view with the same markup.
+//! The kit's inline SVG icons: stroked 24 × 24 outlines that take the text colour (`currentColor`).
 
 use crate::html::html;
 use leptos::prelude::*;
 
-/// The attributes every stroked icon shares. From `ui.rs` `p`.
+/// The attributes every stroked icon shares.
 const OPEN: &str =
     r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">"#;
 
-/// The paths of icon `name` inside Encore's common `<svg>` (`""` for a name the kit does not have).
+/// The paths of icon `name` inside the common `<svg>` (`""` for a name the kit does not have).
 pub fn paths(name: &str) -> &'static str {
     match name {
         "plus" => r#"<path d="M12 5v14M5 12h14"/>"#,
@@ -39,7 +35,7 @@ pub fn paths(name: &str) -> &'static str {
     }
 }
 
-/// `icon.<name>`: the whole SVG as Encore writes it (`""` for a name the kit does not have).
+/// `icon.<name>`: the whole SVG (`""` for a name the kit does not have).
 pub fn icon(name: &str) -> String {
     let p = paths(name);
     if p.is_empty() {
@@ -48,7 +44,7 @@ pub fn icon(name: &str) -> String {
     format!("{OPEN}{p}</svg>")
 }
 
-/// The chevron of a fold, or `▾` where the icon is missing (Encore's `chev`).
+/// The chevron of a fold, or `▾` where the icon is missing.
 pub fn chevron() -> String {
     let c = icon("chevron");
     if c.is_empty() {
@@ -58,15 +54,15 @@ pub fn chevron() -> String {
     }
 }
 
-/// The password eye (shown). From `ui.rs` `EYE`.
+/// The password eye (shown).
 pub const EYE: &str = r#"<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>"#;
-/// The password eye (hidden). From `ui.rs` `EYE_OFF`.
+/// The password eye (hidden).
 pub const EYE_OFF: &str = r#"<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19c-6.4 0-10-7-10-7a18.5 18.5 0 0 1 5.1-5.9M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a18.6 18.6 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2"/><path d="m2 2 20 20"/></svg>"#;
 
-/// Icon `name` as a view: Encore's `<svg>` with the icon's paths.
+/// Icon `name` as a view: the common `<svg>` with the icon's paths.
 #[component]
 pub fn Icon(
-    /// The icon's name, as Encore's `icon.<name>`.
+    /// The icon's name, as [`icon`] takes it.
     name: &'static str,
 ) -> impl IntoView {
     view! { <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {..html(paths(name))}>{""}</svg> }

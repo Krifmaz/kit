@@ -50,7 +50,7 @@ class ServerAddressTest {
     /** "an" before a vowel, "a" otherwise. */
     @Test
     fun notServerWords() {
-        assertEquals("That isn't an Encore server", ServerAddress.notServer("Encore"))
+        assertEquals("That isn't an Orbit server", ServerAddress.notServer("Orbit"))
         assertEquals("That isn't a Filebrary server", ServerAddress.notServer("Filebrary"))
     }
 }

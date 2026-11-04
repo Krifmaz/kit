@@ -1,29 +1,12 @@
-//! The settings cards drawn from the schema are the cards Encore draws.
-//!
-//! Ported from Encore's `web-rs/src/settings/form_tests.rs` and `schema_form.rs` tests. `fixtures/` holds
-//! Encore's own fixtures, copied unchanged from Krifmaz/Encore at commit
-//! `5c0bdcba82307c522e4516d1bc51a81c8efa4026` (`web-rs/src/settings/fixtures/`):
-//! `settings-schema.json` is the answer of `GET /api/admin/settings/schema` saved from Encore's server, and
-//! `settings-cards.html` is what Encore's web app draws for every Server page, for two sets of values (the
-//! defaults, and a case with locked, saved, secret, escaped and missing values), with and without the eye and
-//! copy buttons; icons are shortened to `<svg/>` and the cards' own extra blocks to a marker. The kit draws every
-//! page from the same schema and values and compares the documents (whitespace between elements and attribute
-//! order aside, see `crate::testing`).
+//! The settings cards drawn from the kit's sample schema ([`SAMPLE_SCHEMA`]).
 
 use super::schema::{Schema, When};
 use super::*;
-use crate::testing::{render, tokens, Token};
+use crate::testing::{assert_same_html, render, tokens, Token};
 use serde_json::json;
 
-const SCHEMA_JSON: &str = include_str!("fixtures/settings-schema.json");
-const CARDS: &str = include_str!("fixtures/settings-cards.html");
-
-/// The cards of Encore's Downloads page that became plugin cards in 0.32 (`plugins.rs` `MOVED`): Encore's Server
-/// pages leave them out.
-const MOVED: &[&str] = &["streamrip", "torznab", "slskd", "ytdlp", "youtube"];
-
 fn schema_json() -> Value {
-    serde_json::from_str(SCHEMA_JSON).expect("the schema fixture is JSON")
+    serde_json::from_str(SAMPLE_SCHEMA).expect("the sample schema is JSON")
 }
 fn schema() -> Schema {
     Schema::from_json(&schema_json())
@@ -33,153 +16,32 @@ fn all_fields(v: &Value) -> Vec<Value> {
     v.a("sections").iter().flat_map(|s| s.a("groups")).flat_map(|g| g.a("fields")).collect()
 }
 
-fn field_mut<'a>(v: &'a mut Value, key: &str) -> &'a mut Value {
-    v["sections"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .flat_map(|s| s["groups"].as_array_mut().unwrap().iter_mut())
-        .flat_map(|g| g["fields"].as_array_mut().unwrap().iter_mut())
-        .find(|f| f["key"] == key)
-        .expect("a field of the schema")
-}
-
-/// `GET /admin/settings` for the cases: (name, values with `_meta`). From `form_tests.rs` `cases`.
-fn cases() -> Vec<(&'static str, Value)> {
+/// `GET /api/settings` with every field at its default, set in the app (`source: ui`).
+fn defaults() -> Value {
     let mut values = Map::new();
     let mut meta = Map::new();
     for f in all_fields(&schema_json()) {
         values.insert(f.s("key"), f.g("default").clone());
         meta.insert(f.s("key"), json!({ "env": f.g("env"), "source": "default" }));
     }
-    let defaults = {
-        let mut v = values.clone();
-        v.insert("_meta".into(), Value::Object(meta.clone()));
-        Value::Object(v)
-    };
-    let mut set = |k: &str, v: Value, source: &str| {
-        values.insert(k.to_string(), v);
-        if let Some(m) = meta.get_mut(k) {
-            m["source"] = json!(source);
-        }
-    };
-    set("library_path", json!("/music"), "env");
-    set("github_token", json!("•••• (saved)"), "env");
-    set("discord_webhook", json!("•••• (saved)"), "ui");
-    set("vpn_wireguard_config", json!("•••• (saved)"), "ui");
-    set("ytdlp_cookies", json!("•••• (saved)"), "ui");
-    set("lastfm_api_key", json!("•••• (saved)"), "ui");
-    set("app_name", json!("My <Music> & \"more\""), "ui");
-    set("prowlarr_url", json!("http://prowlarr:9696/?a=\"b\"&c<d>"), "ui");
-    set("torrent_client", json!("deluge"), "ui");
-    set("nzb_client", json!("blackhole"), "ui");
-    set("release_types", json!("Album,EP,single"), "ui");
-    set("release_skip", json!("Live,Remix,Spoken word"), "ui");
-    set("streamrip_quality", json!(4), "ui");
-    set("cadenza_max_rate", json!(384000), "ui");
-    set("auto_approve", json!(true), "ui");
-    set("ytdlp_enabled", json!(false), "ui");
-    set("musicbrainz_rate", json!(0.5), "ui");
-    set("autotag_threshold", json!(0.85), "ui");
-    if let Some(m) = meta.get_mut("acoustid_api_key") {
-        m["env"] = Value::Null;
-    }
-    for k in [
-        "sync_interval_minutes",
-        "staging_path",
-        "roon_enabled",
-        "roon_host",
-        "smtp_host",
-        "smtp_port",
-        "smtp_user",
-        "smtp_password",
-        "smtp_from",
-        "smtp_security",
-    ] {
-        values.remove(k);
-    }
-    let changed = {
-        let mut v = values;
-        v.insert("_meta".into(), Value::Object(meta));
-        Value::Object(v)
-    };
-    vec![("defaults", defaults), ("changed", changed)]
+    values.insert("_meta".into(), Value::Object(meta));
+    Value::Object(values)
 }
 
-/// Every `<svg …>…</svg>` as `<svg/>`, as the fixture records icons.
-fn svgs_short(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let mut rest = html;
-    while let Some(i) = rest.find("<svg") {
-        out.push_str(&rest[..i]);
-        match rest[i..].find("</svg>") {
-            Some(j) => {
-                out.push_str("<svg/>");
-                rest = &rest[i + j + "</svg>".len()..];
-            }
-            None => {
-                out.push_str(&rest[i..]);
-                rest = "";
-            }
-        }
-    }
-    out.push_str(rest);
-    out
+/// `values` with `key` set to `v` from `source`.
+fn with(mut values: Value, key: &str, v: Value, source: &str) -> Value {
+    values[key] = v;
+    values["_meta"][key]["source"] = json!(source);
+    values
 }
 
-/// One Server page as the kit draws it (`page_cards` + `cards_html`).
-fn page(schema: &Schema, id: &str, values: &Value, reveal: bool, focus: Option<&str>) -> String {
-    let sec = schema.section(id).expect("a page of the schema");
-    let cards: Vec<_> = visible_cards(&sec.groups, values).into_iter().filter(|(g, _)| !MOVED.contains(&g.id.as_str())).collect();
-    let (values, focus) = (values.clone(), focus.map(str::to_string));
-    svgs_short(&render(move || view! { <SettingsCards cards=cards values=values reveal=reveal focus=focus/> }))
-}
-
-/// The fixture's pages, by their marker line.
-fn fixture_pages() -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = vec![];
-    for line in CARDS.lines() {
-        if line.starts_with("<!-- page ") {
-            out.push((line.to_string(), String::new()));
-        } else if let Some((_, body)) = out.last_mut() {
-            body.push_str(line);
-            body.push('\n');
-        }
-    }
-    out
-}
-
-#[test]
-fn the_cards_are_the_ones_encore_draws() {
+/// One settings page as the kit draws it.
+fn page(id: &str, values: &Value, reveal: bool, focus: Option<&str>) -> String {
     let schema = schema();
-    let mut ours = vec![];
-    for (case, values) in cases() {
-        for reveal in [false, true] {
-            for sec in &schema.sections {
-                ours.push((
-                    format!("<!-- page {}, {case} values, reveal {reveal} -->", sec.id),
-                    page(&schema, &sec.id, &values, reveal, None),
-                ));
-            }
-        }
-    }
-    ours.push((
-        "<!-- page downloads, defaults, the Release types card asked for -->".to_string(),
-        page(&schema, "downloads", &cases()[0].1, false, Some("releases")),
-    ));
-    let want = fixture_pages();
-    assert_eq!(ours.iter().map(|o| &o.0).collect::<Vec<_>>(), want.iter().map(|w| &w.0).collect::<Vec<_>>(), "the same pages");
-    for ((name, got), (_, want)) in ours.iter().zip(&want) {
-        let (g, w) = (tokens(got), tokens(want));
-        if g != w {
-            let at = g.iter().zip(&w).position(|(a, b)| a != b).unwrap_or(g.len().min(w.len()));
-            panic!(
-                "{name}: the kit draws something else at token {at}:\n--- kit\n{:#?}\n--- Encore\n{:#?}",
-                &g[at.saturating_sub(3)..(at + 3).min(g.len())],
-                &w[at.saturating_sub(3)..(at + 3).min(w.len())]
-            );
-        }
-    }
+    let sec = schema.section(id).expect("a page of the schema");
+    let cards = visible_cards(&sec.groups, values);
+    let (values, focus) = (values.clone(), focus.map(str::to_string));
+    render(move || view! { <SettingsCards cards=cards values=values reveal=reveal focus=focus/> })
 }
 
 /// Whether `html` has an element `tag` with all of `attrs`.
@@ -189,99 +51,168 @@ fn has(html: &str, tag: &str, attrs: &[(&str, &str)]) -> bool {
         .any(|t| matches!(t, Token::Open(n, a) if n == tag && attrs.iter().all(|(k, v)| a.iter().any(|(ak, av)| ak == k && av == v))))
 }
 
-/// Ported from `form_tests.rs` `a_not_equal_rule_is_drawn_and_hides_its_field`.
 #[test]
-fn a_not_equal_rule_is_drawn_and_hides_its_field() {
-    let mut v = schema_json();
-    field_mut(&mut v, "qbit_url")["when"] = json!("torrent_client!=blackhole");
-    let schema = Schema::from_json(&v);
-    let draw = |client: &str| {
-        let mut values = cases()[0].1.clone();
-        values["torrent_client"] = json!(client);
-        let sec = schema.section("downloads").unwrap();
-        let cards = visible_cards(&sec.groups, &values);
-        render(move || view! { <SettingsCards cards=cards values=values/> })
-    };
-    let rule = [("data-when", "torrent_client"), ("data-when-not", "blackhole"), ("class", "field")];
-    let shown = draw("deluge");
-    assert!(has(&shown, "label", &rule) && !has(&shown, "label", &[("data-when-not", "blackhole"), ("hidden", "")]), "{shown}");
-    let hidden = draw("blackhole");
-    assert!(has(&hidden, "label", &[("data-when-not", "blackhole"), ("hidden", "")]), "{hidden}");
+fn a_card_draws_its_fields_save_and_notes() {
+    let schema = schema();
+    let g = schema.group("app").expect("the App card");
+    let values = with(defaults(), "app_name", json!("My <App> & \"more\""), "ui");
+    let cards = visible_cards(&[g], &values);
+    let html = render(move || view! { <SettingsCards cards=cards values=values/> });
+    let want = format!(
+        r#"<details data-sec="app" open class="card settings-card">
+            <summary class="row between" style="gap:10px;flex-wrap:nowrap;align-items:flex-start;">
+              <div style="min-width:0;"><h2>App</h2><div class="small muted" style="margin-top:4px;font-weight:400;">The name people see and where the app is reached.</div></div>
+              <span class="row" style="gap:8px;"><span class="chev">{chev}</span></span>
+            </summary>
+            <div style="height:14px;"></div>
+            <div data-out></div>
+            <div class="form-grid">
+              <label class="field"><span>App name</span><input type="text" data-k="app_name" value="My &lt;App&gt; &amp; &quot;more&quot;" autocomplete="off" class="input"></label>
+              <label class="field"><span>Public address</span><input type="text" data-k="base_url" value="" autocomplete="off" class="input">
+                <small>Used in links the app sends out.</small><small class="src faint">Default · env var <span class="mono">APP_BASE_URL</span></small></label>
+              <label class="field"><span>Stay signed in (days)</span><input type="number" data-k="session_days" step="1" value="30" autocomplete="off" class="input"></label>
+              <div class="field" style="justify-content:center;"><label class="switch"><input type="checkbox" data-k="signups"><i></i>Let people sign up</label></div>
+            </div>
+            <div class="row mt" style="justify-content:flex-end;"><button data-save class="btn primary">{check}Save</button></div>
+          </details>"#,
+        chev = crate::icons::chevron(),
+        check = icon("check")
+    );
+    assert_same_html(&html, &want);
 }
 
-/// Ported from `form_tests.rs` `every_field_type_of_the_schema_is_drawn`.
+#[test]
+fn a_rule_each_way_shows_and_hides_its_fields() {
+    let draw = |storage: &str| page("general", &with(defaults(), "storage", json!(storage), "ui"), false, None);
+    let local = draw("local");
+    assert!(has(&local, "label", &[("data-when", "storage"), ("data-when-in", "local")]), "{local}");
+    assert!(!has(&local, "label", &[("data-when-in", "local"), ("hidden", "")]), "{local}");
+    assert!(has(&local, "label", &[("data-when-in", "s3"), ("hidden", "")]), "{local}");
+    assert!(has(&local, "label", &[("data-when-not", "local"), ("hidden", "")]), "{local}");
+    let s3 = draw("s3");
+    assert!(has(&s3, "label", &[("data-when-in", "local"), ("hidden", "")]), "{s3}");
+    assert!(!has(&s3, "label", &[("data-when-in", "s3"), ("hidden", "")]), "{s3}");
+    assert!(!has(&s3, "label", &[("data-when-not", "local"), ("hidden", "")]), "{s3}");
+    assert!(has(&s3, "option", &[("value", "s3"), ("selected", "")]), "{s3}");
+    assert!(When::parse("a=b").is_some());
+}
+
 #[test]
 fn every_field_type_of_the_schema_is_drawn() {
     let mut v = schema_json();
-    field_mut(&mut v, "app_name")["type"] = json!("colour");
+    v["sections"][0]["groups"][0]["fields"][0]["type"] = json!("colour");
     let schema = Schema::from_json(&v);
-    let values = &cases()[0].1;
-    let html = page(&schema, "general", values, false, None);
-    assert!(has(&html, "input", &[("class", "input"), ("type", "text"), ("data-k", "app_name")]), "{html}");
-    assert!(has(&html, "input", &[("type", "text"), ("data-k", "base_url")]), "url as text");
-    let library = page(&schema, "library", values, false, None);
-    assert!(has(&library, "input", &[("type", "text"), ("data-k", "staging_path")]), "path as text");
+    let values = with(defaults(), "notify", json!("Reports,readonly"), "ui");
+    let cards = visible_cards(&schema.section("general").unwrap().groups, &values);
+    let v2 = values.clone();
+    let general = render(move || view! { <SettingsCards cards=cards values=v2/> });
+    assert!(
+        has(&general, "input", &[("class", "input"), ("type", "text"), ("data-k", "app_name")]),
+        "a type this client does not know, as text"
+    );
+    assert!(has(&general, "input", &[("type", "text"), ("data-k", "base_url")]), "url as text");
+    assert!(has(&general, "input", &[("type", "text"), ("data-k", "data_path")]), "path as text");
+    assert!(has(&general, "input", &[("type", "number"), ("step", "0.5")]), "number with its step");
+    assert!(has(&general, "input", &[("type", "checkbox"), ("data-k", "signups")]), "bool as a switch");
+    assert!(has(&general, "select", &[("data-k", "storage")]), "select");
+    assert!(has(&general, "input", &[("type", "password"), ("data-k", "s3_secret"), ("placeholder", "not set")]), "password");
+    let mail = page("mail", &values, false, None);
+    assert!(has(&mail, "div", &[("class", "field"), ("data-k", "notify")]), "checks");
+    assert!(
+        has(&mail, "input", &[("value", "reports"), ("checked", "")]) && has(&mail, "input", &[("value", "read-only"), ("checked", "")]),
+        "{mail}"
+    );
+    assert!(!has(&mail, "input", &[("value", "signups"), ("checked", "")]), "{mail}");
+    assert!(has(&mail, "textarea", &[("class", "input mono"), ("data-k", "footer")]), "textarea");
+    assert!(has(&mail, "label", &[("class", "field full")]), "a textarea takes the whole width");
+    // the card's Test button says the card's words
+    assert!(mail.contains("Send a test mail</button>") && has(&mail, "button", &[("data-test", "")]), "{mail}");
 }
 
-/// Ported from `schema_form.rs` `advanced_fields_fold_and_a_plugins_value_is_read_only`.
 #[test]
-fn advanced_fields_fold_and_a_plugins_value_is_read_only() {
-    let url = Field::from_json(&json!({ "key": "gamdl_wrapper_url", "label": "Wrapper URL", "type": "url" }));
-    let dec = Field::from_json(&json!({ "key": "gamdl_wrapper_decrypt", "label": "Wrapper decrypt address", "advanced": true }));
+fn secrets_and_values_set_elsewhere_say_so() {
+    let values = with(defaults(), "smtp_password", json!("•••• (saved)"), "ui");
+    let values = with(values, "dkim_key", json!("•••• (saved)"), "ui");
+    let values = with(values, "smtp_host", json!("mail.example.org"), "env");
+    let mail = page("mail", &values, true, None);
+    assert!(has(&mail, "input", &[("data-k", "smtp_host"), ("disabled", "")]), "set by the environment: locked");
+    assert!(
+        mail.contains(
+            "🔒 Set by <span class=\"mono\">APP_SMTP_HOST</span> in the environment – change it there (the environment always wins)"
+        ),
+        "{mail}"
+    );
+    assert!(has(&mail, "a", &[("data-clear", "smtp_password")]) && mail.contains("Saved ✓ (hidden)"), "{mail}");
+    assert!(
+        has(&mail, "input", &[("data-k", "smtp_password"), ("placeholder", "saved – paste a new value to replace"), ("data-eye", "1")]),
+        "{mail}"
+    );
+    assert!(has(&mail, "button", &[("class", "eye-btn"), ("data-reveal", "smtp_password"), ("title", "Show")]), "{mail}");
+    assert!(has(&mail, "button", &[("data-reveal", "dkim_key")]) && has(&mail, "button", &[("data-copy", "dkim_key")]), "{mail}");
+    assert!(has(&mail, "textarea", &[("data-k", "dkim_key"), ("placeholder", "Saved – paste to replace")]), "{mail}");
+    // without reveal no button asks for a saved secret
+    let hidden = page("mail", &values, false, None);
+    assert!(!has(&hidden, "button", &[("data-reveal", "smtp_password")]), "{hidden}");
+}
+
+#[test]
+fn advanced_fields_fold_and_a_value_filled_in_elsewhere_is_read_only() {
+    let url = Field::from_json(&json!({ "key": "mirror_url", "label": "Mirror URL", "type": "url" }));
+    let port = Field::from_json(&json!({ "key": "mirror_port", "label": "Mirror port", "advanced": true }));
     let values = json!({
-        "gamdl_wrapper_url": "http://encore-wrapper", "gamdl_wrapper_decrypt": "encore-wrapper:10020",
-        "_meta": { "gamdl_wrapper_url": { "source": "plugin", "plugin": "Apple Music wrapper" } }
+        "mirror_url": "http://mirror.local", "mirror_port": "8081",
+        "_meta": { "mirror_url": { "source": "plugin", "plugin": "the sync add-on" } }
     });
-    let (f2, v2) = (vec![url.clone(), dec], values.clone());
+    let (f2, v2) = (vec![url.clone(), port], values.clone());
     let h = render(move || view! { <SchemaFields fields=f2 values=v2/> });
     let fold = h.find(SHOW_ADVANCED).expect("a fold");
-    assert!(h.find(r#"data-k="gamdl_wrapper_url""#).unwrap() < fold && h.find(r#"data-k="gamdl_wrapper_decrypt""#).unwrap() > fold, "{h}");
+    assert!(h.find(r#"data-k="mirror_url""#).unwrap() < fold && h.find(r#"data-k="mirror_port""#).unwrap() > fold, "{h}");
     assert!(
-        has(&h, "input", &[("value", "http://encore-wrapper"), ("readonly", "")])
-            && h.contains("Filled in by the <b>Apple Music wrapper</b> plugin"),
+        has(&h, "input", &[("value", "http://mirror.local"), ("readonly", "")])
+            && h.contains("🔗 Filled in by <b>the sync add-on</b> – it changes this itself"),
         "{h}"
     );
     let h = render(move || view! { <SchemaFields fields=vec![url] values=values/> });
     assert!(!h.contains(SHOW_ADVANCED));
 }
 
-/// Ported from `form_tests.rs` `the_nav_is_the_split_one_and_old_links_still_open` (the schema's part).
+#[test]
+fn the_card_a_link_names_opens() {
+    let values = defaults();
+    let html = page("general", &values, false, Some("storage"));
+    assert!(
+        has(&html, "details", &[("data-sec", "storage"), ("open", "")]) && !has(&html, "details", &[("data-sec", "app"), ("open", "")]),
+        "{html}"
+    );
+    // a heading over the cards of a part
+    assert!(html.contains(r#"<div class="nav-label" style="padding:18px 4px 8px;">Files</div>"#), "{html}");
+    // a page of one card has it open
+    assert!(has(&page("mail", &values, false, None), "details", &[("data-sec", "smtp"), ("open", "")]));
+}
+
 #[test]
 fn pages_are_found_by_id_alias_or_card() {
     let schema = schema();
     let nav: Vec<(&str, &str)> = schema.sections.iter().map(|s| (s.id.as_str(), s.title.as_str())).collect();
-    assert_eq!(
-        nav,
-        [
-            ("general", "General"),
-            ("library", "Library"),
-            ("downloads", "Downloads"),
-            ("integrations", "Integrations"),
-            ("processing", "Server processing"),
-            ("accounts", "Email & notifications"),
-            ("autodownload", "Auto-download"),
-            ("contribute", "Contribute"),
-            ("blocked", "Blocked"),
-            ("tasks", "Scheduled tasks"),
-        ]
-    );
+    assert_eq!(nav, [("general", "General"), ("mail", "Mail")]);
     for (id, want) in
-        [("apps", "downloads"), ("tagging", "library"), ("pipeline", "downloads"), ("cadenza", "processing"), ("nothing", "nothing")]
+        [("mail", "mail"), ("email", "mail"), ("smtp", "mail"), ("app", "general"), ("storage", "general"), ("nothing", "nothing")]
     {
         assert_eq!(schema.page_of(id), want, "?s={id}");
     }
-    let with_tools: Vec<&str> = schema.sections.iter().map(|s| s.id.as_str()).filter(|id| schema.holds(id, "pipeline")).collect();
-    assert_eq!(with_tools, ["downloads"]);
-    assert!(When::parse("a=b").is_some());
+    assert!(schema.holds("general", "storage") && !schema.holds("mail", "storage"));
+    // the cards a server without some fields has
+    let some = json!({ "app_name": "x", "_meta": {} });
+    let cards = visible_cards(&schema.section("general").unwrap().groups, &some);
+    assert_eq!(cards.iter().map(|(g, f)| (g.id.as_str(), f.len())).collect::<Vec<_>>(), [("app", 1)]);
 }
 
 #[test]
 fn a_test_result_says_how_it_went() {
     let ok = render(|| view! { <TestResult result=json!({ "ok": true })/> });
-    // settings/mod.rs `test_result`
-    crate::testing::assert_same_html(&ok, &format!(r#"<div class="test-result ok">{}<span>Connected</span></div>"#, icon("check")));
+    assert_same_html(&ok, &format!(r#"<div class="test-result ok">{}<span>Connected</span></div>"#, icon("check")));
     let err = render(|| view! { <TestResult result=json!({ "ok": false, "message": "refused <x>" })/> });
-    crate::testing::assert_same_html(
+    assert_same_html(
         &err,
         &format!(
             r#"<div class="test-result err">{}<span>refused &lt;x&gt;</span>{}</div>"#,
@@ -289,4 +220,16 @@ fn a_test_result_says_how_it_went() {
             crate::details::copy_button_html("refused <x>")
         ),
     );
+    assert!(render(|| view! { <TestResult result=json!({ "ok": false })/> }).contains("<span>Failed</span>"));
+}
+
+#[test]
+fn an_app_words_the_form_its_own_way() {
+    let mut cfg = crate::config::AppConfig::default();
+    cfg.words.form.save = "Speichern";
+    cfg.words.form.default_env = "Standard ({env})";
+    crate::config::set(cfg);
+    let html = page("general", &defaults(), false, None);
+    assert!(html.contains("Speichern</button>") && html.contains(r#"Standard (<span class="mono">APP_NAME</span>)"#), "{html}");
+    crate::config::set(crate::config::AppConfig::default());
 }

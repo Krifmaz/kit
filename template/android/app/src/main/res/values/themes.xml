@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Platform themes only (no AppCompat): Compose draws everything; this is the window behind it (Encore's). -->
+    <!-- Platform themes only (no AppCompat): Compose draws everything; this is the window behind it. -->
     <style name="Theme.App" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/app_bg</item>
         <item name="android:colorBackground">@color/app_bg</item>

@@ -1,4 +1,4 @@
-# ktlint (Kotlin style) for android/. Encore's code is written to long lines, as the kit's Rust is (rustfmt.toml).
+# ktlint (Kotlin style) for android/. Long lines, as the kit's Rust (rustfmt.toml).
 root = true
 
 [*.{kt,kts}]
