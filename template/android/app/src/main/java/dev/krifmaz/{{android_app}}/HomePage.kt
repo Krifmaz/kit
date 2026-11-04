@@ -36,8 +36,8 @@ import dev.krifmaz.kit.compose.bugs.CrashLog
 import dev.krifmaz.kit.compose.bugs.CrashLogReport
 import dev.krifmaz.kit.compose.bugs.NewBugReportSheet
 import dev.krifmaz.kit.compose.bugs.saveExport
-import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.details.DetailsDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.offline.OfflineBanner
 import dev.krifmaz.kit.compose.offline.probeHealth
 import dev.krifmaz.kit.compose.settings.Muted
