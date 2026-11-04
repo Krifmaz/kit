@@ -32,16 +32,19 @@ pub const DATA_WORDS: CheckWords = CheckWords {
     fixed: "The data folder can be written",
 };
 
-/// The looks the Look select offers: `(theme id, label)`.
-pub const THEMES: [(&str, &str); 5] =
-    [("encore", "Default"), ("dark", "Dark"), ("oled", "Black (OLED)"), ("light", "Light"), ("system", "System")];
+/// Where the Updates block is, for the toast when a new version was found.
+pub const UPDATES_PLACE: &str = "Settings → This computer → Updates";
 
-/// Makes the look of a theme id the one every kit-iced style reads (the kit's accent, solid background).
+/// The looks the Look select offers: the kit's themes, `(theme id, name)`.
+pub const THEMES: [(&str, &str); 5] = theme::THEMES;
+
+/// Makes the look of a theme id (one of [`THEMES`]) the one every kit-iced style reads: the theme's own accent,
+/// solid background; `system` follows a dark system. The default theme is [`theme::default_look`].
 pub fn apply_theme(id: &str) {
-    if id == "encore" {
-        theme::set(theme::encore());
+    if id == theme::THEMES[0].0 {
+        theme::set(theme::default_look());
     } else {
-        theme::set(theme::palette(id, "logo", "", "solid", true));
+        theme::set(theme::palette(id, "", "", "solid", true));
     }
 }
 
@@ -56,7 +59,7 @@ pub enum Stage {
     Shell,
 }
 
-/// A dialog that asks before it acts.
+/// What a confirm dialog asks before doing (the action of kit-iced's [`kit_iced::confirm::Confirm`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Confirm {
     /// Sign out of this computer.
@@ -71,6 +74,17 @@ impl Confirm {
         match self {
             Confirm::SignOut => ("Sign out?", "This computer forgets its sign-in. You'll need your password to sign in again.", "Sign out"),
             Confirm::ChangeServer => ("Change server?", "This computer signs out and asks for a server's address again.", "Change server"),
+        }
+    }
+
+    /// kit-iced's confirm dialog for this action (signing out is red: it can't be undone from here).
+    pub fn dialog(self) -> kit_iced::confirm::Confirm<Confirm> {
+        let (title, text, ok) = self.words();
+        let d = kit_iced::confirm::Confirm::new(title, text, ok, self);
+        if self == Confirm::SignOut {
+            d.danger()
+        } else {
+            d
         }
     }
 }
@@ -107,10 +121,8 @@ pub enum Message {
     SignInBack,
     /// Ask before signing out or changing the server.
     Ask(Confirm),
-    /// The confirm dialog's OK.
-    Confirmed,
-    /// The confirm dialog's Cancel (or its X, the backdrop, Escape).
-    Cancelled,
+    /// The confirm dialog's OK or Cancel (or its X, the backdrop, Escape).
+    Dialog(kit_iced::confirm::Msg),
     /// A request whose answer needs nothing (sign-out, What's new seen).
     Done,
     /// `/api/auth/me`'s answer.
@@ -235,7 +247,7 @@ pub struct App {
     /// The details dialog.
     pub details: Option<Details<Page>>,
     /// The confirm dialog.
-    pub confirm: Option<Confirm>,
+    pub confirm: Option<kit_iced::confirm::Confirm<Confirm>>,
     /// Why the server can't be reached, while it can't.
     pub offline: Option<String>,
     /// The offline banner's words ("The <app> server isn't answering").
@@ -608,10 +620,9 @@ impl App {
                     self.stage = Stage::Connect;
                 }
             }
-            Message::Ask(c) => self.confirm = Some(c),
-            Message::Cancelled => self.confirm = None,
-            Message::Confirmed => {
-                let Some(c) = self.confirm.take() else { return Task::none() };
+            Message::Ask(c) => self.confirm = Some(c.dialog()),
+            Message::Dialog(m) => {
+                let Some(c) = self.confirm.take().and_then(|d| d.update(m)) else { return Task::none() };
                 let leaving = self.client.clone();
                 self.sign_out_here();
                 if c == Confirm::ChangeServer {
@@ -661,7 +672,7 @@ impl App {
                         self.details = None;
                         return self.open(p);
                     }
-                    Some(details::Out::Act(_) | details::Out::Play(_)) => self.details = None,
+                    Some(details::Out::Act(_)) => self.details = None,
                     None if close => self.details = None,
                     None => {}
                 }
@@ -816,7 +827,7 @@ impl App {
                 Ok(Some(rel)) => {
                     if self.told != rel.version {
                         self.told = rel.version.clone();
-                        self.toasts.push(kit_iced::update::ready_words(crate::title(), &rel.version), ToastKind::Info);
+                        self.toasts.push(kit_iced::update::ready_words(crate::title(), &rel.version, UPDATES_PLACE), ToastKind::Info);
                     }
                     self.phase = Phase::Available(rel.clone());
                     self.found = Some(rel);
@@ -1056,14 +1067,14 @@ mod tests {
     fn confirming_sign_out_forgets_the_token_but_keeps_the_server() {
         let mut a = app(Some("https://x.example"), "t");
         let _ = a.update(Message::Ask(Confirm::SignOut));
-        assert_eq!(a.confirm, Some(Confirm::SignOut));
-        let _ = a.update(Message::Cancelled);
-        assert_eq!((a.confirm, a.stage), (None, Stage::Shell), "Cancel changes nothing");
+        assert_eq!(a.confirm.as_ref().map(|d| (d.action, d.danger)), Some((Confirm::SignOut, true)));
+        let _ = a.update(Message::Dialog(kit_iced::confirm::Msg::Cancel));
+        assert_eq!((a.confirm.is_none(), a.stage), (true, Stage::Shell), "Cancel changes nothing");
         let _ = a.update(Message::Ask(Confirm::SignOut));
-        let _ = a.update(Message::Confirmed);
+        let _ = a.update(Message::Dialog(kit_iced::confirm::Msg::Ok));
         assert_eq!((a.stage, a.stored.server.as_str(), a.stored.token.as_str()), (Stage::SignIn, "https://x.example", ""));
         let _ = a.update(Message::Ask(Confirm::ChangeServer));
-        let _ = a.update(Message::Confirmed);
+        let _ = a.update(Message::Dialog(kit_iced::confirm::Msg::Ok));
         assert_eq!((a.stage, a.stored.server.as_str()), (Stage::Connect, ""));
     }
 
@@ -1108,7 +1119,7 @@ mod tests {
         for (id, _) in THEMES {
             apply_theme(id);
         }
-        apply_theme("encore");
-        assert_eq!(theme::look().accent, theme::encore().accent);
+        apply_theme(THEMES[0].0);
+        assert_eq!(theme::look().accent, theme::default_look().accent);
     }
 }

@@ -10,8 +10,8 @@ and the kit's default theme. Read the kit's `CHANGELOG.md` before bumping the ki
   programmer understands. No codes, no jargon, no blame.
 - **Copyable errors.** Every error is shown in full and can be copied (the kit's toasts and details dialog do
   this); errors answer `{"detail": "<plain sentence>"}` with the right HTTP status (kit-server-core's `err`).
-- **The kit's look.** Use the kit's theme (`data-theme="encore"`) and components; no colours, fonts or sizes of
-  your own outside the generated tokens.
+- **The kit's look.** Use the kit's theme (the default look on `:root`; `data-theme` `dark`, `oled` or `light`
+  for the others) and components; no colours, fonts or sizes of your own outside the generated tokens.
 - **Small validated changes.** One change at a time, each with its test. `cargo fmt`, `cargo clippy --workspace
   --all-targets -- -D warnings` and `cargo test --workspace` pass before every commit{% if android %}; ktlint and
   `./gradlew test` for `android/`{% endif %}. Every change gets a line in `CHANGELOG.md`.

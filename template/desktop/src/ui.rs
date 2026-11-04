@@ -52,17 +52,15 @@ pub fn overlay(app: &App) -> Vec<El<'_, Message>> {
     if let Some(d) = &app.details {
         out.push(details::view(d).map(Message::Details));
     }
-    if let Some(c) = app.confirm {
+    if let Some(c) = &app.confirm {
         out.push(confirm(c));
     }
     out
 }
 
-/// The confirm dialog of `c` (kit-iced's `confirm`: Cancel and the OK button). Kept apart so the app's dialogs
-/// switch to another confirm component in one place.
-pub fn confirm<'a>(c: Confirm) -> El<'a, Message> {
-    let (title, text, ok) = c.words();
-    w::confirm(title, text, ok, c == Confirm::SignOut, Message::Confirmed, Message::Cancelled)
+/// The open confirm dialog (kit-iced's `confirm`: the question, Cancel and the action's button).
+pub fn confirm(d: &kit_iced::confirm::Confirm<Confirm>) -> El<'_, Message> {
+    kit_iced::confirm::view(d).map(Message::Dialog)
 }
 
 /// An error in full, red, with Copy (nothing when there is none).
@@ -79,7 +77,7 @@ fn centred<'a>(body: impl Into<El<'a, Message>>) -> El<'a, Message> {
 pub fn connect(app: &App) -> El<'_, Message> {
     let go = (!app.busy).then_some(Message::Connect);
     let mut c = column![
-        row![w::logo(32.0), w::h2(crate::title())].spacing(10).align_y(Alignment::Center),
+        row![w::logo(&crate::LOGO, 32.0), w::h2(crate::title())].spacing(10).align_y(Alignment::Center),
         w::muted("Connect to your server").size(14),
         w::field("Server address", s::input("server.example.com", &app.address, Message::Address).on_submit_maybe(go.clone())),
     ]
@@ -96,7 +94,7 @@ pub fn sign_in(app: &App) -> El<'_, Message> {
     let ready = crate::signin::ready(&app.username, &app.password, app.code.as_deref());
     let go = (ready && !app.busy).then_some(Message::SignIn);
     let mut c = column![
-        row![w::logo(32.0), w::h2(crate::signin::title(crate::title()))].spacing(10).align_y(Alignment::Center),
+        row![w::logo(&crate::LOGO, 32.0), w::h2(crate::signin::title(crate::title()))].spacing(10).align_y(Alignment::Center),
         s::between(w::small_muted(app.client.base().to_string()).into(), s::link_muted("Change server", Message::SignInBack)),
         w::field("Username", s::input("", &app.username, Message::Username).on_submit_maybe(go.clone())),
         w::field("Password", s::input("", &app.password, Message::Password).secure(true).on_submit_maybe(go.clone())),
@@ -118,7 +116,9 @@ pub fn sign_in(app: &App) -> El<'_, Message> {
 /// The sidebar and the open page, under the offline and notice banners.
 pub fn shell(app: &App) -> El<'_, Message> {
     let p = theme::look();
-    let mut nav = column![row![w::logo(26.0), w::h3(crate::title())].spacing(10).align_y(Alignment::Center), space().height(12)].spacing(4);
+    let mut nav =
+        column![row![w::logo(&crate::LOGO, 26.0), w::h3(crate::title())].spacing(10).align_y(Alignment::Center), space().height(12)]
+            .spacing(4);
     for page in Page::NAV.into_iter().filter(|pg| app.admin() || !pg.admin_only()) {
         let on = app.page.nav() == page;
         nav = nav.push(
@@ -524,9 +524,9 @@ mod tests {
         a.details = None;
 
         let mut c = App::new(Stored::default(), None, None);
-        c.confirm = Some(Confirm::ChangeServer);
+        c.confirm = Some(Confirm::ChangeServer.dialog());
         assert!(shows(&c, "Change server?"));
-        assert!(matches!(clicked(&c, "Change server")[..], [M::Confirmed]));
-        assert!(matches!(clicked(&c, "Cancel")[..], [M::Cancelled]));
+        assert!(matches!(clicked(&c, "Change server")[..], [M::Dialog(kit_iced::confirm::Msg::Ok)]));
+        assert!(matches!(clicked(&c, kit_iced::confirm::CANCEL)[..], [M::Dialog(kit_iced::confirm::Msg::Cancel)]));
     }
 }

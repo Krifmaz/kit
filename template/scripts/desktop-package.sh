@@ -7,9 +7,10 @@
 #                                            with MACOS_SIGN_IDENTITY (ad hoc without it), notarized with APPLE_ID,
 #                                            APPLE_TEAM_ID and APPLE_APP_PASSWORD when they are set
 #
-# The kit's kit-desktop.yml calls it on each system from the repository root:
-#   bash scripts/desktop-package.sh --version <V> [--stamp] --features <features> [--universal] --out out
-# --stamp builds the app as version <V> (APP_VERSION), so its update notice compares the right number.
+# The kit's kit-desktop.yml runs it on each system from the repository root (its `package` in release.yml):
+#   bash scripts/desktop-package.sh --version <V> [--stamp | --release true|false] --features <features> [--universal] --out <dir>
+# --stamp (or --release true) builds the app as version <V> (APP_VERSION), so its update notice compares the right
+# number; --universal joins both Mac targets.
 set -euo pipefail
 
 VERSION=""
@@ -21,6 +22,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
     --stamp) STAMP=true; shift ;;
+    --release) [ "$2" = true ] && STAMP=true; shift 2 ;;
     --features) FEATURES="$2"; shift 2 ;;
     --universal) UNIVERSAL=true; shift ;;
     --out) OUT="$2"; shift 2 ;;

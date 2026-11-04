@@ -16,10 +16,10 @@ cargo run --example walk -- http://127.0.0.1:8080 admin <password>   # every req
 | --- | --- | --- |
 | Connect: the server's address (https first, then http), remembered in the config folder; `<PROJECT>_SERVER` overrides it | `address.rs`, `store.rs` | the phone app's rules |
 | Sign in: an app token (`POST /api/auth/login` with `app`), sent as `Authorization: Bearer`; a 401 asks again | `signin.rs`, `client.rs` | the phone app's rules |
-| The shell: sidebar, Home, Bug reports, Settings, Diagnostics, What's new | `ui.rs`, `route.rs` | `widgets`, `theme` |
+| The shell: sidebar, Home, Bug reports, Settings, Diagnostics, What's new | `ui.rs`, `route.rs` | `widgets` (the app's `Logo`: `LOGO` in lib.rs), `theme` |
 | Toasts: errors stay with Copy, repeats don't pile up, Undo, at most 5 | `app.rs` | `toast` |
 | The details dialog: any text in full, selectable, with Copy | `app.rs`, `ui.rs` | `details` |
-| A question before signing out or changing the server | `ui.rs` `confirm` | `widgets::confirm` |
+| A question before signing out or changing the server | `ui.rs` `confirm` | `confirm` |
 | The offline banner with Details and Retry (and a retry every 30 s) | `ui.rs` | `offline`, kit-rules' offline reasons |
 | The data folder notice with Check again (admins) | `ui.rs` | `notice` |
 | What's new: the popup once per release, and the full page | `app.rs` | `whats_new` |

@@ -33,6 +33,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   keeps the previous release's other files).
 
 ### Added
+- `template/`: follows the neutral kit: the web app sets no `data-theme` (the default look is `:root`); the
+  desktop app uses `theme::default_look()`, kit-iced's confirm dialog and the app's `Logo` (`Logo::KIT` until
+  it has one); the release workflow uses kit-desktop's `package` command, and an `apps` job hands the app
+  artifacts to kit-release under the title, so a title with spaces still gets its APK and desktop files attached.
 - `template/desktop/`: the generated app's desktop app (Iced 0.14 on kit-iced and kit-rules): connect to a server
   (remembered in the config folder, `<PROJECT>_SERVER` overrides it), sign in for an app token, then Home (a
   button for every kit feature), Bug reports (list, thread with the reply box, New report with the file dialog

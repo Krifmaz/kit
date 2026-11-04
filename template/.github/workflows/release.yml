@@ -87,14 +87,16 @@ jobs:
     if: inputs.apps
     uses: Krifmaz/kit/.github/workflows/kit-desktop.yml@{{kit_tag}}
     with:
-      # the artifacts are <app-name>-desktop-<OS>; publish attaches the ones named after its own app-name
-      app-name: {{app_title}}
+      # the artifacts are <app-name>-desktop-<OS>, named like the files (no spaces)
+      app-name: {{app_file}}
 {% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}
       project-dir: desktop
+      # V, RELEASE, FEATURES, ARGS and OUT are kit-desktop's; a release builds the app as V (--stamp)
+{% raw %}      package: bash scripts/desktop-package.sh --version "$V" --release "$RELEASE" --features "$FEATURES" $ARGS --out "$OUT"{% endraw %}
+      macos-args: --universal
       linux-files: "{{app_file}}-{V}-linux-x86_64.tar.gz"
       windows-files: "{{app_file}}-{V}-windows-x86_64.zip"
       macos-files: "{{app_file}}-{V}-macos-universal.dmg"
-      nsis: false
 {% raw %}    secrets:
       windows-cert-pfx-base64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
       windows-cert-password: ${{ secrets.WINDOWS_CERT_PASSWORD }}
@@ -105,8 +107,28 @@ jobs:
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
       apple-app-password: ${{ secrets.APPLE_APP_PASSWORD }}{% endraw %}
 
-  publish:
-    needs: [prepare, docker, desktop{% if android %}, android{% endif %}]
+{% if app_title != app_file %}  # kit-release attaches the artifacts named after its app-name ("{{app_title}}-…"); the apps' artifacts are named
+  # after the files ("{{app_file}}-…", no spaces), so this hands them over under the title
+  apps:
+    needs: [desktop{% if android %}, android{% endif %}]
+{% raw %}    if: always() && contains(needs.*.result, 'success'){% endraw %}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: {{app_file}}-*
+          path: apps
+          merge-multiple: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: {{app_title}}-apps
+          path: apps/*
+          if-no-files-found: error
+
+{% endif %}  publish:
+    needs: [prepare, docker, desktop{% if android %}, android{% endif %}{% if app_title != app_file %}, apps{% endif %}]
 {% raw %}    if: always() && needs.prepare.result == 'success' && needs.docker.result == 'success'{% endraw %}
     uses: Krifmaz/kit/.github/workflows/kit-release.yml@{{kit_tag}}
     with:

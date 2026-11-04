@@ -29,6 +29,10 @@ pub mod ui;
 use serde::Deserialize;
 use std::sync::LazyLock;
 
+/// The app's logo in the sidebar and on the connect and sign-in pages, drawn in the look's accent gradient: the
+/// kit's neutral mark until the app has its own (`Logo { view_box, paths, gradient }`).
+pub const LOGO: kit_iced::widgets::Logo = kit_iced::widgets::Logo::KIT;
+
 /// The package name, `<project>-desktop`: the binary's name.
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 

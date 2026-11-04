@@ -19,7 +19,7 @@ pub struct Stored {
     pub token: String,
     /// This install's id, sent with the sign-in so the account's sessions tell computers apart.
     pub device_id: String,
-    /// The look's theme id (`encore`, `dark`, `oled`, `light`, `system`).
+    /// The look's theme id (one of kit-iced's `theme::THEMES`; the first is the default).
     pub theme: String,
     /// Look for a new version at start.
     pub check_updates: bool,
@@ -27,7 +27,13 @@ pub struct Stored {
 
 impl Default for Stored {
     fn default() -> Self {
-        Stored { server: String::new(), token: String::new(), device_id: String::new(), theme: "encore".into(), check_updates: true }
+        Stored {
+            server: String::new(),
+            token: String::new(),
+            device_id: String::new(),
+            theme: kit_iced::theme::THEMES[0].0.into(),
+            check_updates: true,
+        }
     }
 }
 
@@ -93,7 +99,7 @@ mod tests {
     #[test]
     fn a_missing_file_gives_the_defaults_with_a_new_id() {
         let s = load_from(&scratch("missing"));
-        assert_eq!((s.server.as_str(), s.token.as_str(), s.theme.as_str(), s.check_updates), ("", "", "encore", true));
+        assert_eq!((s.server.as_str(), s.token.as_str(), s.theme.as_str(), s.check_updates), ("", "", kit_iced::theme::THEMES[0].0, true));
         assert_eq!(s.device_id.len(), 32);
         assert_ne!(s.device_id, new_device_id(), "every id is new");
     }
@@ -112,7 +118,10 @@ mod tests {
         // an older file without the newer keys keeps their defaults
         std::fs::write(&p, r#"{"server": "http://10.0.0.2:8080"}"#).unwrap();
         let old = load_from(&p);
-        assert_eq!((old.server.as_str(), old.check_updates, old.theme.as_str()), ("http://10.0.0.2:8080", true, "encore"));
+        assert_eq!(
+            (old.server.as_str(), old.check_updates, old.theme.as_str()),
+            ("http://10.0.0.2:8080", true, kit_iced::theme::THEMES[0].0)
+        );
         std::fs::remove_dir_all(p.parent().unwrap()).unwrap();
     }
 
