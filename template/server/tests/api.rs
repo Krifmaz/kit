@@ -77,7 +77,7 @@ async fn signing_in_gives_a_session_that_needs_the_csrf_header() {
     assert!(cookie.starts_with(&server::auth::cookie_name()));
     let (s, v, _) = call(&app, Request::get("/api/auth/me").header(header::COOKIE, &cookie).body(Body::empty()).unwrap()).await;
     assert_eq!((s, v["username"].as_str()), (StatusCode::OK, Some("admin")));
-    // a change through the cookie without X-Requested-With is refused, as in Encore
+    // a change through the cookie without X-Requested-With is refused
     let seen = |csrf: bool| {
         let b = Request::post("/api/changelog/seen").header(header::COOKIE, &cookie);
         let b = if csrf { b.header("x-requested-with", server::NAME) } else { b };

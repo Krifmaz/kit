@@ -13,7 +13,7 @@ import dev.krifmaz.kit.compose.theme.KitTheme
 import dev.krifmaz.kit.compose.toasts.ToastHost
 import dev.krifmaz.kit.compose.update.Updater
 
-/** The app's one activity: the Encore theme, the app's pages ([AppShell]) and the toasts above them. */
+/** The app's one activity: the kit's default theme, the app's pages ([AppShell]) and the toasts above them. */
 class MainActivity : ComponentActivity() {
     /** Draws the app and looks for a new version once a day. */
     override fun onCreate(savedInstanceState: Bundle?) {

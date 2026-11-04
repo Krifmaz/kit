@@ -11,7 +11,8 @@ app (its `README.md` is the app's own).
 | You get | Where |
 | --- | --- |
 | Axum server with the kit server crates wired in: health, changelog, notices, bug reports, diagnostics, settings | `server/` |
-| Leptos web UI with the kit-leptos components and the Encore theme | `web/` |
+| Leptos web UI with the kit-leptos components and the kit's default theme | `web/` |
+| Desktop app (Linux, Windows, macOS) on Iced with kit-iced: connect, app-token sign-in, every kit feature, the update notice on the app's own releases | `desktop/` |
 | Optional Compose Android app with kit-compose, Baseline Profile and benchmark modules | `android/` (answer yes to "Add the Android app") |
 | Distroless, non-root, read-only-friendly Docker image with a health check | `Dockerfile` |
 | CI and releases through the kit's shared workflows | `.github/workflows/` |
@@ -37,7 +38,9 @@ Without questions: `cargo generate krifmaz/kit template --name filebrary --defin
 The kit's CI (`template` job in `.github/workflows/ci.yml`) generates an app from this folder on every pull
 request, points its kit dependencies at the pull request's own crates, and runs its fmt, clippy and tests —
 which start the server and check every kit endpoint — then builds the web app and the Docker image, runs the
-image read-only and waits for its health check.
+image read-only and waits for its health check. It also checks, tests (every page headless) and packages the
+desktop app, and walks its requests against the running server (`desktop/examples/walk.rs`); the `template-android`
+job builds and tests the Android app.
 
 ## Editing the template
 
@@ -46,4 +49,6 @@ carry no Liquid and build as normal code; names come from `env!("CARGO_PKG_NAME"
 need the app's name (`Cargo.toml`, `Dockerfile`, workflows, `index.html`, Gradle files, docs) use Liquid; workflow
 lines with GitHub's own `${{ … }}` are wrapped in `{% raw %}`. Kotlin files are templated too, for their package
 line (`package {{android_package}}`) and the benchmarks' package name; they must hold no other `{{` or `{%`. Their
-folders are `dev/krifmaz/{{android_app}}` (cargo-generate turns a `/` inside a placeholder into `_`).
+folders are `dev/krifmaz/{{android_app}}` (cargo-generate turns a `/` inside a placeholder into `_`). The desktop
+app's names come from `desktop/app.json` (templated) and Cargo.toml's `repository`; `scripts/desktop-package.sh`
+is templated.

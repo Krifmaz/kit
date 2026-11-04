@@ -85,6 +85,19 @@ await step('details-dialog-with-copy', async () => {
   await page.click('#details-probe');
   await see('.modal-bg .modal');
 });
+await step('sign-out-asks-first', async () => {
+  await page.keyboard.press('Escape');
+  await page.click('#logout-btn');
+  await page.locator('.modal-bg .modal', { hasText: 'Sign out?' }).waitFor();
+  await page.locator('.modal-bg button[data-close]', { hasText: 'Cancel' }).click();
+  await page.locator('.modal-bg').waitFor({ state: 'detached' });
+  await see('.shell');
+});
+await step('signed-out-after-ok', async () => {
+  await page.click('#logout-btn');
+  await page.locator('.modal-bg button[data-ok]', { hasText: 'Sign out' }).click();
+  await see('.auth-card');
+});
 if (errors.length) {
   console.log(`FAIL page errors:\n${errors.join('\n')}`);
   await browser.close();

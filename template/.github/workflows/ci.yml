@@ -1,6 +1,6 @@
 name: ci
 
-# Every pull request: the kit's checks (fmt, clippy -D warnings, tests of server/ and web/), the Docker image
+# Every pull request: the kit's checks (fmt, clippy -D warnings, tests of server/, desktop/ and web/), the Docker image
 # built (not pushed){% if android %} and the Android app built and unit-tested{% endif %}. Required to pass before a merge.
 on:
   pull_request:
@@ -18,7 +18,9 @@ jobs:
   test:
     uses: Krifmaz/kit/.github/workflows/kit-ci.yml@{{kit_tag}}
     with:
-      rust-dirs: server
+      rust-dirs: |
+        server
+        desktop
       wasm-dirs: web
 
   docker:

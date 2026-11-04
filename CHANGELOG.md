@@ -50,6 +50,23 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   keeps the previous release's other files).
 
 ### Added
+- `template/`: follows the neutral kit: the web app sets no `data-theme` (the default look is `:root`); the
+  desktop app uses `theme::default_look()`, kit-iced's confirm dialog and the app's `Logo` (`Logo::KIT` until
+  it has one); the release workflow uses kit-desktop's `package` command, and an `apps` job hands the app
+  artifacts to kit-release under the title, so a title with spaces still gets its APK and desktop files attached.
+- `template/android`: Sign out asks first in kit-compose's `ConfirmDialog`, as on the web and the desktop.
+- `template/web`: Sign out asks first in the kit's confirm dialog (the desktop app asks the same), and the kit's
+  browser walk (`scripts/template-smoke.cjs`) checks that Cancel keeps the session and OK signs out.
+- `template/desktop/`: the generated app's desktop app (Iced 0.14 on kit-iced and kit-rules): connect to a server
+  (remembered in the config folder, `<PROJECT>_SERVER` overrides it), sign in for an app token, then Home (a
+  button for every kit feature), Bug reports (list, thread with the reply box, New report with the file dialog
+  and drag and drop), Settings (the server's form from its schema, the look, Updates), Diagnostics and What's new
+  (popup once per release and the page), with toasts, the details dialog, a confirm dialog, the offline banner
+  and the notice banner; the update notice reads the app's own GitHub releases. Unit tests for its rules,
+  headless iced_test tests for every page, and `examples/walk.rs`, which makes every request against a running
+  server. `template/scripts/desktop-package.sh` makes the Linux tarball, the Windows zip and the macOS dmg the
+  update notice looks for; the template's release workflow builds them through `kit-desktop.yml` with "apps",
+  its CI tests `desktop/`, and the kit's `template` job checks, packages and walks it.
 - `crates/kit-leptos/style/kit.css` (also `kit_leptos::CSS`): the kit's own stylesheet for every component,
   built only on `design/out/tokens.css`, so all four themes draw it.
 - A confirm dialog: `kit_rules::dialogs::{Confirm, Answer, DialogWords}`, `kit_leptos::modal::confirm(Confirm)
