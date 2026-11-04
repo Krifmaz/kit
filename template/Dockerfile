@@ -11,14 +11,12 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
 ARG APP_VERSION=
 WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
 COPY server ./server
-COPY web ./web
-# the release notes the server builds in for What's new
+# the release notes the server builds in for What's new (server/build.rs reads ../docs/releases)
 COPY docs/releases ./docs/releases
 RUN case "$TARGETARCH" in arm64) T=aarch64-unknown-linux-gnu ;; *) T=x86_64-unknown-linux-gnu ;; esac \
  && { [ -n "$APP_VERSION" ] || unset APP_VERSION; } \
- && cargo build --release --locked -p {{project-name}} --target "$T" && cp "target/$T/release/{{project-name}}" /app \
+ && cd server && cargo build --release --locked --target "$T" && cp "target/$T/release/{{project-name}}" /app \
  && mkdir -p /data
 
 # The web app (Leptos → WebAssembly), built once on the build machine with trunk, served at / by the server.
@@ -28,10 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
  && rustup target add wasm32-unknown-unknown \
  && curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin trunk
 WORKDIR /src
-COPY Cargo.toml Cargo.lock ./
-COPY server ./server
 COPY web ./web
-COPY docs/releases ./docs/releases
 RUN cd web && trunk build --release --locked \
  && find dist -type f \( -name '*.js' -o -name '*.wasm' -o -name '*.css' -o -name '*.html' -o -name '*.svg' \
       -o -name '*.webmanifest' -o -name '*.json' \) -exec brotli -f -k -q 11 {} + -exec gzip -f -k -n -9 {} + \

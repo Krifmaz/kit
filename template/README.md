@@ -10,11 +10,19 @@ ease-of-use features from the first commit.
 | `android/` | Compose app with kit-compose, a Baseline Profile and a benchmark module |{% endif %}
 | `docs/releases/` | one Markdown file per release: the release notes and What's new |
 
+## First steps
+
+1. Make the lock files and commit them (CI and the Docker build use `--locked`):
+   `(cd server && cargo generate-lockfile) && (cd web && cargo generate-lockfile)`.
+2. Push to GitHub. Every pull request runs the checks; every merge to main is a release.
+3. The first start makes the owner account: set `APP_ADMIN_PASSWORD` (and `APP_ADMIN_USER`, default `admin`),
+   or read the password it prints (also in `initial_admin_password.txt` in the data folder).
+
 ## Run it
 
 ```
 cd web && trunk build && cd ..
-APP_DATA_DIR=./data APP_STATIC_DIR=./web/dist cargo run -p {{project-name}}
+cd server && APP_DATA_DIR=../data APP_STATIC_DIR=../web/dist cargo run
 ```
 
 Then open <http://localhost:8080>. With Docker:
@@ -29,8 +37,10 @@ docker run --read-only -p 8080:8080 -v {{project-name}}-data:/data {{project-nam
 | `APP_PORT` | the port the server listens on | `8080` |
 | `APP_DATA_DIR` | where the database and uploads live (the only folder it writes to) | `/data` |
 | `APP_STATIC_DIR` | the built web app | `/app/static` |
+| `APP_ADMIN_USER`, `APP_ADMIN_PASSWORD` | the owner made at the first start | `admin`, a printed password |
+| `APP_NAME`, `APP_SESSION_DAYS`, `APP_API_KEY` | settings (settings.toml); set here they are locked in Settings | |
 
 ## Checks
 
-`cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
+In `server/` and `web/`: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 Every merge to main is released as `vX.Y.Z` with the Docker image `{{image}}:<version>` and `:latest`.
