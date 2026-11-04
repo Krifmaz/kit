@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-notices"
-description = "TODO"
+description = "Plain-language banners for a kit server: register notices (id, severity, one sentence), check them again on a timer and on demand, and serve them at /api/notices or inside an app's own answer."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,10 +13,12 @@ axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+tokio.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 kit-server-core = { workspace = true, features = ["testing"] }
-tokio.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 tower.workspace = true
 
 [lints]

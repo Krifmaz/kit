@@ -268,7 +268,7 @@ paths:
     parameters: [{ name: service, in: path, required: true, schema: { type: string } }]
     post:
       summary: Run one settings card's check (admin)
-      responses: { "200": { description: result, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, detail: { type: string } } } } } } }
+      responses: { "200": { description: result, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, message: { type: string } } } } } } }
   /api/admin/settings/schema:
     get:
       summary: The settings described as data (admin); see settings-schema.md

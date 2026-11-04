@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-updates"
-description = "TODO"
+description = "In-app updates for a kit app: its GitHub releases as an update feed (full releases and hotfixes, the file for each device, SHA256SUMS checks) and the server's own update and restart routes."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,10 +13,11 @@ axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
+tokio.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 kit-server-core = { workspace = true, features = ["testing"] }
-tokio.workspace = true
 tower.workspace = true
 
 [lints]

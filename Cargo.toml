@@ -24,6 +24,8 @@ zip = { version = "9.0.1", default-features = false, features = ["deflate"] }
 urlencoding = "2"
 # kit-server-settings: reads settings.toml
 toml = { version = "0.8.23", default-features = false, features = ["parse", "preserve_order"] }
+futures-util = "0.3.34"
+sha2 = "0.10"
 kit-server-core = { path = "crates/kit-server-core" }
 
 [workspace.lints.rust]
