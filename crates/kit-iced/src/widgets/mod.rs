@@ -24,7 +24,7 @@ use iced::{Alignment, Length};
 /// An element of this app: `iced::Element` with the default theme and renderer.
 pub type El<'a, M> = iced::Element<'a, M>;
 
-/// Text with advanced shaping, so album and artist names in any script render right.
+/// Text with advanced shaping, so names in any script render right.
 pub fn t<'a>(s: impl IntoFragment<'a>) -> Text<'a> {
     text(s).shaping(Shaping::Advanced)
 }

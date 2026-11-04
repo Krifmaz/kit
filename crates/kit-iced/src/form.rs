@@ -1,10 +1,10 @@
-//! A settings form drawn from a table of fields: Encore's Settings → Server form (the desktop app's
-//! `pages/settings/server.rs` and `fields.rs`), with its cards that fold open, two fields per row,
+//! A settings form drawn from a table of fields: a desktop app's Settings → Server form, with its
+//! cards that fold open, two fields per row,
 //! switches, selects, check boxes, text areas, secrets with Show saved / Copy, the note under each field
 //! about where its value comes from, and the card's Save and Test buttons.
 //!
 //! The fields come either from a table written in the app ([`field`], [`Field`]'s `const` builders and
-//! [`Card::new`], like Encore's `SECTIONS`) or from the server's answer to `GET /api/admin/settings/schema`
+//! [`Card::new`], say an app's `SECTIONS`) or from the server's answer to `GET /api/admin/settings/schema`
 //! ([`Schema::from_json`], `contracts/settings-schema.md`).
 //!
 //! [`Form`] keeps what was typed and what is open; it holds no network code. [`Form::update`] applies a
@@ -12,7 +12,8 @@
 //! fetch a secret, copy a text, show a toast. The app makes the request and sends the answer back as a
 //! [`Msg`] (`Values`, `Saved`, `Tested`, `Revealed`, `Copied`, `Cleared`).
 //!
-//! A table moves over from Encore by writing `card! {` where it wrote `Card {` (see [`card!`](crate::card)).
+//! A table written as `Card { .. }` literals moves over by writing `card! {` where it wrote `Card {` (see
+//! [`card!`](crate::card)).
 
 use crate::settings::{help, input, input_locked, link_muted, result_line_copy, select_table, switch_maybe, two};
 use crate::theme::{self, Btn};
@@ -165,7 +166,7 @@ pub struct Field {
     pub help: Option<Str>,
     /// Takes the whole row.
     pub full: bool,
-    /// A textarea whose saved value is never sent back (WireGuard config, cookies).
+    /// A textarea whose saved value is never sent back (a private key, cookies).
     pub secret: bool,
     /// The number input's step (`"0.1"`); `None`: whole numbers.
     pub step: Option<Str>,
@@ -175,13 +176,13 @@ pub struct Field {
     pub when: Option<When>,
 }
 
-/// A field of a `const` table (Encore's `s(key, label, type)`).
+/// A field of a `const` table (the web's `s(key, label, type)`).
 pub const fn field(key: &'static str, label: &'static str, kind: &'static str) -> Field {
     Field::new(key, label, kind)
 }
 
 impl Field {
-    /// A field with no help, options or rule (Encore's `s(key, label, type)`).
+    /// A field with no help, options or rule (the web's `s(key, label, type)`).
     pub const fn new(key: &'static str, label: &'static str, kind: &'static str) -> Field {
         Field {
             key: borrowed(key),
@@ -281,7 +282,8 @@ fn req(v: &Value, name: &str, what: &str) -> Result<String, String> {
     }
 }
 
-/// The server's key for a release type: lower case letters and digits only (how `checks` values compare).
+/// The server's key for an option of a `checks` field: lower case letters and digits only (how `checks` values
+/// compare).
 pub fn type_key(s: &str) -> String {
     s.to_lowercase().chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).collect()
 }
@@ -314,7 +316,7 @@ const fn opt(s: Option<&'static str>) -> Option<Str> {
 }
 
 impl Card {
-    /// A card of a `const` table, in the order of Encore's `Card { id, title, desc, test, test_label, fields }`.
+    /// A card of a `const` table, in the order of a `Card { id, title, desc, test, test_label, fields }` literal.
     pub const fn new(
         id: &'static str,
         title: &'static str,
@@ -362,13 +364,13 @@ impl Card {
     }
 }
 
-/// A [`Card`] of a `const` table, written like Encore's `Card { id, title, desc, test, test_label, fields: &[..] }`
+/// A [`Card`] of a `const` table, written like a `Card { id, title, desc, test, test_label, fields: &[..] }`
 /// literal (a const table cannot pass `&[..]` of fields straight to [`Card::new`]):
 ///
 /// ```
 /// use kit_iced::card;
 /// use kit_iced::form::{field, Card};
-/// const SECTIONS: &[Card] = &[card! { id: "email", title: "Email", desc: "Lets Encore send password-reset and sign-in emails.",
+/// const SECTIONS: &[Card] = &[card! { id: "email", title: "Email", desc: "Lets the app send password-reset and sign-in emails.",
 ///     test: Some("email"), test_label: Some("Send test email"), fields: &[
 ///         field("smtp_host", "SMTP server", "text").help("e.g. smtp.fastmail.com – used for password-reset emails"),
 ///         field("smtp_password", "Password", "password"),
@@ -617,7 +619,7 @@ pub enum Out {
     },
     /// Put this text on the clipboard.
     Copy(String),
-    /// Copy this text and say whether it took (Encore's `copy_text`).
+    /// Copy this text and say whether it took.
     CopyText(String),
     /// A green toast.
     ToastOk(String),
@@ -625,7 +627,8 @@ pub enum Out {
     ToastErr(String),
 }
 
-/// What the app adds inside a card, for cards with blocks of their own (Encore's Soulseek or Cadenza card).
+/// What the app adds inside a card, for cards with blocks of their own (say a service's status or a list the app
+/// keeps).
 pub struct Slots<'a, M> {
     /// Under the test results, over the fields.
     pub top: Vec<El<'a, M>>,
@@ -676,8 +679,8 @@ impl Form {
         Form::default()
     }
 
-    /// The same form with secret text areas whose saved value the server never shows (Encore's
-    /// `vpn_wireguard_config`): they get no Show saved / Copy.
+    /// The same form with secret text areas whose saved value the server never shows (for example a
+    /// private key): they get no Show saved / Copy.
     pub fn never_shown<S: Into<String>>(mut self, keys: impl IntoIterator<Item = S>) -> Form {
         self.never_shown = keys.into_iter().map(Into::into).collect();
         self
@@ -854,7 +857,7 @@ impl Form {
         }
     }
 
-    /// Applies a message. `cards` is every card the app may draw (Encore: its whole table; the schema:
+    /// Applies a message. `cards` is every card the app may draw (a table: all of it; the schema:
     /// [`Schema::cards`]); the answer is what the app must do, in order.
     pub fn update<'c>(&mut self, msg: Msg, cards: impl IntoIterator<Item = &'c Card> + Clone) -> Vec<Out> {
         let find = |id: &str| cards.clone().into_iter().find(|c| c.id == id);
@@ -1230,40 +1233,40 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    const RELEASE_KINDS: &[(&str, &str)] =
-        &[("Album", "Album"), ("EP", "EP"), ("Single", "Single"), ("Broadcast", "Broadcast"), ("Other", "Other")];
-    const RELEASE_EXTRAS: &[(&str, &str)] = &[("Compilation", "Compilation"), ("Live", "Live"), ("Remix", "Remix"), ("DJ-mix", "DJ-mix")];
+    const EVENTS: &[(&str, &str)] =
+        &[("Sign-up", "Sign-up"), ("Login", "Login"), ("Backup", "Backup"), ("Error", "Error"), ("Other", "Other")];
+    const EVENT_EXTRAS: &[(&str, &str)] = &[("Daily", "Daily"), ("Test", "Test"), ("Retry", "Retry"), ("Auto-renew", "Auto-renew")];
 
-    const SLSKD: &[Field] = &[field("vpn_wireguard_config", "WireGuard config", "textarea").full().secret()];
+    const BACKUP: &[Field] = &[field("backup_ssh_key", "SSH key", "textarea").full().secret()];
 
-    /// A few of Encore's cards, as its table writes them.
+    /// A few cards of an imaginary app, Demo, as its table writes them.
     const SECTIONS: &[Card] = &[
-        card! { id: "general", title: "General", desc: "Your server's name and address, who can sign up, and how requests are approved.", test: None, test_label: None, fields: &[
+        card! { id: "general", title: "General", desc: "Your server's name and address, who can sign up, and how sign-ups are approved.", test: None, test_label: None, fields: &[
             field("app_name", "App name", "text"),
-            field("base_url", "Public URL", "text").help("e.g. https://music.example.com – used in links & notifications"),
+            field("base_url", "Public URL", "text").help("e.g. https://demo.example.com – used in links & notifications"),
             field("signup_mode", "Sign-up mode", "select").options(&[("invite", "Invite only"), ("open", "Open to anyone"), ("closed", "Closed")]),
-            field("auto_approve", "Auto-approve all requests", "bool"),
+            field("auto_approve", "Auto-approve all sign-ups", "bool"),
             field("session_days", "Stay signed in for (days)", "number"),
-            field("musicbrainz_rate", "MusicBrainz requests / second", "number").step("0.1"),
-            field("github_token", "GitHub token (optional)", "password").full(),
+            field("rate_limit", "Requests / second", "number").step("0.1"),
+            field("api_token", "API token (optional)", "password").full(),
         ] },
-        card! { id: "library", title: "Library & tagging", desc: "", test: None, test_label: None, fields: &[
-            field("library_path", "Music library path", "text"),
-            field("library_extra_roots", "Extra library folders", "textarea").full(),
-            field("staging_path", "Staging folder for downloads", "text"),
+        card! { id: "storage", title: "Storage", desc: "", test: None, test_label: None, fields: &[
+            field("data_path", "Data folder", "text"),
+            field("extra_folders", "Extra folders", "textarea").full(),
+            field("cache_path", "Cache folder", "text"),
         ] },
-        card! { id: "releases", title: "Release types", desc: "", test: None, test_label: None, fields: &[
-            field("release_types", "Kinds to request", "checks").full().options(RELEASE_KINDS),
-            field("release_skip", "Skip releases that are", "checks").full().options(RELEASE_EXTRAS),
+        card! { id: "notify", title: "Notifications", desc: "", test: None, test_label: None, fields: &[
+            field("notify_events", "Events to mail about", "checks").full().options(EVENTS),
+            field("notify_skip", "Skip events that are", "checks").full().options(EVENT_EXTRAS),
         ] },
-        card! { id: "torznab", title: "Torrents & Usenet (Prowlarr)", desc: "", test: Some("torznab"), test_label: None, fields: &[
-            field("torrent_client", "Torrent client", "select").options(&[("qbittorrent", "qBittorrent"), ("transmission", "Transmission")]),
-            field("qbit_url", "qBittorrent URL", "text").when("torrent_client", &["qbittorrent"]),
-            field("qbit_password", "qBittorrent password", "password").when("torrent_client", &["qbittorrent"]),
-            field("transmission_url", "Transmission URL", "text").when("torrent_client", &["transmission"]),
-            field("not_qbit", "Not qBittorrent", "text").when_not("torrent_client", &["qbittorrent"]),
+        card! { id: "email", title: "Email", desc: "", test: Some("email"), test_label: None, fields: &[
+            field("smtp_security", "Security", "select").options(&[("starttls", "STARTTLS"), ("tls", "TLS"), ("none", "None")]),
+            field("starttls_port", "STARTTLS port", "text").when("smtp_security", &["starttls"]),
+            field("smtp_password", "SMTP password", "password").when("smtp_security", &["starttls"]),
+            field("tls_port", "TLS port", "text").when("smtp_security", &["tls"]),
+            field("other_port", "Port", "text").when_not("smtp_security", &["starttls"]),
         ] },
-        Card::new("slskd", "Soulseek", "", Some("slskd"), Some("Test Soulseek"), SLSKD),
+        Card::new("backup", "Off-site backup", "", Some("backup"), Some("Test backup"), BACKUP),
     ];
 
     fn card(id: &str) -> &'static Card {
@@ -1275,58 +1278,58 @@ mod tests {
     }
 
     #[test]
-    fn the_table_builds_like_encores() {
+    fn the_table_builds_from_const_fields() {
         let general = card("general");
         assert_eq!(general.fields[0].key, "app_name");
         assert_eq!(general.fields.last().unwrap().kind, "password");
         assert!(general.fields.last().unwrap().full);
-        assert_eq!(get(general, "musicbrainz_rate").step.as_deref(), Some("0.1"));
-        assert_eq!(get(card("torznab"), "qbit_url").when, Some(When::is("torrent_client", &["qbittorrent"])));
-        let wg = get(card("slskd"), "vpn_wireguard_config");
-        assert!(wg.is_secret() && wg.spans() && wg.kind == "textarea");
-        assert!(get(general, "github_token").is_secret());
+        assert_eq!(get(general, "rate_limit").step.as_deref(), Some("0.1"));
+        assert_eq!(get(card("email"), "starttls_port").when, Some(When::is("smtp_security", &["starttls"])));
+        let key = get(card("backup"), "backup_ssh_key");
+        assert!(key.is_secret() && key.spans() && key.kind == "textarea");
+        assert!(get(general, "api_token").is_secret());
         assert!(!get(general, "app_name").spans());
-        assert!(get(card("releases"), "release_types").spans());
-        assert_eq!(card("torznab").test_words(), TEST_CONNECTION);
-        assert_eq!(card("slskd").test_words(), "Test Soulseek");
-        assert_eq!(type_key("Mixtape/Street"), "mixtapestreet");
-        assert_eq!(type_key("DJ-mix"), "djmix");
+        assert!(get(card("notify"), "notify_events").spans());
+        assert_eq!(card("email").test_words(), TEST_CONNECTION);
+        assert_eq!(card("backup").test_words(), "Test backup");
+        assert_eq!(type_key("Read/Write"), "readwrite");
+        assert_eq!(type_key("Auto-renew"), "autorenew");
     }
 
     #[test]
     fn a_plain_text_area_keeps_what_is_saved() {
-        let values = json!({ "library_path": "/music", "library_extra_roots": "/mnt/a\n/mnt/b", "staging_path": "/s" });
-        let card = card("library");
+        let values = json!({ "data_path": "/data", "extra_folders": "/mnt/a\n/mnt/b", "cache_path": "/c" });
+        let card = card("storage");
         let mut st = Form::new();
         st.take_values(values.clone(), SECTIONS);
-        assert_eq!(st.save_body(&values, card)["library_extra_roots"], "/mnt/a\n/mnt/b", "an untouched Save keeps the folders");
-        // a value changed on the server (an in-place import) shows when the values come again
-        let newer = json!({ "library_path": "/music", "library_extra_roots": "/mnt/a\n/mnt/b\n/mnt/c", "staging_path": "/s" });
+        assert_eq!(st.save_body(&values, card)["extra_folders"], "/mnt/a\n/mnt/b", "an untouched Save keeps the folders");
+        // a value changed on the server (by another admin) shows when the values come again
+        let newer = json!({ "data_path": "/data", "extra_folders": "/mnt/a\n/mnt/b\n/mnt/c", "cache_path": "/c" });
         st.take_values(newer.clone(), SECTIONS);
-        assert_eq!(st.save_body(&newer, card)["library_extra_roots"], "/mnt/a\n/mnt/b\n/mnt/c");
+        assert_eq!(st.save_body(&newer, card)["extra_folders"], "/mnt/a\n/mnt/b\n/mnt/c");
         // what was typed stays until it is saved
-        st.areas.insert("library_extra_roots".into(), text_editor::Content::with_text("/x"));
-        st.typed.insert("library_extra_roots".into());
+        st.areas.insert("extra_folders".into(), text_editor::Content::with_text("/x"));
+        st.typed.insert("extra_folders".into());
         st.take_values(newer.clone(), SECTIONS);
-        assert_eq!(st.save_body(&newer, card)["library_extra_roots"], "/x");
+        assert_eq!(st.save_body(&newer, card)["extra_folders"], "/x");
         st.values = Some(newer.clone());
         st.settle(card);
-        assert_eq!(st.areas["library_extra_roots"].text().trim(), "/mnt/a\n/mnt/b\n/mnt/c");
+        assert_eq!(st.areas["extra_folders"].text().trim(), "/mnt/a\n/mnt/b\n/mnt/c");
         // a secret one still starts empty and is left out until something is pasted
-        let wg = json!({ "vpn_wireguard_config": "•••• (saved)" });
+        let key = json!({ "backup_ssh_key": "•••• (saved)" });
         let mut st = Form::new();
-        st.take_values(wg.clone(), SECTIONS);
-        assert!(st.save_body(&wg, super::tests::card("slskd")).get("vpn_wireguard_config").is_none());
-        st.areas.insert("vpn_wireguard_config".into(), text_editor::Content::with_text(" [Interface] "));
-        assert_eq!(st.save_body(&wg, super::tests::card("slskd"))["vpn_wireguard_config"], "[Interface]");
+        st.take_values(key.clone(), SECTIONS);
+        assert!(st.save_body(&key, super::tests::card("backup")).get("backup_ssh_key").is_none());
+        st.areas.insert("backup_ssh_key".into(), text_editor::Content::with_text(" -----BEGIN KEY----- "));
+        assert_eq!(st.save_body(&key, super::tests::card("backup"))["backup_ssh_key"], "-----BEGIN KEY-----");
     }
 
     #[test]
     fn the_save_body_follows_the_web_rules() {
         let values = json!({
-            "app_name": "Encore", "base_url": "http://x", "auto_approve": 1, "github_token": "•••• (saved)", "signup_mode": "invite",
-            "musicbrainz_rate": 1.5,
-            "_meta": { "base_url": { "source": "env", "env": "ENCORE_BASE_URL" } }
+            "app_name": "Demo", "base_url": "http://x", "auto_approve": 1, "api_token": "•••• (saved)", "signup_mode": "invite",
+            "rate_limit": 1.5,
+            "_meta": { "base_url": { "source": "env", "env": "DEMO_BASE_URL" } }
         });
         let mut st = Form::new();
         st.edits.insert("app_name".into(), "Mine".into());
@@ -1336,42 +1339,42 @@ mod tests {
         assert_eq!(b["app_name"], "Mine");
         assert_eq!(b["auto_approve"], false);
         assert_eq!(b["signup_mode"], "invite");
-        assert_eq!(b["musicbrainz_rate"], "1.5", "numbers go as the text the input shows");
+        assert_eq!(b["rate_limit"], "1.5", "numbers go as the text the input shows");
         assert!(b.get("base_url").is_none(), "locked by the environment");
-        assert!(b.get("github_token").is_none(), "nothing typed keeps the saved secret");
+        assert!(b.get("api_token").is_none(), "nothing typed keeps the saved secret");
         assert!(b.get("session_days").is_none(), "the server does not have it");
-        st.edits.insert("github_token".into(), " tok ".into());
-        assert_eq!(st.save_body(&values, card)["github_token"], "tok");
+        st.edits.insert("api_token".into(), " tok ".into());
+        assert_eq!(st.save_body(&values, card)["api_token"], "tok");
         // a secret shown from the server is not sent back
-        st.revealed.insert("github_token".into());
-        assert!(st.save_body(&values, card).get("github_token").is_none());
+        st.revealed.insert("api_token".into());
+        assert!(st.save_body(&values, card).get("api_token").is_none());
         // checks join the ticked options in the table's order and spelling
-        let values = json!({ "release_types": "album,ep", "release_skip": "" });
+        let values = json!({ "notify_events": "signup,login", "notify_skip": "" });
         let mut st = Form::new();
-        st.checks.insert("release_skip".into(), vec!["djmix".into(), "live".into()]);
-        let b = st.save_body(&values, super::tests::card("releases"));
-        assert_eq!(b["release_types"], "Album,EP");
-        assert_eq!(b["release_skip"], "Live,DJ-mix");
+        st.checks.insert("notify_skip".into(), vec!["autorenew".into(), "test".into()]);
+        let b = st.save_body(&values, super::tests::card("notify"));
+        assert_eq!(b["notify_events"], "Sign-up,Login");
+        assert_eq!(b["notify_skip"], "Test,Auto-renew");
     }
 
     #[test]
     fn when_rules_follow_the_select() {
-        let values = json!({ "torrent_client": "qbittorrent", "qbit_url": "", "transmission_url": "", "not_qbit": "" });
+        let values = json!({ "smtp_security": "starttls", "starttls_port": "", "tls_port": "", "other_port": "" });
         let mut st = Form::new();
-        let t = card("torznab");
-        let (qbit, tr, not) = (get(t, "qbit_url"), get(t, "transmission_url"), get(t, "not_qbit"));
-        assert!(st.visible(&values, qbit) && !st.visible(&values, tr) && !st.visible(&values, not));
-        st.edits.insert("torrent_client".into(), "transmission".into());
-        assert!(!st.visible(&values, qbit) && st.visible(&values, tr) && st.visible(&values, not));
+        let t = card("email");
+        let (starttls, tls, not) = (get(t, "starttls_port"), get(t, "tls_port"), get(t, "other_port"));
+        assert!(st.visible(&values, starttls) && !st.visible(&values, tls) && !st.visible(&values, not));
+        st.edits.insert("smtp_security".into(), "tls".into());
+        assert!(!st.visible(&values, starttls) && st.visible(&values, tls) && st.visible(&values, not));
         // only the fields the server has and whose rule holds are drawn
         st.values = Some(values);
         let keys: Vec<&str> = st.visible_fields(t).iter().map(|f| &*f.key).collect();
-        assert_eq!(keys, ["torrent_client", "transmission_url", "not_qbit"]);
+        assert_eq!(keys, ["smtp_security", "tls_port", "other_port"]);
         assert_eq!(
-            When::parse("nzb_client=sabnzbd"),
-            Some(When { key: "nzb_client".into(), values: Words::Owned(vec!["sabnzbd".into()]), not: false })
+            When::parse("smtp_security=tls"),
+            Some(When { key: "smtp_security".into(), values: Words::Owned(vec!["tls".into()]), not: false })
         );
-        assert!(When::parse("nzb_client!=blackhole").is_some_and(|w| w.not && w.holds("sabnzbd") && !w.holds("blackhole")));
+        assert!(When::parse("smtp_security!=none").is_some_and(|w| w.not && w.holds("tls") && !w.holds("none")));
         assert_eq!(When::parse("no rule"), None);
         assert_eq!(test_words(&json!({ "ok": true })), (true, "Connected".to_string()));
         assert_eq!(test_words(&json!({ "ok": false })), (false, "Failed".to_string()));
@@ -1381,13 +1384,13 @@ mod tests {
     #[test]
     fn the_first_card_the_server_has_starts_open() {
         let mut st = Form::new();
-        st.open(["general", "releases"], None);
-        st.update(Msg::Values(Ok(json!({ "release_types": "Album" }))), SECTIONS);
-        assert!(st.is_open("releases") && !st.is_open("general"));
+        st.open(["general", "notify"], None);
+        st.update(Msg::Values(Ok(json!({ "notify_events": "Sign-up" }))), SECTIONS);
+        assert!(st.is_open("notify") && !st.is_open("general"));
         // or the one a link asked for
-        st.open(["general", "releases"], Some("general".into()));
-        st.update(Msg::Values(Ok(json!({ "release_types": "Album" }))), SECTIONS);
-        assert!(st.is_open("general") && !st.is_open("releases"));
+        st.open(["general", "notify"], Some("general".into()));
+        st.update(Msg::Values(Ok(json!({ "notify_events": "Sign-up" }))), SECTIONS);
+        assert!(st.is_open("general") && !st.is_open("notify"));
         st.update(Msg::Toggle("general".into()), SECTIONS);
         assert!(!st.is_open("general"));
         st.update(Msg::Values(Err("Server unreachable".into())), SECTIONS);
@@ -1396,7 +1399,7 @@ mod tests {
 
     #[test]
     fn the_update_says_what_the_app_does() {
-        let values = json!({ "app_name": "Encore", "github_token": "•••• (saved)", "torrent_client": "qbittorrent", "qbit_url": "", "qbit_password": "" });
+        let values = json!({ "app_name": "Demo", "api_token": "•••• (saved)", "smtp_security": "starttls", "starttls_port": "", "smtp_password": "" });
         let mut st = Form::new();
         st.open(["general"], None);
         st.update(Msg::Values(Ok(values)), SECTIONS);
@@ -1417,55 +1420,55 @@ mod tests {
         assert_eq!(st.current(st.values().unwrap(), "app_name"), "Mine", "the typed value settled");
         assert_eq!(st.update(Msg::Saved("general".into(), Err("no".into())), SECTIONS), [Out::ToastErr("no".into())]);
         // a test saves first, then runs
-        st.update(Msg::Values(Ok(json!({ "torrent_client": "qbittorrent", "qbit_url": "http://q" }))), SECTIONS);
-        let out = st.update(Msg::Test("torznab".into()), SECTIONS);
+        st.update(Msg::Values(Ok(json!({ "smtp_security": "starttls", "starttls_port": "587" }))), SECTIONS);
+        let out = st.update(Msg::Test("email".into()), SECTIONS);
         assert!(
-            matches!(&out[..], [Out::Test { card, test, body }] if card == "torznab" && test == "torznab" && body["qbit_url"] == "http://q")
+            matches!(&out[..], [Out::Test { card, test, body }] if card == "email" && test == "email" && body["starttls_port"] == "587")
         );
-        assert!(st.is_open("torznab") && st.is_busy("torznab"));
-        assert_eq!(st.flash("torznab"), [(true, "Testing…".to_string())]);
-        st.update(Msg::Tested("torznab".into(), Ok((json!({ "torrent_client": "qbittorrent" }), Err(String::new())))), SECTIONS);
-        assert_eq!(st.flash("torznab"), [(false, "Test failed".to_string())]);
+        assert!(st.is_open("email") && st.is_busy("email"));
+        assert_eq!(st.flash("email"), [(true, "Testing…".to_string())]);
+        st.update(Msg::Tested("email".into(), Ok((json!({ "smtp_security": "starttls" }), Err(String::new())))), SECTIONS);
+        assert_eq!(st.flash("email"), [(false, "Test failed".to_string())]);
         st.update(
             Msg::Tested(
-                "torznab".into(),
-                Ok((json!({ "torrent_client": "qbittorrent" }), Ok(json!({ "ok": true, "message": "qBittorrent 5.0" })))),
+                "email".into(),
+                Ok((json!({ "smtp_security": "starttls" }), Ok(json!({ "ok": true, "message": "SMTP 220 ready" })))),
             ),
             SECTIONS,
         );
-        assert_eq!(st.flash("torznab"), [(true, "qBittorrent 5.0".to_string())]);
-        st.update(Msg::Tested("torznab".into(), Err("Not saved".into())), SECTIONS);
-        assert_eq!(st.flash("torznab"), [(false, "Not saved".to_string())]);
+        assert_eq!(st.flash("email"), [(true, "SMTP 220 ready".to_string())]);
+        st.update(Msg::Tested("email".into(), Err("Not saved".into())), SECTIONS);
+        assert_eq!(st.flash("email"), [(false, "Not saved".to_string())]);
         assert!(st.update(Msg::Test("general".into()), SECTIONS).is_empty(), "a card with no test");
         assert!(st.update(Msg::Save("nowhere".into()), SECTIONS).is_empty());
         // secrets: shown from what was typed, else fetched
-        assert_eq!(st.update(Msg::Reveal("github_token".into()), SECTIONS), [Out::Reveal { key: "github_token".into() }]);
-        st.update(Msg::Revealed("github_token".into(), Ok(json!({ "value": "ghp_1" }))), SECTIONS);
-        assert!(st.shown.contains("github_token") && st.save_body(st.values().unwrap(), card("general")).get("github_token").is_none());
-        st.update(Msg::Hide("github_token".into()), SECTIONS);
-        assert!(!st.edits.contains_key("github_token"), "a fetched secret is forgotten when hidden");
-        st.update(Msg::Edit("qbit_password".into(), "pw".into()), SECTIONS);
-        assert!(st.update(Msg::Reveal("qbit_password".into()), SECTIONS).is_empty());
+        assert_eq!(st.update(Msg::Reveal("api_token".into()), SECTIONS), [Out::Reveal { key: "api_token".into() }]);
+        st.update(Msg::Revealed("api_token".into(), Ok(json!({ "value": "tok_1" }))), SECTIONS);
+        assert!(st.shown.contains("api_token") && st.save_body(st.values().unwrap(), card("general")).get("api_token").is_none());
+        st.update(Msg::Hide("api_token".into()), SECTIONS);
+        assert!(!st.edits.contains_key("api_token"), "a fetched secret is forgotten when hidden");
+        st.update(Msg::Edit("smtp_password".into(), "pw".into()), SECTIONS);
+        assert!(st.update(Msg::Reveal("smtp_password".into()), SECTIONS).is_empty());
         assert_eq!(
-            st.update(Msg::Copy("qbit_password".into()), SECTIONS),
+            st.update(Msg::Copy("smtp_password".into()), SECTIONS),
             [Out::Copy("pw".into()), Out::ToastOk("Copied to clipboard".into())]
         );
-        assert_eq!(st.update(Msg::Copy("github_token".into()), SECTIONS), [Out::CopySecret { key: "github_token".into() }]);
+        assert_eq!(st.update(Msg::Copy("api_token".into()), SECTIONS), [Out::CopySecret { key: "api_token".into() }]);
         assert_eq!(
-            st.update(Msg::Copied(Ok(json!({ "value": "ghp_1" }))), SECTIONS),
-            [Out::Copy("ghp_1".into()), Out::ToastOk("Copied to clipboard".into())]
+            st.update(Msg::Copied(Ok(json!({ "value": "tok_1" }))), SECTIONS),
+            [Out::Copy("tok_1".into()), Out::ToastOk("Copied to clipboard".into())]
         );
         assert_eq!(st.update(Msg::Revealed("x".into(), Err("Owner only".into())), SECTIONS), [Out::ToastErr("Owner only".into())]);
         let mut body = Map::new();
-        body.insert("github_token".into(), json!(""));
-        assert_eq!(st.update(Msg::Clear("github_token".into()), SECTIONS), [Out::Clear { key: "github_token".into(), body }]);
-        assert_eq!(st.update(Msg::Cleared(Ok(json!({ "github_token": "" }))), SECTIONS), [Out::ToastOk("Cleared".into())]);
+        body.insert("api_token".into(), json!(""));
+        assert_eq!(st.update(Msg::Clear("api_token".into()), SECTIONS), [Out::Clear { key: "api_token".into(), body }]);
+        assert_eq!(st.update(Msg::Cleared(Ok(json!({ "api_token": "" }))), SECTIONS), [Out::ToastOk("Cleared".into())]);
         assert_eq!(st.update(Msg::CopyText("why".into()), SECTIONS), [Out::CopyText("why".into())]);
         // check boxes keep the ticked keys
-        st.update(Msg::Values(Ok(json!({ "release_types": "Album" }))), SECTIONS);
-        st.update(Msg::Check("release_types".into(), "EP".into(), true), SECTIONS);
-        st.update(Msg::Check("release_types".into(), "Album".into(), false), SECTIONS);
-        assert_eq!(st.checked(st.values().unwrap(), "release_types"), ["ep"]);
+        st.update(Msg::Values(Ok(json!({ "notify_events": "Sign-up" }))), SECTIONS);
+        st.update(Msg::Check("notify_events".into(), "Login".into(), true), SECTIONS);
+        st.update(Msg::Check("notify_events".into(), "Sign-up".into(), false), SECTIONS);
+        assert_eq!(st.checked(st.values().unwrap(), "notify_events"), ["login"]);
     }
 
     #[test]
@@ -1474,43 +1477,43 @@ mod tests {
             { "id": "general", "title": "General", "aliases": [], "groups": [
                 { "id": "general", "title": "General", "part": "", "desc": "Your server.", "test": null, "test_label": null, "fields": [
                     { "key": "app_name", "label": "App name", "help": null, "type": "text", "options": [], "when": null, "secret": false,
-                      "env": "APP_NAME", "env_locked": false, "default": "Encore", "unit": null, "min": null, "max": null, "step": null, "full": false, "advanced": false },
-                    { "key": "musicbrainz_rate", "label": "MusicBrainz requests / second", "help": "Keep at 1", "type": "number", "options": [], "when": null,
+                      "env": "DEMO_APP_NAME", "env_locked": false, "default": "Demo", "unit": null, "min": null, "max": null, "step": null, "full": false, "advanced": false },
+                    { "key": "rate_limit", "label": "Requests / second", "help": "Keep at 1", "type": "number", "options": [], "when": null,
                       "secret": false, "step": 0.1, "full": false }
                 ] }
             ] },
-            { "id": "downloads", "title": "Downloads", "aliases": ["apps"], "groups": [
-                { "id": "torznab", "title": "Torrents & Usenet (Prowlarr)", "part": "", "desc": "", "test": "torznab", "test_label": "Test connection", "fields": [
-                    { "key": "streamrip_quality", "label": "Max quality", "type": "select", "options": [{ "value": "1", "label": "MP3 320 / AAC" }, { "value": "2", "label": "CD – 16-bit FLAC" }] },
-                    { "key": "qbit_password", "label": "qBittorrent password", "help": null, "type": "password", "options": [], "when": "torrent_client=qbittorrent", "secret": true, "full": false }
+            { "id": "notifications", "title": "Notifications", "aliases": ["mail"], "groups": [
+                { "id": "email", "title": "Email", "part": "", "desc": "", "test": "email", "test_label": "Test connection", "fields": [
+                    { "key": "email_format", "label": "Format", "type": "select", "options": [{ "value": "1", "label": "Plain text" }, { "value": "2", "label": "HTML – with images" }] },
+                    { "key": "smtp_password", "label": "SMTP password", "help": null, "type": "password", "options": [], "when": "smtp_security=starttls", "secret": true, "full": false }
                 ] }
             ] },
             { "id": "blocked", "title": "Blocked", "aliases": [], "groups": [] }
         ] });
         let schema = Schema::from_json(&answer).unwrap();
         assert_eq!(schema.sections.len(), 3);
-        assert_eq!(schema.find("apps").unwrap().id, "downloads");
-        assert_eq!(schema.find("torznab").unwrap().id, "downloads");
+        assert_eq!(schema.find("mail").unwrap().id, "notifications");
+        assert_eq!(schema.find("email").unwrap().id, "notifications");
         assert_eq!(schema.find("general").unwrap().id, "general");
         assert!(schema.find("nowhere").is_none());
         assert!(schema.sections[2].cards.is_empty());
         let rate = &schema.card("general").unwrap().fields[1];
         assert_eq!((rate.step.as_deref(), rate.help.as_deref()), (Some("0.1"), Some("Keep at 1")));
-        let t = schema.card("torznab").unwrap();
-        assert_eq!(t.test.as_deref(), Some("torznab"));
+        let t = schema.card("email").unwrap();
+        assert_eq!(t.test.as_deref(), Some("email"));
         assert_eq!(t.test_words(), "Test connection");
-        assert_eq!(t.fields[0].options.iter().collect::<Vec<_>>(), [("1", "MP3 320 / AAC"), ("2", "CD – 16-bit FLAC")]);
+        assert_eq!(t.fields[0].options.iter().collect::<Vec<_>>(), [("1", "Plain text"), ("2", "HTML – with images")]);
         let pw = &t.fields[1];
-        assert!(pw.is_secret() && pw.when == When::parse("torrent_client=qbittorrent"));
+        assert!(pw.is_secret() && pw.when == When::parse("smtp_security=starttls"));
         assert_eq!(schema.sections[1].parts().len(), 1);
         assert_eq!(schema.cards().count(), 2);
         // the form runs on the schema's cards as on a table
         let mut st = Form::new();
         st.open(schema.sections[1].cards.iter().map(|c| c.id.to_string()), None);
-        st.update(Msg::Values(Ok(json!({ "streamrip_quality": 2, "qbit_password": "" }))), schema.cards());
-        assert!(st.is_open("torznab"));
-        let out = st.update(Msg::Save("torznab".into()), schema.cards());
-        assert!(matches!(&out[..], [Out::Save { body, .. }] if body["streamrip_quality"] == "2" && !body.contains_key("qbit_password")));
+        st.update(Msg::Values(Ok(json!({ "email_format": 2, "smtp_password": "" }))), schema.cards());
+        assert!(st.is_open("email"));
+        let out = st.update(Msg::Save("email".into()), schema.cards());
+        assert!(matches!(&out[..], [Out::Save { body, .. }] if body["email_format"] == "2" && !body.contains_key("smtp_password")));
         // what does not fit says so
         assert_eq!(Schema::from_json(&json!({})), Err("The settings schema has no sections".into()));
         let bad = json!({ "sections": [{ "id": "x", "groups": [{ "id": "c", "fields": [{ "key": "k", "label": "K", "type": "text", "when": "nope" }] }] }] });
@@ -1518,12 +1521,12 @@ mod tests {
     }
 
     #[test]
-    fn notes_and_values_read_like_encore() {
-        let values = json!({ "_meta": { "base_url": { "source": "env", "env": "ENCORE_BASE_URL" } } });
+    fn notes_and_values_read_as_the_server_sends_them() {
+        let values = json!({ "_meta": { "base_url": { "source": "env", "env": "DEMO_BASE_URL" } } });
         assert!(env_locked(&values, "base_url") && !env_locked(&values, "app_name"));
         assert_eq!(
             env_note(&values, "base_url").as_deref(),
-            Some("🔒 Set by ENCORE_BASE_URL in your compose/env – change it there (environment always wins)")
+            Some("🔒 Set by DEMO_BASE_URL in your compose/env – change it there (environment always wins)")
         );
         assert!(is_masked("•••• (saved)") && !is_masked("tok"));
         assert_eq!(vs(&json!(2)), "2");
@@ -1534,13 +1537,13 @@ mod tests {
 
     #[test]
     fn the_card_draws() {
-        let mut st = Form::new().never_shown(["vpn_wireguard_config"]);
-        st.open(["general", "slskd"], None);
-        st.update(Msg::Values(Ok(json!({ "app_name": "Encore", "signup_mode": "open", "auto_approve": true, "github_token": "•••• (saved)", "vpn_wireguard_config": "•••• (saved)" }))), SECTIONS);
-        st.update(Msg::Toggle("slskd".into()), SECTIONS);
+        let mut st = Form::new().never_shown(["backup_ssh_key"]);
+        st.open(["general", "backup"], None);
+        st.update(Msg::Values(Ok(json!({ "app_name": "Demo", "signup_mode": "open", "auto_approve": true, "api_token": "•••• (saved)", "backup_ssh_key": "•••• (saved)" }))), SECTIONS);
+        st.update(Msg::Toggle("backup".into()), SECTIONS);
         for c in SECTIONS {
             let _: El<'_, Msg> = st.card_view(c, true, std::convert::identity, Slots::default());
         }
-        let _: El<'_, Msg> = part_heading("Download sources");
+        let _: El<'_, Msg> = part_heading("Services");
     }
 }
