@@ -135,3 +135,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · Template releases: kit-desktop's `package` command calls `scripts/desktop-package.sh --release "$RELEASE"` (a release builds the app as its version); `--stamp` stays for the kit's own check.
 - 2026-11-04 · Template web: `index.html` sets no `data-theme`, since the default look is the tokens' `:root`; `dark`, `oled` and `light` are the only `data-theme` values.
 - 2026-11-04 · Template web: Sign out asks first (`kit_leptos::modal::confirm`, danger), the template's one confirm dialog on every platform; the web's text says "This browser" where the desktop's says "This computer".
+- 2026-11-04 · The `--player`/`--player-h` tokens keep their names (apps' stylesheets use them); they are documented as the room for a bar along the bottom, 0 by default.

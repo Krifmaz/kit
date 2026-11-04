@@ -5,6 +5,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- No app's words in the kit's comments and data (first pass): the template web's `app.css` keeps only the rules its
+  pages and kit-leptos draw (the copied player, lyrics, library, request and group listening rules are gone);
+  kit-iced and kit-tokens doc comments and package descriptions no longer name an app or a media player.
 - `crates/kit-rules` and `crates/kit-leptos` are neutral and configured per app: no Encore names, music concepts,
   routes or words. kit-rules gains `app::App { id, name, version }` (the id prefixes storage keys, events and
   service worker names) and a `Words` struct with the kit's `DEFAULT` per module (`ToastWords`, `DialogWords`,
