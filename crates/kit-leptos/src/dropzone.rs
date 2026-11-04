@@ -1,13 +1,4 @@
 //! Drag and drop for every file upload: one set of listeners on the document turns any upload into a drop place.
-//!
-//! From Encore's `web-rs/src/dropzone.rs`. A drop place ("zone") is an element marked `data-dropzone` (its value
-//! is the `id` of the file input it feeds, or empty for the first `input[type=file]` inside it; [`DropZone`]
-//! draws one), or a `<label>` that holds a file input. A drop goes through the input itself: the files are
-//! checked against its `accept` like the browser's chooser (kit-rules' [`choose`]), only the first is kept unless
-//! it has `multiple`, they are put in `input.files` and a bubbling `change` fires, so a dropped file takes the
-//! same path as a picked one. While files are dragged over the window every zone shows `drop-ready`, the one
-//! under the pointer `drop-over`; files dropped anywhere else are swallowed, so a missed drop never opens the
-//! file in the tab. Pages with their own drop handling call `preventDefault()` first and are left alone.
 
 use crate::toasts::show;
 use js_sys::{Array, Reflect};
@@ -21,8 +12,7 @@ fn get(o: &JsValue, k: &str) -> JsValue {
     Reflect::get(o, &JsValue::from_str(k)).unwrap_or(JsValue::UNDEFINED)
 }
 
-/// Whether a drag carries files from the computer (not text or a link from the page). From `dropzone.rs`
-/// `has_files`.
+/// Whether a drag carries files from the computer (not text or a link from the page).
 pub fn has_files(e: &Event) -> bool {
     let types = get(&get(e.as_ref(), "dataTransfer"), "types");
     if types.is_undefined() || types.is_null() {
@@ -38,7 +28,7 @@ fn set_drop_effect(e: &Event, effect: &str) {
     }
 }
 
-/// The zone an element sits in, with the input it feeds. From `dropzone.rs` `zone_of`.
+/// The zone an element sits in, with the input it feeds.
 fn zone_of(start: &Element) -> Option<(Element, HtmlInputElement)> {
     let mut el = Some(start.clone());
     while let Some(cur) = el {
@@ -142,7 +132,7 @@ fn drop_on(input: &HtmlInputElement, files: Vec<File>) {
 }
 
 /// Starts drag and drop for the whole app (once, at start-up). The listeners sit on the document for the whole
-/// session, so zones drawn later work without any setup. From `dropzone.rs` `init`.
+/// session, so zones drawn later work without any setup.
 pub fn init() {
     crate::rt::on_document("dragenter", |e| {
         if !has_files(e) {
@@ -233,8 +223,8 @@ mod tests {
 
     #[test]
     fn a_zone_names_its_input() {
-        let html = render(|| view! { <DropZone input="bk-upload" class="card flat"><p>"x"</p></DropZone> });
-        assert_same_html(&html, r#"<div class="card flat" data-dropzone="bk-upload"><p>x</p></div>"#);
+        let html = render(|| view! { <DropZone input="report-files" class="card flat"><p>"x"</p></DropZone> });
+        assert_same_html(&html, r#"<div class="card flat" data-dropzone="report-files"><p>x</p></div>"#);
         let html = render(|| view! { <DropZone><input type="file"/></DropZone> });
         assert_same_html(&html, r#"<div class="" data-dropzone=""><input type="file"></div>"#);
     }

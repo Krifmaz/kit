@@ -38,7 +38,7 @@ pub fn project() -> &'static str {
 /// This page's web build: the hash in its script's name, `<project>-web-<hash>.js`.
 fn this_build() -> Option<String> {
     let head = rt::document()?.head()?.inner_html();
-    kit_rules::update::build_in(&head, project())
+    kit_rules::update::build_in(&head, NAME)
 }
 
 /// The connection banner (kit-leptos `offline::watch_connection`, with the project name for the events and
@@ -51,6 +51,20 @@ fn watch_connection(app: &str) {
     rt::on_window("online", |_| offline::conn_banner(false, ""));
     rt::on_window(&format!("{}:server-down", project()), move |_| offline::conn_banner(true, &down));
     rt::on_window(&format!("{}:server-up", project()), |_| offline::conn_banner(false, ""));
+}
+
+/// The kit's configuration for this app: its id and name, and the paths of this server's settings and
+/// diagnostics routes (the kit's components default to `/api/settings` and `/api/diagnostics`).
+fn kit_config(app: &str) -> kit_leptos::config::AppConfig {
+    let mut cfg = kit_leptos::config::AppConfig::new(kit_rules::app::App::new(project(), app));
+    cfg.script = NAME.to_string();
+    cfg.routes.changelog = "/settings?s=whats-new".into();
+    cfg.paths.diagnostics = "/system/diagnostics".into();
+    cfg.paths.test = "/system/test/{name}".into();
+    cfg.paths.settings = "/admin/settings".into();
+    cfg.paths.settings_schema = "/admin/settings/schema".into();
+    cfg.paths.settings_secret = "/admin/settings/secret/{key}".into();
+    cfg
 }
 
 /// The page the address names: its path (`/settings`) and query (`s=diagnostics`).
@@ -92,6 +106,7 @@ pub fn navigate(path: &str) {
 fn main() {
     console_error();
     let app = app_name();
+    kit_leptos::config::set(kit_config(&app));
     api::set_backend(HttpBackend::new(project()));
     toasts::mount();
     details::init();

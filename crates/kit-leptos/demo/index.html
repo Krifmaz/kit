@@ -4,17 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>kit-leptos demo</title>
-  <!-- the kit's colour tokens (design/out/tokens.css), then Encore's rules (a copy, see encore-app.css) -->
+  <!-- the kit's design tokens (every theme), then the kit's stylesheet built on them -->
   <link data-trunk rel="css" href="../../../design/out/tokens.css">
-  <link data-trunk rel="css" href="encore-app.css">
+  <link data-trunk rel="css" href="../style/kit.css">
   <link data-trunk rel="rust" data-wasm-opt="z" data-bin="kit-leptos-demo">
   <style>
     #demo { max-width: 1100px; margin: 0 auto; padding: 24px 16px 120px; }
-    #demo > section { margin-top: 28px; }
+    #demo > section { margin-top: 32px; }
+    #demo > section > h2 { margin-bottom: 12px; }
+    #server-notice { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+    #server-notice:not(:empty) { padding-top: 16px; }
+    body:has(> #offline-banner) { padding-top: 40px; }
+    .demo-head { margin-bottom: 8px; }
+    #kit-check { margin: 12px 0 0; }
   </style>
 </head>
 <body>
-  <!-- Encore's shell: the notice slot, the app, the toasts and the dialogs (web-rs/index.html) -->
+  <!-- the shell: the notice slot, the app, the toasts and the dialogs -->
   <div id="server-notice"></div>
   <div id="demo"></div>
   <div id="toasts"></div>

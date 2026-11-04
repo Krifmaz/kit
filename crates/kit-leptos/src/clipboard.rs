@@ -1,19 +1,17 @@
-//! Copy to the clipboard, with Encore's fallback for a server reached over plain http.
+//! Copy to the clipboard, with a fallback for a server reached over plain http (no clipboard API there).
 //!
-//! From Encore's `web-rs/src/ui.rs` (`copy_text`, `copy_then`, `copy_done`, `copy_by_selection`): the clipboard
-//! API where the page may use it (https or localhost); otherwise – a server on the home network reached over
-//! plain http has no `navigator.clipboard` – the text is selected in a hidden box and copied the old way. The
-//! toast says which way it went ([`COPIED`], or [`COPY_FAILED`]).
+//! The toasts say the configured words ([`ToastWords::copied`](kit_rules::toasts::ToastWords::copied) and
+//! [`ToastWords::copy_failed`](kit_rules::toasts::ToastWords::copy_failed)).
 
 use crate::toasts::show;
-use kit_rules::toasts::{copy_toast, COPIED};
+use kit_rules::toasts::ToastKind;
 use wasm_bindgen::JsCast;
 
 pub use kit_rules::toasts::COPY_FAILED;
 
 /// Copies `t` and says so ("Copied to clipboard").
 pub fn copy_text(t: &str) {
-    copy_then(t, COPIED);
+    copy_then(t, crate::config::get().words.toasts.copied);
 }
 
 /// [`copy_text`] with `copied` as the toast when it worked (a share link says what the link does instead).
@@ -34,8 +32,11 @@ pub fn copy_then(t: &str, copied: &str) {
 }
 
 fn done(ok: bool, copied: &str) {
-    let (msg, kind) = copy_toast(ok, copied);
-    show(msg, kind);
+    if ok {
+        show(copied, ToastKind::Ok);
+    } else {
+        show(crate::config::get().words.toasts.copy_failed, ToastKind::Err);
+    }
 }
 
 /// The old way: the text in an off-screen box, selected, `document.execCommand('copy')`. Inside an open dialog,

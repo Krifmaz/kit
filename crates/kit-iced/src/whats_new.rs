@@ -313,6 +313,6 @@ mod tests {
     fn the_words_name_the_app() {
         assert_eq!(saved_words(true), "What's new will show after updates");
         assert_eq!(saved_words(false), "What's new won't show after updates – it stays in Settings");
-        assert!(runs_words("Demo", "0.40.1").contains("Demo 0.40.1"));
+        assert_eq!(runs_words("Demo", "0.40.1"), "This is Demo 0.40.1. After an update, a short list of what changed shows once.");
     }
 }

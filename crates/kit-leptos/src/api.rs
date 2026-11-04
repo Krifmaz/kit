@@ -1,10 +1,10 @@
 //! The calls the components make to the server, through one replaceable [`Backend`].
 //!
-//! The default, [`HttpBackend`], is Encore's `web-rs/src/api.rs`: `fetch('/api' + path)` with the session
-//! cookie and `X-Requested-With: <app>`, JSON in and out, the server's sentence (`detail`) as the error, "Not
-//! connected to the server" when it can't be reached, and the window events `<app>:server-down`,
-//! `<app>:server-up` and `<app>:unauthorized` the shell listens for. An app with its own API client (Encore keeps
-//! its `api.rs`) passes it in with [`set_backend`]; the demo passes a fake one, so no server is needed.
+//! The default, [`HttpBackend`], is a `fetch` client for the configured app ([`crate::config`]):
+//! `fetch(<api> + path)` with the session cookie and `X-Requested-With: <app id>`, JSON in and out, the server's
+//! sentence (`detail`) as the error, "Not connected to the server" when it can't be reached, and the window
+//! events `<id>:server-down`, `<id>:server-up` and `<id>:unauthorized` the shell listens for. An app with its own
+//! API client passes it in with [`set_backend`]; the demo passes a fake one, so no server is needed.
 
 use serde_json::Value;
 use std::cell::RefCell;
@@ -43,7 +43,7 @@ impl std::fmt::Display for ApiError {
 
 impl std::error::Error for ApiError {}
 
-/// What a failed call says when the server could not be reached. From `api.rs` `NOT_CONNECTED`.
+/// What a failed call says when the server could not be reached.
 pub const NOT_CONNECTED: &str = "Not connected to the server";
 
 /// The server the components talk to. Paths are relative to `/api` (`/changelog/new`).
@@ -55,16 +55,17 @@ pub trait Backend {
 }
 
 thread_local! {
-    static BACKEND: RefCell<Rc<dyn Backend>> = RefCell::new(Rc::new(HttpBackend::new("Encore")));
+    static BACKEND: RefCell<Option<Rc<dyn Backend>>> = const { RefCell::new(None) };
 }
 
-/// Uses `b` for every call from here on (Encore's own `api.rs`, or a fake one in a demo).
+/// Uses `b` for every call from here on (the app's own client, or a fake one in a demo). Until one is set, the
+/// calls go through [`HttpBackend::from_config`].
 pub fn set_backend(b: impl Backend + 'static) {
-    BACKEND.with(|x| *x.borrow_mut() = Rc::new(b));
+    BACKEND.with(|x| *x.borrow_mut() = Some(Rc::new(b)));
 }
 
 fn backend() -> Rc<dyn Backend> {
-    BACKEND.with(|b| b.borrow().clone())
+    BACKEND.with(|b| b.borrow().clone()).unwrap_or_else(|| Rc::new(HttpBackend::from_config()))
 }
 
 /// `GET /api<path>`.
@@ -77,7 +78,7 @@ pub async fn post(path: &str, body: Value) -> ApiResult {
     backend().call("POST", path, Some(body)).await
 }
 
-/// `POST /api<path>` with the empty body `{}` (Encore's `post_empty`).
+/// `POST /api<path>` with the empty body `{}`.
 pub async fn post_empty(path: &str) -> ApiResult {
     backend().call("POST", path, Some(serde_json::json!({}))).await
 }
@@ -97,19 +98,33 @@ pub async fn post_form(path: &str, form: web_sys::FormData) -> ApiResult {
     backend().post_form(path, form).await
 }
 
-/// Encore's `fetch` client (`web-rs/src/api.rs`), for an app named `app`.
+/// The `fetch` client for one app.
 #[derive(Clone, Debug)]
 pub struct HttpBackend {
-    /// The app's name in lower case: the `X-Requested-With` header and the events' prefix.
+    /// The app's id in lower case: the `X-Requested-With` header and the events' prefix.
     app: String,
     /// The prefix of every path (`/api`).
     base: String,
 }
 
 impl HttpBackend {
-    /// The client for `app` ("Encore": `X-Requested-With: encore`, `encore:server-down`, …), under `/api`.
+    /// The client for the app with id `app` (`kit-demo`: `X-Requested-With: kit-demo`, `kit-demo:server-down`,
+    /// …), under `/api`.
     pub fn new(app: &str) -> Self {
         HttpBackend { app: app.to_ascii_lowercase(), base: "/api".into() }
+    }
+
+    /// The client for the configured app ([`crate::config::get`]): its id, under its [`api`](crate::config::Paths::api)
+    /// prefix.
+    pub fn from_config() -> Self {
+        let c = crate::config::get();
+        HttpBackend { app: c.app.id.to_ascii_lowercase(), base: c.paths.api.clone() }
+    }
+
+    /// The same client under another prefix (`/v1`).
+    pub fn with_base(mut self, base: &str) -> Self {
+        self.base = base.to_string();
+        self
     }
 
     fn event(&self, what: &str) {
@@ -117,15 +132,15 @@ impl HttpBackend {
     }
 }
 
-/// Whether an answer came from something in front of the server, not the server: Encore marks its answers with
-/// `x-<app>` and sends its errors as JSON objects, a proxy in front of a server that is down answers with its
-/// own page. From `api.rs` `proxy_answer`.
+/// Whether an answer came from something in front of the server, not the server: a kit server marks its answers
+/// with `x-<app id>` and sends its errors as JSON objects, a proxy in front of a server that is down answers with
+/// its own page.
 pub fn proxy_answer(status: u16, marked: bool, body: &str) -> bool {
     (status == 404 || status >= 500) && !marked && !serde_json::from_str::<Value>(body).is_ok_and(|v| v.is_object())
 }
 
 /// The sentence of a failed answer: the server's `detail` (a string, or the `msg` of each entry), else the
-/// status text, else "Request failed". From `api.rs` `answer`.
+/// status text, else "Request failed".
 pub fn error_message(data: &Value, status_text: &str) -> String {
     let msg = match data.get("detail") {
         Some(Value::String(s)) => s.clone(),
@@ -223,7 +238,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn errors_read_like_encores() {
+    fn errors_read_as_the_servers_sentence() {
         assert_eq!(error_message(&json!({ "detail": "No such report" }), "Not Found"), "No such report");
         assert_eq!(error_message(&json!({ "detail": [{ "msg": "a" }, { "msg": "b" }] }), ""), "a, b");
         assert_eq!(error_message(&Value::Null, "Bad Gateway"), "Bad Gateway");
@@ -232,5 +247,13 @@ mod tests {
         assert!(!proxy_answer(502, true, "<html>"));
         assert!(!proxy_answer(500, false, r#"{"detail":"x"}"#));
         assert!(!proxy_answer(400, false, "<html>"));
+    }
+
+    #[test]
+    fn the_default_client_is_the_configured_app() {
+        let b = HttpBackend::from_config();
+        assert_eq!((b.app.as_str(), b.base.as_str()), ("app", "/api"));
+        let b = HttpBackend::new("Kit-Demo").with_base("/v1");
+        assert_eq!((b.app.as_str(), b.base.as_str()), ("kit-demo", "/v1"));
     }
 }

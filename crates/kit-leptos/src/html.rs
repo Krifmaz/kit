@@ -1,9 +1,7 @@
-//! HTML escaping, for the components that keep Encore's HTML strings (a modal's title and body, the markup
-//! of hand-written pages) and for the markup tests.
-//!
-//! From Encore's `web-rs/src/ui.rs` `esc`.
+//! HTML escaping, for the components that take HTML strings (a modal's title and body, the markup of an app's
+//! hand-written pages) and for the markup tests.
 
-/// HTML-escape `s` the way Encore's `esc` does (`&`, `<`, `>`, `"` and `'`).
+/// HTML-escape `s` (`&`, `<`, `>`, `"` and `'`).
 pub fn esc(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
@@ -28,7 +26,7 @@ pub fn html<T: leptos::tachys::html::element::InnerHtmlValue>(s: T) -> leptos::t
 
 /// An HTML fragment drawn as it is, without a wrapper element and without a placeholder comment: the nodes
 /// `innerHTML` would make of `s` (elements, text, the whitespace between them), mounted where the view stands.
-/// An app's own HTML builders (Encore's hand-written blocks) go into a component this way, node for node.
+/// An app's own HTML builders go into a component this way, node for node.
 /// An empty string is one empty text node, which adds nothing to `outerHTML`.
 pub fn raw(s: impl Into<String>) -> RawHtml {
     RawHtml(s.into())
@@ -181,7 +179,7 @@ pub fn seq<V: leptos::prelude::IntoView + 'static>(items: impl IntoIterator<Item
 }
 
 /// An optional part: the view, or an empty text node (an `Option` that is `None` leaves an empty `<!---->`
-/// placeholder, which Encore's HTML does not have).
+/// placeholder, which hand-written HTML does not have).
 pub fn opt<V: leptos::prelude::IntoView + 'static>(v: Option<V>) -> leptos::prelude::AnyView {
     use leptos::prelude::IntoAny;
     match v {
@@ -193,7 +191,7 @@ pub fn opt<V: leptos::prelude::IntoView + 'static>(v: Option<V>) -> leptos::prel
 #[cfg(test)]
 mod tests {
     #[test]
-    fn escapes_like_encore() {
+    fn escapes_the_five_characters() {
         assert_eq!(super::esc(r#"a<b> & "c" 'd'"#), "a&lt;b&gt; &amp; &quot;c&quot; &#39;d&#39;");
     }
 
