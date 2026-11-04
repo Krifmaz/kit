@@ -74,7 +74,7 @@ async fn signing_in_gives_a_session_that_needs_the_csrf_header() {
     // a change through the cookie without X-Requested-With is refused, as in Encore
     let seen = |csrf: bool| {
         let b = Request::post("/api/changelog/seen").header(header::COOKIE, &cookie);
-        let b = if csrf { b.header("x-requested-with", server::NAME) } else { b };
+        let b = if csrf { b.header("x-requested-with", server::TITLE.to_ascii_lowercase()) } else { b };
         b.body(Body::empty()).unwrap()
     };
     let (s, v, _) = call(&app, seen(false)).await;
@@ -205,4 +205,32 @@ async fn the_health_check_command_asks_a_running_server() {
     let nobody = free.local_addr().unwrap().port();
     drop(free);
     assert!(!server::healthcheck(nobody).await);
+}
+
+#[tokio::test]
+async fn a_phone_signs_in_with_an_app_token_and_keeps_its_prefs() {
+    let (app, _, _) = server("apptoken");
+    let body = json!({ "username": "admin", "password": PASSWORD, "app": { "device_id": "phone-1", "device_name": "Pixel 8" } });
+    let req = Request::post("/api/auth/login").header(header::CONTENT_TYPE, "application/json").body(Body::from(body.to_string())).unwrap();
+    let (s, v, h) = call(&app, req).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    assert!(h.get(header::SET_COOKIE).is_none(), "a phone gets a token, not a cookie");
+    let token = v["token"].as_str().unwrap().to_string();
+    assert_eq!(v["user"]["username"], "admin");
+    let auth = format!("Bearer {token}");
+    let with = |m: &str, path: &str, body: Option<Value>| {
+        let b = Request::builder().method(m).uri(path).header(header::AUTHORIZATION, &auth);
+        match body {
+            Some(v) => b.header(header::CONTENT_TYPE, "application/json").body(Body::from(v.to_string())).unwrap(),
+            None => b.body(Body::empty()).unwrap(),
+        }
+    };
+    let (s, v, _) = call(&app, with("PUT", "/api/auth/prefs", Some(json!({ "whats_new_popup": false })))).await;
+    assert_eq!((s, &v["whats_new_popup"]), (StatusCode::OK, &json!(false)));
+    let (_, v, _) = call(&app, with("GET", "/api/auth/prefs", None)).await;
+    assert_eq!(v, json!({ "whats_new_popup": false }));
+    let (s, _, _) = call(&app, with("POST", "/api/auth/logout", None)).await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _, _) = call(&app, with("GET", "/api/auth/me", None)).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
 }

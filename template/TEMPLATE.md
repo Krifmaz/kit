@@ -29,7 +29,8 @@ app (its `README.md` is the app's own).
 
 Without questions: `cargo generate krifmaz/kit template --name filebrary --define app_title=Filebrary --silent`.
 
-`hooks/init.rhai` derives `image` (`ghcr.io/<owner>/<name>`) and `android_package` (`dev.krifmaz.<crate>`).
+`hooks/init.rhai` derives `image` (`ghcr.io/<owner>/<name>`), `android_app` (the crate name without underscores),
+`android_package` (`dev.krifmaz.<android_app>`) and `app_file` (the title without spaces, for file names).
 
 ## How it is tested
 
@@ -40,7 +41,9 @@ image read-only and waits for its health check.
 
 ## Editing the template
 
-Rust, Kotlin and CSS files are copied as they are (`exclude` in `cargo-generate.toml`), so they carry no Liquid
-and build as normal code; names come from `env!("CARGO_PKG_NAME")` and the environment. Files that need the
-app's name (`Cargo.toml`, `Dockerfile`, workflows, `index.html`, Gradle files, docs) use Liquid; workflow lines
-with GitHub's own `${{ … }}` are wrapped in `{% raw %}`.
+Rust and CSS files (and the Gradle wrapper) are copied as they are (`exclude` in `cargo-generate.toml`), so they
+carry no Liquid and build as normal code; names come from `env!("CARGO_PKG_NAME")` and the environment. Files that
+need the app's name (`Cargo.toml`, `Dockerfile`, workflows, `index.html`, Gradle files, docs) use Liquid; workflow
+lines with GitHub's own `${{ … }}` are wrapped in `{% raw %}`. Kotlin files are templated too, for their package
+line (`package {{android_package}}`) and the benchmarks' package name; they must hold no other `{{` or `{%`. Their
+folders are `dev/krifmaz/{{android_app}}` (cargo-generate turns a `/` inside a placeholder into `_`).

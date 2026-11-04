@@ -2,8 +2,10 @@
 # The answers below become Liquid variables; hooks/init.rhai fills in the ones derived from the app's name.
 [template]
 cargo_generate_version = ">=0.23.0"
-# Files copied as they are: no Liquid in them (Rust, CSS and Kotlin use `{{`/`{%` of their own).
-exclude = ["web/static/**", "**/*.rs", "**/*.kt", "**/*.css"]
+# Files copied as they are: no Liquid in them (Rust and CSS use `{{`/`{%` of their own; the Gradle wrapper is
+# generated). Kotlin files are templated: they need the app's package (`package dev.krifmaz.<crate>`), so they
+# must not contain `{{` or `{%` anywhere else.
+exclude = ["web/static/**", "**/*.rs", "**/*.css", "android/gradlew", "android/gradlew.bat", "android/gradle/wrapper/gradle-wrapper.jar"]
 # Files that describe the template itself, not the new app.
 ignore = ["TEMPLATE.md", "hooks", "target"]
 

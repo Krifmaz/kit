@@ -4,5 +4,6 @@
 {% if android %}/android/.gradle
 /android/build
 /android/*/build
+/android/.kotlin
 /android/local.properties
 {% endif %}

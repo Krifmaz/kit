@@ -1,11 +1,14 @@
 //! Signing in, from Encore's `server/crates/api/src/auth.rs` and `routes/auth.rs`, cut down to what every app
 //! needs: accounts with bcrypt passwords, an owner made at the first start, a web session cookie, the
-//! server's API key (`x-api-key`) and Encore's CSRF rule. Encore's words throughout.
+//! server's API key (`x-api-key`) and Encore's CSRF rule (`X-Requested-With: <app name in lower case>`). Encore's words throughout.
 //!
 //! ```text
 //! POST /api/auth/login   {username, password} → the account, and the session cookie
-//! POST /api/auth/logout  → {ok}, the cookie removed
+//!                        {username, password, app: {device_id, device_name}} → {user, token}: a phone's app token
+//!                        (`Authorization: Bearer <token>`), kept as its SHA-256 only
+//! POST /api/auth/logout  → {ok}, the cookie (or the app token) removed
 //! GET  /api/auth/me      → the signed-in account (401 "Not authenticated")
+//! GET  /api/auth/prefs   → the account's preferences; PUT merges into them (a null removes a key)
 //! ```
 
 use crate::AppState;
@@ -38,6 +41,23 @@ pub fn random_token(bytes: usize) -> String {
     let mut b = vec![0u8; bytes];
     rand::rng().fill(&mut b[..]);
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b)
+}
+
+/// How long an app token lasts after its last use: a year (Encore's default `app_session_days`).
+pub const APP_SESSION_SECS: f64 = 365.0 * 86400.0;
+
+/// The `sessions.token` of an app token: its SHA-256, so the database never holds a usable token.
+pub fn app_token_key(token: &str) -> String {
+    use sha2::Digest;
+    format!("sha256:{}", hex::encode(sha2::Sha256::digest(token.as_bytes())))
+}
+
+/// The token of an `Authorization: Bearer <token>` header.
+pub fn bearer(headers: &HeaderMap) -> Option<String> {
+    let v = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?.trim();
+    let (scheme, token) = v.split_once(' ')?;
+    let token = token.trim();
+    (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then(|| token.to_string())
 }
 
 /// The account and session tables (Encore's columns that sign-in, What's new and bug reports read).
@@ -95,7 +115,10 @@ pub fn create_user(db: &SqliteDb, username: &str, password: &str, role: &str) ->
     if db.one("SELECT id FROM users WHERE username=?", p![username])?.is_some() {
         return Err(err(409, "Username already taken"));
     }
-    db.execute("INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)", p![username, hash_password(password), role, now()])
+    db.execute(
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
+        p![username, hash_password(password), role, now()],
+    )
 }
 
 /// First start: make sure there is an owner. `user` defaults to `admin`; without a `password` one is made,
@@ -160,12 +183,12 @@ fn ct_eq(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-/// The signed-in account of a request: the API key (as the owner), else the session cookie. A cookie
+/// The signed-in account of a request: the API key (as the owner), an app token, else the session cookie. A cookie
 /// request that changes something must carry `X-Requested-With: <app>` (CSRF), as Encore's.
 pub fn signed_in(st: &AppState, parts: &Parts) -> Result<Account> {
     let (mut row, cookie) = user_of(st, &parts.headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
     if cookie && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS) {
-        let ok = parts.headers.get("x-requested-with").and_then(|v| v.to_str().ok()) == Some(crate::NAME);
+        let ok = parts.headers.get("x-requested-with").and_then(|v| v.to_str().ok()) == Some(crate::TITLE.to_ascii_lowercase().as_str());
         if !ok {
             return Err(err(403, "Missing CSRF header"));
         }
@@ -179,9 +202,19 @@ fn user_of(st: &AppState, headers: &HeaderMap) -> Result<Option<(Row, bool)>> {
     if let Some(key) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
         let want = st.settings.str("api_key");
         if !want.is_empty() && ct_eq(key, &want) {
-            let u = st.db.one("SELECT * FROM users WHERE role IN ('owner','admin') AND disabled=0 ORDER BY role='owner' DESC, id LIMIT 1", p![])?;
+            let u = st
+                .db
+                .one("SELECT * FROM users WHERE role IN ('owner','admin') AND disabled=0 ORDER BY role='owner' DESC, id LIMIT 1", p![])?;
             return Ok(u.map(|u| (u, false)));
         }
+    }
+    // a bearer token is used on its own: a wrong or expired one is a 401, never a fall back to the cookie
+    if let Some(token) = bearer(headers) {
+        let Some(s) = st.db.one("SELECT * FROM sessions WHERE token=? AND kind='app'", p![app_token_key(&token)])? else { return Ok(None) };
+        if s.f("expires_at") < now() {
+            return Ok(None);
+        }
+        return Ok(st.db.one("SELECT * FROM users WHERE id=? AND disabled=0", p![s.i("user_id")])?.map(|u| (u, false)));
     }
     let jar = CookieJar::from_headers(headers);
     let Some(token) = jar.get(&cookie_name()).map(|c| c.value().to_string()) else { return Ok(None) };
@@ -203,7 +236,11 @@ pub fn public_user(u: &Row) -> Value {
 
 /// The sign-in routes.
 pub fn router() -> Router<AppState> {
-    Router::new().route("/api/auth/login", post(login)).route("/api/auth/logout", post(logout)).route("/api/auth/me", get(me))
+    Router::new()
+        .route("/api/auth/login", post(login))
+        .route("/api/auth/logout", post(logout))
+        .route("/api/auth/me", get(me))
+        .route("/api/auth/prefs", get(get_prefs).put(put_prefs))
 }
 
 /// `POST /api/auth/login` body.
@@ -213,6 +250,17 @@ pub struct Login {
     pub username: String,
     /// the password
     pub password: String,
+    /// the phone app's device, for an app token instead of a cookie
+    pub app: Option<AppDevice>,
+}
+
+/// The phone that signs in (Encore's `AppDevice`).
+#[derive(Deserialize)]
+pub struct AppDevice {
+    /// the app's own id for this install
+    pub device_id: String,
+    /// the phone's name, shown to the account
+    pub device_name: Option<String>,
 }
 
 /// The address a request came from, for the sign-in limit: the first `X-Forwarded-For` hop, else "local".
@@ -227,6 +275,9 @@ fn client_ip(headers: &HeaderMap) -> String {
 
 /// `POST /api/auth/login`: sign in (10 tries per address in 5 minutes) and get the session cookie.
 async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, Json(b): Json<Login>) -> Result<(CookieJar, Json<Value>)> {
+    if b.app.as_ref().is_some_and(|a| a.device_id.trim().is_empty()) {
+        return Err(err(400, "app.device_id is required"));
+    }
     let key = format!("login:{}", client_ip(&headers));
     if st.limits.limited(&key, 10, 300.0, false) {
         return Err(err(429, "Too many attempts – wait a few minutes"));
@@ -247,6 +298,14 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
     if user.b("disabled") {
         return Err(err(403, "This account is disabled"));
     }
+    if b.app.is_some() {
+        let token = random_token(32);
+        st.db.execute(
+            "INSERT INTO sessions (token, user_id, kind, created_at, expires_at) VALUES (?,?,'app',?,?)",
+            p![app_token_key(&token), user.i("id"), now(), now() + APP_SESSION_SECS],
+        )?;
+        return Ok((jar, Json(json!({ "user": public_user(&user), "token": token }))));
+    }
     let days = st.settings.int("session_days").max(1);
     let max_age = days * 86400;
     let token = random_token(32);
@@ -265,8 +324,12 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
     Ok((jar.add(cookie), Json(public_user(&user))))
 }
 
-/// `POST /api/auth/logout`: end this session.
-async fn logout(State(st): State<AppState>, jar: CookieJar) -> Result<(CookieJar, Json<Value>)> {
+/// `POST /api/auth/logout`: end this session (the app token, or the cookie's).
+async fn logout(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar) -> Result<(CookieJar, Json<Value>)> {
+    if let Some(t) = bearer(&headers) {
+        st.db.execute("DELETE FROM sessions WHERE token=? AND kind='app'", p![app_token_key(&t)])?;
+        return Ok((jar, Json(json!({ "ok": true }))));
+    }
     if let Some(t) = jar.get(&cookie_name()) {
         st.db.execute("DELETE FROM sessions WHERE token=? AND kind='web'", p![t.value()])?;
     }
@@ -277,4 +340,33 @@ async fn logout(State(st): State<AppState>, jar: CookieJar) -> Result<(CookieJar
 async fn me(State(st): State<AppState>, headers: HeaderMap) -> Result<Json<Value>> {
     let (u, _) = user_of(&st, &headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
     Ok(Json(public_user(&u)))
+}
+
+/// `GET /api/auth/prefs`: the account's preferences.
+async fn get_prefs(kit_server_core::SignedIn(u): kit_server_core::SignedIn) -> Json<Value> {
+    Json(serde_json::from_str(&u.row.s("prefs")).unwrap_or(json!({})))
+}
+
+/// `PUT /api/auth/prefs`: merge preferences into the account's (a null removes a key).
+async fn put_prefs(
+    State(st): State<AppState>,
+    kit_server_core::SignedIn(u): kit_server_core::SignedIn,
+    Json(b): Json<Value>,
+) -> Result<Json<Value>> {
+    let mut prefs: Value = serde_json::from_str(&u.row.s("prefs")).unwrap_or(json!({}));
+    if let (Some(p), Some(n)) = (prefs.as_object_mut(), b.as_object()) {
+        for (k, v) in n {
+            if v.is_null() {
+                p.remove(k);
+            } else {
+                p.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    let s = prefs.to_string();
+    if s.len() > 20_000 {
+        return Err(err(400, "Preferences too large"));
+    }
+    st.db.execute("UPDATE users SET prefs=? WHERE id=?", p![s, u.id])?;
+    Ok(Json(prefs))
 }

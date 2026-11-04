@@ -46,9 +46,13 @@ pub const VERSION: &str = match option_env!("APP_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// The binary's name (`CARGO_PKG_NAME`): the session cookie's prefix, the CSRF header's value and the web
-/// app's script name (`<name>-web-<hash>.js`).
+/// The binary's name (`CARGO_PKG_NAME`): the session cookie's prefix and the web app's script name
+/// (`<name>-web-<hash>.js`).
 pub const NAME: &str = env!("CARGO_PKG_NAME");
+
+/// The app's name as people see it (settings.toml's default `app_name`, from build.rs). In lower case it is
+/// the value of the `X-Requested-With` header the web app sends (Encore: `encore`).
+pub const TITLE: &str = env!("APP_TITLE");
 
 /// The port from `APP_PORT`, 8080 when it is not set or not a number.
 pub fn port() -> u16 {
@@ -87,11 +91,16 @@ impl AppState {
 
     /// The state on the data folder `data` (made when missing) with the web app in `static_dir`; `env` reads
     /// the settings' environment variables (a test passes its own).
-    pub fn open(data: &Path, static_dir: PathBuf, env: impl Fn(&str) -> Option<String> + Send + Sync + 'static) -> anyhow::Result<AppState> {
+    pub fn open(
+        data: &Path,
+        static_dir: PathBuf,
+        env: impl Fn(&str) -> Option<String> + Send + Sync + 'static,
+    ) -> anyhow::Result<AppState> {
         std::fs::create_dir_all(data).map_err(|e| anyhow::anyhow!("The data folder {} can't be made: {e}", data.display()))?;
         let db = SqliteDb::open(&data.join("app.db")).map_err(|e| anyhow::anyhow!("The database can't be opened: {}", e.detail))?;
         auth::migrate(&db)?;
-        let settings = Store::load_with(db.clone(), SETTINGS, env).map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
+        let settings =
+            Store::load_with(db.clone(), SETTINGS, env).map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
         let changelog = Arc::new(Changelog::new(&settings.str("app_name"), VERSION, changelog_gen::NOTES));
         Ok(AppState {
             db,

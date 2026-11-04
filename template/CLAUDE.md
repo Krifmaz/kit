@@ -9,7 +9,7 @@ and the Encore theme. Read the kit's `CHANGELOG.md` before bumping the kit tag.
 - **Plain wording.** Say what happened and what to do next, in short sentences a person who is not a
   programmer understands. No codes, no jargon, no blame.
 - **Copyable errors.** Every error is shown in full and can be copied (the kit's toasts and details dialog do
-  this); errors answer `{"error": "<plain sentence>"}` with the right HTTP status.
+  this); errors answer `{"detail": "<plain sentence>"}` with the right HTTP status (kit-server-core's `err`).
 - **Encore's look.** Use the kit's theme (`data-theme="encore"`) and components; no colours, fonts or sizes of
   your own outside the generated tokens.
 - **Small validated changes.** One change at a time, each with its test. `cargo fmt`, `cargo clippy --workspace
