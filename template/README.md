@@ -6,7 +6,8 @@ ease-of-use features from the first commit.
 | Folder | What it is |
 | --- | --- |
 | `server/` | Axum server with the kit server crates: health, changelog (What's new), notices, bug reports, diagnostics, settings |
-| `web/` | Leptos web app with the kit components and the kit's default theme, served at `/` by the server |{% if android %}
+| `web/` | Leptos web app with the kit components and the kit's default theme, served at `/` by the server |
+| `desktop/` | Desktop app (Linux, Windows, macOS) on Iced with kit-iced: connect, app-token sign-in, every kit feature, the update notice on the app's own releases |{% if android %}
 | `android/` | Compose app with kit-compose, a Baseline Profile and a benchmark module |{% endif %}
 | `docs/releases/` | one Markdown file per release: the release notes and What's new |
 
@@ -42,5 +43,9 @@ docker run --read-only -p 8080:8080 -v {{project-name}}-data:/data {{project-nam
 
 ## Checks
 
-In `server/` and `web/`: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
+In `server/`, `web/` and `desktop/`: `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 Every merge to main is released as `vX.Y.Z` with the Docker image `{{image}}:<version>` and `:latest`.
+Desktop installers (Linux tar.gz, Windows zip, macOS dmg) build with Actions → release → "apps". Signing is optional,
+from the secrets `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD`, `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`,
+`MACOS_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_PASSWORD`; without them the zip is unsigned and the
+dmg is signed ad hoc.

@@ -15,6 +15,9 @@ and the kit's default theme. Read the kit's `CHANGELOG.md` before bumping the ki
 - **Small validated changes.** One change at a time, each with its test. `cargo fmt`, `cargo clippy --workspace
   --all-targets -- -D warnings` and `cargo test --workspace` pass before every commit{% if android %}; ktlint and
   `./gradlew test` for `android/`{% endif %}. Every change gets a line in `CHANGELOG.md`.
+- **Desktop.** `cd desktop && cargo test` draws every page headless; every server path lives in
+  `desktop/src/paths.rs`; release file names from `scripts/desktop-package.sh` must match `desktop/src/release.rs`
+  (`file_for`).
 - **Safety.** The container is distroless and runs as a non-root user with a read-only root filesystem; write
   only to the data folder (`APP_DATA_DIR`, `/data` in the image).
 - **Releases.** Every merge to main is a normal release `vMAJOR.MINOR.PATCH` (never a pre-release). PATCH by
