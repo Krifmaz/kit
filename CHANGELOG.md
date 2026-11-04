@@ -5,6 +5,7 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Added
+- kit-iced: `Icon::Video` (Encore desktop's "Save video to this device" button).
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
   theme and Flutter ThemeData; tests prove the output equals Encore's current CSS, Compose and desktop themes.

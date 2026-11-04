@@ -52,11 +52,13 @@ pub enum Icon {
     List,
     Devices,
     Bug,
+    /// A video (save a video from a link).
+    Video,
 }
 
 impl Icon {
     /// Every icon.
-    pub const ALL: [Icon; 40] = [
+    pub const ALL: [Icon; 41] = [
         Icon::Home,
         Icon::Search,
         Icon::Library,
@@ -97,6 +99,7 @@ impl Icon {
         Icon::List,
         Icon::Devices,
         Icon::Bug,
+        Icon::Video,
     ];
 
     /// The web's name (`icon("home")`).
@@ -107,6 +110,7 @@ impl Icon {
             Icon::Library => "library",
             Icon::Inbox => "inbox",
             Icon::Download => "download",
+            Icon::Video => "video",
             Icon::Activity => "activity",
             Icon::Users => "users",
             Icon::Ticket => "ticket",
@@ -164,6 +168,7 @@ impl Icon {
                 r##"<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>"##
             }
             Icon::Download => r##"<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>"##,
+            Icon::Video => r##"<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-4v12l-6-4z"/>"##,
             Icon::Activity => r##"<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>"##,
             Icon::Users => {
                 r##"<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>"##
