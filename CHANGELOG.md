@@ -22,6 +22,13 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
   notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
   with Encore's words as constants and Encore's tests ported.
+- `crates/kit-iced`: Encore's desktop components on Iced 0.14 and kit-rules, styled from the generated Iced
+  tokens: `theme` (every palette, `theme::encore()`, every widget style), `widgets` (text styles, buttons, cards,
+  fields, modal, badges, skeletons, tabs, icons, text area), `toast` (desktop toast rules), `details`,
+  `whats_new` (popup and changelog page), `update` (release checks, SHA256SUMS, the Updates block), `notice`,
+  `drop_zone`, `settings` (the settings pieces), `form` (the settings form from a const table or the server's
+  schema), `bug_report` (labels, file picker, New report dialog, reply box), `diagnostics` and `offline`.
+  Components hold no network code: their updates return what the app must request.
 - `crates/kit-leptos`: Encore's web components as Leptos 0.8 components on kit-rules, drawing Encore's HTML
   node for node: toasts (with the global `toast`/`toast_action`), copy to clipboard, modals and the confirm
   dialog, the details dialog, What's new (popup and changelog page), the self-update reload (health polling and
