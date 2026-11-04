@@ -205,7 +205,7 @@ class SchemaApi(private val api: KitApi, private val client: OkHttpClient, priva
 
     /** POST <settings test>/{service}: `{ok, message}`. */
     fun test(service: String): JsonObject {
-        val req = Request.Builder().url(api.url(routes.settingsTest + "/" + enc(service))).post("".toRequestBody(jsonType))
+        val req = Request.Builder().url(api.url(routes.settingsTest.replace("{test}", enc(service)))).post("".toRequestBody(jsonType))
         return send(slow, req)
     }
 

@@ -3,11 +3,12 @@
 
 use crate::reports::{filter_sql, load_full, Full, ListQ};
 use crate::time::{when, ymd};
-use crate::{ensure_table, export_stem, kind_label, reports_dir, status_label, BugReportsHost, MAX_EXPORT_BYTES};
+use crate::{ensure_table, fill, mb, reports_dir, BugReportsHost, Cfg, Words};
 use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::http::{header, HeaderValue};
 use axum::response::{IntoResponse, Response};
+use axum::Extension;
 use kit_server_core::db::now;
 use kit_server_core::{err, Admin, Result, Row, RowExt};
 use serde_json::{json, Value};
@@ -29,21 +30,24 @@ fn md_file(report_id: i64, f: &Row) -> String {
     }
 }
 
-/// The app's name and version, for the export's heading.
+/// The export's heading and words.
 struct App {
-    /// "Encore"
-    name: String,
+    /// the heading: [`Words::export_title`] with the app's name
+    title: String,
     /// the app's version
     version: String,
+    /// the kinds' and statuses' words
+    words: Words,
 }
 
 /// reports.md: every report, its meta line, body, files and thread.
 fn render_md(reports: &[Full], exported: &str, app: &App) -> String {
-    let mut out = format!("# {} bug reports ({}, exported {exported})\n", app.name, app.version);
+    let mut out = format!("# {} ({}, exported {exported})\n", app.title, app.version);
     for full in reports {
         let r = &full.report;
         let id = r.i("id");
-        out.push_str(&format!("\n## #{id} [{}] {} — {}\n", kind_label(&r.s("kind")), r.s("title"), status_label(&r.s("status"))));
+        let (kind, status) = (r.s("kind"), r.s("status"));
+        out.push_str(&format!("\n## #{id} [{}] {} — {}\n", app.words.kind_label(&kind), r.s("title"), app.words.status_label(&status)));
         let mut meta = vec![format!("by {}", r.s("username")), when(r.f("created_at"))];
         for (label, key) in [("page", "page"), ("app", "app_version"), ("device", "device")] {
             let v = r.s(key);
@@ -83,15 +87,16 @@ fn render_txt(reports: &[Full], exported: &str, base: &std::path::Path, app: &Ap
         }
         out
     };
-    let mut out = format!("{} bug reports ({}, exported {exported})\n", app.name, app.version);
+    let mut out = format!("{} ({}, exported {exported})\n", app.title, app.version);
     for full in reports {
         let r = &full.report;
+        let (kind, status) = (r.s("kind"), r.s("status"));
         out.push_str(&format!(
             "\n{rule}\n#{} [{}] {} - {}\n",
             r.i("id"),
-            kind_label(&r.s("kind")),
+            app.words.kind_label(&kind),
             r.s("title"),
-            status_label(&r.s("status"))
+            app.words.status_label(&status)
         ));
         out.push_str(&format!("By: {}\nCreated: {}\n", r.s("username"), when(r.f("created_at"))));
         for (label, key) in [("Page", "page"), ("App", "app_version"), ("Device", "device")] {
@@ -123,9 +128,10 @@ fn render_json(reports: &[Full], exported: &str, app: &App) -> Value {
         .map(|full| {
             let r = &full.report;
             let id = r.i("id");
+            let (kind, status) = (r.s("kind"), r.s("status"));
             json!({
-                "id": id, "kind": r.s("kind"), "kind_label": kind_label(&r.s("kind")), "title": r.s("title"), "body": r.s("body"), "page": r.s("page"),
-                "app_version": r.s("app_version"), "device": r.s("device"), "status": r.s("status"), "status_label": status_label(&r.s("status")),
+                "id": id, "kind": kind, "kind_label": app.words.kind_label(&kind), "title": r.s("title"), "body": r.s("body"), "page": r.s("page"),
+                "app_version": r.s("app_version"), "device": r.s("device"), "status": status, "status_label": app.words.status_label(&status),
                 "username": r.s("username"), "user_id": r.i("user_id"), "created_at": r.f("created_at"), "updated_at": r.f("updated_at"),
                 "files": full.files.iter().map(|f| file(id, f)).collect::<Vec<_>>(),
                 "messages": full.messages.iter().map(|(m, files)| json!({
@@ -181,9 +187,14 @@ fn download(body: impl Into<Body>, mime: &'static str, name: &str) -> Response {
 }
 
 /// GET /api/bug-reports/export: the matching reports as a zip (or one text file with `format=txt`; admins).
-pub async fn export<S: BugReportsHost>(State(st): State<S>, Admin(u): Admin, Query(q): Query<ListQ>) -> Result<Response> {
+pub(crate) async fn export<S: BugReportsHost>(
+    State(st): State<S>,
+    Extension(cfg): Cfg,
+    Admin(u): Admin,
+    Query(q): Query<ListQ>,
+) -> Result<Response> {
     ensure_table(&st)?;
-    let (where_, params) = filter_sql(&q, &u, true);
+    let (where_, params) = filter_sql(&cfg, &q, &u, true);
     // the zip is built in memory: the files it would hold have to fit
     let held = st
         .db()
@@ -193,17 +204,21 @@ pub async fn export<S: BugReportsHost>(State(st): State<S>, Admin(u): Admin, Que
         )?
         .map(|r| r.i("n"))
         .unwrap_or(0);
-    if held > MAX_EXPORT_BYTES {
+    if held > cfg.limits.max_export_bytes {
         return Err(err(
             400,
-            format!("That export would be over {} MB – narrow it with the filters or export reports one by one", MAX_EXPORT_BYTES >> 20),
+            format!(
+                "That export would be over {} MB – narrow it with the filters or export reports one by one",
+                mb(cfg.limits.max_export_bytes)
+            ),
         ));
     }
     let rows = st.db().query(&format!("SELECT * FROM bug_reports r WHERE {where_} ORDER BY r.id"), params)?;
     let reports: Vec<Full> = rows.into_iter().map(|r| load_full(&st, r)).collect::<Result<_>>()?;
     let exported = ymd(now());
-    let app = App { name: st.app_name(), version: st.app_version() };
-    let stem = export_stem(&app.name, &exported);
+    let name = st.app_name();
+    let stem = cfg.words.export_stem(&name, &exported);
+    let app = App { title: fill(&cfg.words.export_title, &[("app", &name)]), version: st.app_version(), words: cfg.words.clone() };
     let base = reports_dir(&st);
     if q.format.eq_ignore_ascii_case("txt") {
         let text = render_txt(&reports, &exported, &base, &app);

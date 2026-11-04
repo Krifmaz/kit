@@ -36,7 +36,7 @@ impl Kind {
     }
 }
 
-/// How a check came out, as the page colours it (kit addition to Encore's `ok`).
+/// How a check came out, as the page colours it (finer than `ok`: a check can pass but want a look).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
@@ -58,8 +58,8 @@ impl Status {
         }
     }
 
-    /// The status a word names; `None` for anything else (Encore's service checks carry the HTTP status
-    /// code under `status`, which is not a kit status).
+    /// The status a word names; `None` for anything else (an app's check may carry an HTTP status code under
+    /// `status`, which is not a kit status).
     pub fn parse(v: &Value) -> Option<Status> {
         match v.as_str()? {
             "ok" => Some(Status::Ok),
@@ -106,7 +106,7 @@ impl Check {
         self.with("fix", Value::String(fix.into()))
     }
 
-    /// The same check with a field of the app's own (Encore's Soulseek check carries `soulseek`).
+    /// The same check with a field of the app's own (`ms`, the response `body`, …).
     pub fn with(mut self, key: impl Into<String>, value: Value) -> Check {
         self.0.insert(key.into(), value);
         self

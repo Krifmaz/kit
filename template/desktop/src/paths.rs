@@ -18,17 +18,17 @@ pub const CHANGELOG_NEW: &str = "/api/changelog/new";
 /// `POST`: this account has seen this version's What's new.
 pub const CHANGELOG_SEEN: &str = "/api/changelog/seen";
 /// `GET`: the data folder notice (one notice object).
-pub const STORAGE: &str = "/api/storage";
+pub const STORAGE: &str = "/api/notices/data";
 /// `POST` (admins): checks the data folder again and answers the notice.
-pub const STORAGE_CHECK: &str = "/api/storage/check";
+pub const STORAGE_CHECK: &str = "/api/notices/data/check";
 /// `GET`: the reports this account may see; `POST` multipart: a new report.
 pub const BUG_REPORTS: &str = "/api/bug-reports";
 /// `GET`: the server's checks (admins).
-pub const DIAGNOSTICS: &str = "/api/system/diagnostics";
+pub const DIAGNOSTICS: &str = "/api/diagnostics";
 /// `GET`: the settings' values; `PUT`: saves some (admins).
-pub const SETTINGS: &str = "/api/admin/settings";
+pub const SETTINGS: &str = "/api/settings";
 /// `GET`: the settings form's schema (admins).
-pub const SETTINGS_SCHEMA: &str = "/api/admin/settings/schema";
+pub const SETTINGS_SCHEMA: &str = "/api/settings/schema";
 
 /// `GET`: one report with its thread.
 pub fn bug_report(id: i64) -> String {
@@ -47,7 +47,7 @@ pub fn settings_secret(key: &str) -> String {
 
 /// `POST` (admins): runs a settings card's test.
 pub fn settings_test(test: &str) -> String {
-    format!("/api/system/test/{test}")
+    format!("{DIAGNOSTICS}/{test}/test")
 }
 
 #[cfg(test)]
@@ -58,7 +58,7 @@ mod tests {
     fn the_paths_with_an_id() {
         assert_eq!(bug_report(12), "/api/bug-reports/12");
         assert_eq!(bug_report_messages(12), "/api/bug-reports/12/messages");
-        assert_eq!(settings_secret("api_key"), "/api/admin/settings/secret/api_key");
-        assert_eq!(settings_test("smtp"), "/api/system/test/smtp");
+        assert_eq!(settings_secret("api_key"), "/api/settings/secret/api_key");
+        assert_eq!(settings_test("smtp"), "/api/diagnostics/smtp/test");
     }
 }

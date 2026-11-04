@@ -15,12 +15,12 @@ use leptos::prelude::*;
 use serde_json::{json, Value};
 use std::rc::Rc;
 
-/// The data folder notice: `GET /api/storage`, Check again posts `/api/storage/check` (the server's
+/// The data folder notice: `GET /api/notices/data`, Check again posts `/api/notices/data/check` (the server's
 /// `checks.rs`). Check again's words name the data folder.
 pub fn data_notice() -> NoticeSource {
     NoticeSource {
-        path: "/storage".into(),
-        check_path: "/storage/check".into(),
+        path: "/notices/data".into(),
+        check_path: "/notices/data/check".into(),
         part: String::new(),
         words: CheckWords {
             failing: "The data folder still can't be written",
@@ -154,8 +154,8 @@ pub fn BugReports() -> impl IntoView {
 #[component]
 pub fn Settings(page: String) -> impl IntoView {
     let data = LocalResource::new(|| async {
-        let schema = api::get("/admin/settings/schema").await.map_err(|e| e.message)?;
-        let values = api::get("/admin/settings").await.map_err(|e| e.message)?;
+        let schema = api::get("/settings/schema").await.map_err(|e| e.message)?;
+        let values = api::get("/settings").await.map_err(|e| e.message)?;
         Ok::<_, String>((Schema::from_json(&schema), values))
     });
     let page = if page.is_empty() { "general".to_string() } else { page };

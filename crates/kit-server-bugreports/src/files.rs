@@ -1,7 +1,7 @@
 //! Attached files: the form is read, each file checked by its bytes and named safely, the user's quota kept,
 //! and the files written under `<data_dir>/reports/<report_id>/<file_id>.<ext>`.
 
-use crate::{reports_dir, BugReportsHost, MAX_BODY, MAX_FILE, MAX_FILES, MAX_NAME, MAX_PIXEL_BYTES, MAX_SIDE, MAX_USER_BYTES};
+use crate::{mb, reports_dir, BugReportsHost, Limits, MAX_NAME};
 use axum::extract::Multipart;
 use axum::http::StatusCode;
 use kit_server_core::db::now;
@@ -35,8 +35,7 @@ impl Form {
     }
 }
 
-/// A name a file system takes: control characters and `\ / : * ? " < > |` become `_`, trimmed (Encore's
-/// `encore_core::fs::safe_file_name`).
+/// A name a file system takes: control characters and `\ / : * ? " < > |` become `_`, trimmed.
 fn safe_file_name(s: &str) -> String {
     s.chars().map(|c| if c.is_control() || "\\/:*?\"<>|".contains(c) { '_' } else { c }).collect::<String>().trim().to_string()
 }
@@ -60,10 +59,10 @@ pub fn safe_name(name: &str, ext: &str) -> String {
 }
 
 /// What the bytes are – never what the browser said. Images are sniffed and decoded with the `image` crate, so a
-/// broken file is refused, and so is one that would decode to more than [`MAX_PIXEL_BYTES`] or [`MAX_SIDE`] a side
-/// (the check happens on the header, before anything that big is allocated); text files are taken by their name
-/// (.txt, .log) when they are UTF-8. Answers (type, extension).
-pub fn check_file(name: &str, data: &[u8]) -> Result<(&'static str, &'static str)> {
+/// broken file is refused, and so is one that would decode to more than [`Limits::max_pixel_bytes`] or
+/// [`Limits::max_side`] a side (the check happens on the header, before anything that big is allocated); text
+/// files are taken by their name (.txt, .log) when they are UTF-8. Answers (type, extension).
+pub fn check_file(name: &str, data: &[u8], lim: &Limits) -> Result<(&'static str, &'static str)> {
     use image::ImageFormat as F;
     if let Ok(format) = image::guess_format(data) {
         let (mime, ext) = match format {
@@ -75,9 +74,9 @@ pub fn check_file(name: &str, data: &[u8]) -> Result<(&'static str, &'static str
         };
         let mut reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
         let mut limits = image::Limits::default();
-        limits.max_alloc = Some(MAX_PIXEL_BYTES);
-        limits.max_image_width = Some(MAX_SIDE);
-        limits.max_image_height = Some(MAX_SIDE);
+        limits.max_alloc = Some(lim.max_pixel_bytes);
+        limits.max_image_width = Some(lim.max_side);
+        limits.max_image_height = Some(lim.max_side);
         reader.limits(limits);
         reader.decode().map_err(|_| err(400, "That image can't be read"))?;
         return Ok((mime, ext));
@@ -97,9 +96,9 @@ pub fn check_file(name: &str, data: &[u8]) -> Result<(&'static str, &'static str
 }
 
 /// A form error in words: too big, or the form's own error.
-fn form_error(e: axum::extract::multipart::MultipartError) -> Error {
+fn form_error(lim: &Limits, e: axum::extract::multipart::MultipartError) -> Error {
     if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
-        err(400, format!("That upload is too big: at most {MAX_FILES} files of {} MB each", MAX_FILE >> 20))
+        err(400, format!("That upload is too big: at most {} files of {} MB each", lim.max_files, mb(lim.max_file as i64)))
     } else {
         err(400, "Could not read the upload")
     }
@@ -107,20 +106,21 @@ fn form_error(e: axum::extract::multipart::MultipartError) -> Error {
 
 /// Reads the whole form: text fields into `fields`, every `file` part (or any part with a file name) checked
 /// and sized. Too many or too big files, and files of a kind we don't take, are refused with a sentence.
-pub(crate) async fn read_form(st: &impl BugReportsHost, mut form: Multipart) -> Result<Form> {
+pub(crate) async fn read_form(st: &impl BugReportsHost, lim: &Limits, mut form: Multipart) -> Result<Form> {
+    let form_error = |e| form_error(lim, e);
     let mut fields = HashMap::new();
     let mut raw: Vec<(String, Vec<u8>)> = vec![];
     while let Some(mut f) = form.next_field().await.map_err(form_error)? {
         let field = f.name().unwrap_or("").to_string();
         let file_name = f.file_name().map(|s| s.to_string());
         if field == "file" || file_name.is_some() {
-            if raw.len() >= MAX_FILES {
-                return Err(err(400, format!("At most {MAX_FILES} files per report")));
+            if raw.len() >= lim.max_files {
+                return Err(err(400, format!("At most {} files per report", lim.max_files)));
             }
             let mut data = Vec::new();
             while let Some(chunk) = f.chunk().await.map_err(form_error)? {
-                if data.len() + chunk.len() > MAX_FILE {
-                    return Err(err(400, format!("Each file can be at most {} MB", MAX_FILE >> 20)));
+                if data.len() + chunk.len() > lim.max_file {
+                    return Err(err(400, format!("Each file can be at most {} MB", mb(lim.max_file as i64))));
                 }
                 data.extend_from_slice(&chunk);
             }
@@ -131,7 +131,7 @@ pub(crate) async fn read_form(st: &impl BugReportsHost, mut form: Multipart) -> 
         } else {
             let mut data = Vec::new();
             while let Some(chunk) = f.chunk().await.map_err(form_error)? {
-                if data.len() + chunk.len() > 4 * MAX_BODY {
+                if data.len() + chunk.len() > 4 * lim.max_body {
                     return Err(err(400, "A text field is too long"));
                 }
                 data.extend_from_slice(&chunk);
@@ -145,10 +145,11 @@ pub(crate) async fn read_form(st: &impl BugReportsHost, mut form: Multipart) -> 
     // decoding a few 8 MB images is not for the request thread, and not for many threads at once either
     let decodes = st.decodes();
     let _permit = decodes.acquire().await.map_err(|_| err(500, "Uploads are not being checked right now"))?;
+    let lim = lim.clone();
     let files = tokio::task::spawn_blocking(move || -> Result<Vec<Pending>> {
         raw.into_iter()
             .map(|(name, data)| {
-                let (mime, ext) = check_file(&name, &data)?;
+                let (mime, ext) = check_file(&name, &data, &lim)?;
                 Ok(Pending { name: safe_name(&name, ext), mime, ext, data })
             })
             .collect()
@@ -159,8 +160,8 @@ pub(crate) async fn read_form(st: &impl BugReportsHost, mut form: Multipart) -> 
 }
 
 /// The files a user's reports may hold in all: refuses `files` when they would take the user over
-/// [`MAX_USER_BYTES`]. Admins are not held back.
-pub(crate) fn check_quota(st: &impl BugReportsHost, u: &Account, files: &[Pending]) -> Result<()> {
+/// [`Limits::max_user_bytes`]. Admins are not held back.
+pub(crate) fn check_quota(st: &impl BugReportsHost, lim: &Limits, u: &Account, files: &[Pending]) -> Result<()> {
     if files.is_empty() || u.admin {
         return Ok(());
     }
@@ -170,13 +171,13 @@ pub(crate) fn check_quota(st: &impl BugReportsHost, u: &Account, files: &[Pendin
         .map(|r| r.i("n"))
         .unwrap_or(0);
     let adding: i64 = files.iter().map(|f| f.data.len() as i64).sum();
-    if held + adding > MAX_USER_BYTES {
+    if held + adding > lim.max_user_bytes {
         return Err(err(
             400,
             format!(
                 "Your reports already hold {} MB of files (the most is {} MB); the admin can delete old ones",
                 held >> 20,
-                MAX_USER_BYTES >> 20
+                mb(lim.max_user_bytes)
             ),
         ));
     }

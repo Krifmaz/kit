@@ -1,4 +1,4 @@
-//! The diagnostics page of a desktop app: every check the server ran (`GET /api/system/diagnostics`,
+//! The diagnostics page of a desktop app: every check the server ran (`GET /api/diagnostics`,
 //! see `contracts/diagnostics.md`) in groups by kind, each with its status dot, name, HTTP badge, time, request, what it said, how to fix it and
 //! its folded raw answer; Copy on a check that failed, the "N problems" / "All good" summary, the
 //! copyable whole report and Run checks / Checking….
@@ -243,7 +243,7 @@ pub enum Msg {
 /// What the app does after a message.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
-    /// Run the checks (`GET /api/system/diagnostics`, plus any requests of the app's own) and hand the answer to
+    /// Run the checks (`GET /api/diagnostics`, plus any requests of the app's own) and hand the answer to
     /// [`State::checked`].
     Run,
     /// Build the [`report`] (with the app's sections) from [`State::answer`] and [`State::all`],

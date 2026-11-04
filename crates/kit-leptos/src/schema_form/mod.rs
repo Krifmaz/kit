@@ -1,7 +1,7 @@
 //! The settings cards drawn from the server's schema, so a new setting needs no UI work.
 //!
 //! [`SettingsCards`] draws a page's cards and wires Save (`PUT /api/settings`), Test (`POST
-//! /api/diagnostics/test/<test>` after a quiet save), clear and the eye and copy buttons
+//! /api/diagnostics/<test>/test` after a quiet save), clear and the eye and copy buttons
 //! (`GET /api/settings/secret/<key>`); [`SchemaFields`] is the fields alone. The paths are the configured ones
 //! ([`Paths`](crate::config::Paths)), the words the configured [`FormWords`].
 

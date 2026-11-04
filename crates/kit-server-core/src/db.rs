@@ -1,5 +1,5 @@
 //! The database the crates use: the app's own, behind a small trait. Rows come back as JSON objects and
-//! parameters go in as JSON values, as in Encore's `encore_db`, so a crate keeps Encore's SQL unchanged.
+//! parameters go in as JSON values, so a crate's SQL works on any app's database.
 
 use crate::Result;
 use serde_json::{Map, Value};
@@ -7,8 +7,7 @@ use serde_json::{Map, Value};
 /// One result row: column name → value.
 pub type Row = Map<String, Value>;
 
-/// The app's database. Statements are SQLite's (Encore's SQL); each call runs one statement, on the caller's
-/// thread, as Encore's handlers do.
+/// The app's database. Statements are SQLite's; each call runs one statement, on the caller's thread.
 pub trait Db: Send + Sync {
     /// Rows of a statement.
     fn query(&self, sql: &str, params: Vec<Value>) -> Result<Vec<Row>>;
@@ -29,7 +28,7 @@ macro_rules! p {
     ($($x:expr),+ $(,)?) => { vec![$($crate::__json::json!($x)),+] };
 }
 
-/// Small accessors for JSON rows (Encore's `RowExt`, same answers).
+/// Small accessors for JSON rows.
 pub trait RowExt {
     /// The column as text (empty for null or missing; other values as JSON).
     fn s(&self, k: &str) -> String;
@@ -64,7 +63,7 @@ impl RowExt for Row {
     }
 }
 
-/// Seconds since 1970 as a real, the time stamp Encore's tables keep.
+/// Seconds since 1970 as a real, the time stamp the kit's tables keep.
 pub fn now() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
 }
@@ -75,7 +74,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn row_accessors_match_encore() {
+    fn row_accessors() {
         let r: Row = json!({ "s": "a", "n": 3.7, "i": 2, "t": true, "z": null }).as_object().unwrap().clone();
         assert_eq!(r.s("s"), "a");
         assert_eq!(r.s("i"), "2");

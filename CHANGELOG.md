@@ -9,6 +9,32 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   no commits since.
 
 ### Changed
+- kit-compose's `KitRoutes` follow the neutral server routes: `clientCrash` is `/api/crash-reports` and
+  `settingsTest` is `/api/diagnostics/{test}/test` (the card's check id goes in `{test}`).
+- Clients follow the neutral server routes: kit-leptos `Paths::test` defaults to `/api/diagnostics/{name}/test`;
+  kit-iced's docs and demo, and the template's web and desktop apps, call `/api/settings*`, `/api/diagnostics*` and
+  `/api/notices/data`.
+- Server crates are neutral (no app's names, words, routes or checks); every route can move with the
+  crate's `XPaths` and `router_with`, and the defaults are the kit's own:
+  - `kit-server-health`: `HealthPaths`; the `web_build` file prefix is the app's (no default).
+  - `kit-server-changelog`: `ChangelogPaths`; `Changelog::from_dir` reads a folder of `<version>.md`.
+  - `kit-server-bugreports`: `BugReportsConfig { paths, limits, words }` (kinds, statuses' words, export name,
+    size limits); the public limit constants, `KINDS`, `kind_label`, `status_label`, `export_stem`, the public
+    handlers and `BugReportsHost::enrich` are gone; crash logs moved to `/api/crash-reports`
+    (`crash::CrashConfig`, `crash::router_with`).
+  - `kit-server-settings`: `GET/PUT /api/settings`, `GET /api/settings/schema`, `GET /api/settings/secret/{key}`
+    (`SettingsPaths`); settings.toml loses `listed_last` (keys are A to Z); errors no longer name `Config`.
+  - `kit-server-diagnostics`: `GET /api/diagnostics`, `POST /api/diagnostics/{id}/test` (`DiagnosticsPaths`);
+    an unknown test answers 404 "Unknown check"; no app-specific checks or answer fields.
+  - `kit-server-notices`: `NoticePaths`; one notice is served generically at `GET /api/notices/{id}` and
+    `POST /api/notices/{id}/check`, replacing `router_at`; every sentence and toast comes from the app.
+  - `kit-server-updates`: `feed::Feed` (owner/repo, release and hotfix tag prefixes, a `{version}` file name
+    pattern per app-chosen platform id, a download limit) replaces `feed::Repo` and `Platform`; every platform
+    reads its version from the file name; `GET/POST /api/update`, `POST /api/restart` (`UpdatePaths`);
+    `MAX_APK_BYTES` → `DEFAULT_MAX_DOWNLOAD_BYTES`; `HOTFIX_PREFIX` removed.
+  - `kit-server-core`: neutral docs and tests, no API change.
+  - `contracts/`, the template's server, web and Android calls, and the clients in kit-leptos (settings form,
+    Diagnostics, demo), kit-iced (docs) and kit-compose (settings, Diagnostics, crash log) use the new routes.
 - No app's words in the kit's comments and data (first pass): the template web's `app.css` keeps only the rules its
   pages and kit-leptos draw (the copied player, lyrics, library, request and group listening rules are gone);
   kit-iced and kit-tokens doc comments and package descriptions no longer name an app or a media player.

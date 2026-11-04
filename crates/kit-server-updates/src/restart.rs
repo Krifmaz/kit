@@ -1,6 +1,6 @@
 //! "Restart server": [`Restart`] plans it so the 202 answer gets out first; the app's server loop waits for
-//! [`Restart::requested`], stops gracefully and exits with [`EXIT_RESTART`] (Encore's image entrypoint starts it
-//! again at once; a service unit can do the same with `RestartForceExitStatus=75`).
+//! [`Restart::requested`], stops gracefully and exits with [`EXIT_RESTART`] (a container entrypoint or a
+//! service unit with `RestartForceExitStatus=75` starts it again at once).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

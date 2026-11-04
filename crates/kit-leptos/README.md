@@ -43,7 +43,7 @@ use kit_rules::app::App;
 
 let mut cfg = AppConfig::new(App::named("Kit Demo").with_version("1.4.0")); // id `kit-demo`
 cfg.logo = Some("/logo.svg".into());
-cfg.paths.diagnostics = "/system/diagnostics".into();   // any path the app's server uses
+cfg.paths.diagnostics = "/checks".into();   // any path the app's server uses
 cfg.words.update.ready = "{app} has a new version";     // any word
 config::set(cfg);
 
@@ -68,7 +68,7 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 - `paths`: every server path, relative to `api` (`/api`): `health` `/health`, `changelog` `/changelog`,
   `changelog_new` `/changelog/new`, `changelog_seen` `/changelog/seen`, `popup` `/auth/prefs` with
   `popup_field` `whats_new_popup`, `notices` `/notices`, `notices_check` `/notices/check`, `bug_reports`
-  `/bug-reports`, `diagnostics` `/diagnostics`, `test` `/diagnostics/test/{name}`, `settings` `/settings`,
+  `/bug-reports`, `diagnostics` `/diagnostics`, `test` `/diagnostics/{name}/test`, `settings` `/settings`,
   `settings_schema` `/settings/schema`, `settings_secret` `/settings/secret/{key}`; and `worker` `/sw.js`.
 - `routes`: the app's pages the components link to (`changelog`: where Full changelog goes).
 - `words`: one struct per component (`ToastWords`, `DialogWords`, `ChangelogWords`, `UpdateWords`,

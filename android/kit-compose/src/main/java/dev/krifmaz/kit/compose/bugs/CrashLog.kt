@@ -43,7 +43,7 @@ import java.util.TimeZone
  *   ([CrashRules]).
  * - [exportText] writes the phone's own crash log as a .txt to share (the app's crash reports), without the
  *   server: Android's exit records, the reports kept here and the recent log.
- * - Every report is sent to POST /api/diagnostics/client-crash (Diagnostics → App crashes for admins) and deleted
+ * - Every report is sent to POST /api/crash-reports (Diagnostics → App crashes for admins) and deleted
  *   once the server has it; without a connection they wait for the next start ([CrashLogHost] gives the calls).
  */
 object CrashLog {
@@ -502,7 +502,7 @@ interface CrashLogHost {
     /** This phone's id, sent with each report (`device_id`). */
     val deviceId: String
 
-    /** The server's API (POST /api/diagnostics/client-crash). */
+    /** The server's API (POST /api/crash-reports). */
     val api: KitApi
 
     /** The bug report calls ("Send the crash log" sends one, [CrashLogReport]). */

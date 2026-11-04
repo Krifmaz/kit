@@ -11,7 +11,7 @@
 //! use kit_rules::app::App;
 //!
 //! let mut cfg = AppConfig::new(App::named("Kit Demo").with_version("1.4.0"));
-//! cfg.paths.diagnostics = "/system/diagnostics".into();
+//! cfg.paths.diagnostics = "/checks".into();
 //! cfg.words.update.ready = "{app} has a new version";
 //! config::set(cfg);
 //! assert_eq!(config::get().app.key("update.tried"), "kit-demo.update.tried");
@@ -56,7 +56,7 @@ pub struct Paths {
     pub bug_reports: String,
     /// The Diagnostics page's checks (`/diagnostics`).
     pub diagnostics: String,
-    /// A settings card's Test button (`/diagnostics/test/{name}`).
+    /// A settings card's Test button (`/diagnostics/{name}/test`).
     pub test: String,
     /// The settings values: `GET` and `PUT` (`/settings`).
     pub settings: String,
@@ -82,7 +82,7 @@ impl Default for Paths {
             notices_check: "/notices/check".into(),
             bug_reports: "/bug-reports".into(),
             diagnostics: "/diagnostics".into(),
-            test: "/diagnostics/test/{name}".into(),
+            test: "/diagnostics/{name}/test".into(),
             settings: "/settings".into(),
             settings_schema: "/settings/schema".into(),
             settings_secret: "/settings/secret/{key}".into(),
@@ -209,7 +209,7 @@ mod tests {
         let c = AppConfig::default();
         assert_eq!((c.app.id.as_str(), c.app.name.as_str(), c.script.as_str()), ("app", "App", "app-web"));
         assert_eq!(c.paths.full(&c.paths.health), "/api/health");
-        assert_eq!(Paths::fill(&c.paths.test, "mail"), "/diagnostics/test/mail");
+        assert_eq!(Paths::fill(&c.paths.test, "mail"), "/diagnostics/mail/test");
         assert_eq!(Paths::fill(&c.paths.settings_secret, "token"), "/settings/secret/token");
         assert_eq!(c.routes.changelog, "/changelog");
         assert_eq!(c.words.form, FormWords::DEFAULT);

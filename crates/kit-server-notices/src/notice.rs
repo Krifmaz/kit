@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// How serious a notice is, for its colour (kit addition; Encore's storage notice is `warn`).
+/// How serious a notice is, for its colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -26,9 +26,9 @@ impl Severity {
     }
 }
 
-/// A notice as a check made it: `{ok, text?, checking?, …}` plus any fields of the app's own (Encore's
-/// storage notice carries `checked_at`, `next_check_at`, `waiting` and `roots` for admins, and only `ok` for
-/// everyone else). The object is kept as it is, so an app's own answer stays byte for byte the same.
+/// A notice as a check made it: `{ok, text?, checking?, …}` plus any fields of the app's own (when it was
+/// checked, what it looked at, …). The object is kept as it is, so an app's own answer stays byte for byte
+/// the same.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Notice(Map<String, Value>);
@@ -108,9 +108,8 @@ impl From<Notice> for Value {
     }
 }
 
-/// The three sentences of Check again's toast for one notice; the app gives them (Encore's storage notice:
-/// "A downloads folder still can't be written", "Still checking the downloads folders", "The downloads
-/// folders can be written").
+/// The three sentences of Check again's toast for one notice; the app gives them (for a disk notice, say:
+/// "The disk is still full", "Still checking the disk", "The disk has room again").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Toasts {
     /// still failing (a `warn` toast)
@@ -136,8 +135,7 @@ impl Toasts {
         Toasts { failing: failing.into(), checking: checking.into(), fixed: fixed.into() }
     }
 
-    /// The toast after Check again answered `n`: still failing, else still checking, else fixed (Encore's
-    /// `notice::check_toast`).
+    /// The toast after Check again answered `n`: still failing, else still checking, else fixed.
     pub fn after(&self, n: &Notice) -> Toast<'_> {
         if !n.ok() {
             Toast { text: &self.failing, kind: "warn" }

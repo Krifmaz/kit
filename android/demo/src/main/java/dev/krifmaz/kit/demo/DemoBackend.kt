@@ -185,7 +185,7 @@ class DemoBackend(
 
             p.startsWith(routes.settingsSecret + "/") && m == "GET" -> DemoAnswer.json(buildJsonObject { put("value", secrets[p.substringAfterLast('/')] ?: "") })
 
-            p.startsWith(routes.settingsTest + "/") && m == "POST" -> DemoAnswer.json(test(p.substringAfterLast('/')))
+            m == "POST" && testOf(p) != null -> DemoAnswer.json(test(testOf(p)!!))
 
             else -> null
         }
@@ -572,6 +572,13 @@ class DemoBackend(
     }
 
     private fun text(key: String): String = (values[key] as? JsonPrimitive)?.content.orEmpty()
+
+    /** The check id in a settings card's Test path ([KitRoutes.settingsTest] with its `{test}`), or null. */
+    private fun testOf(path: String): String? {
+        val (before, after) = routes.settingsTest.split("{test}").let { it[0] to it.getOrElse(1) { "" } }
+        if (!path.startsWith(before) || !path.endsWith(after) || path.length <= before.length + after.length) return null
+        return path.substring(before.length, path.length - after.length)
+    }
 
     private fun test(service: String): JsonObject = when (service) {
         "mail" -> when {

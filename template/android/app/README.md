@@ -21,10 +21,10 @@ One activity in the kit's default theme; every page is a kit-compose part, wired
 | Theme, toasts, details | `MainActivity`, `HomePage` | — |
 | What's new popup and changelog | `HomePage` (`WhatsNewOnStart`), `AppShell` (`ChangelogScreen`) | `/api/changelog…`, `PUT /api/auth/prefs` |
 | In-app updates | `App` (`UpdateRules.source`), `MainActivity`, `HomePage` (`UpdatesSection`) | GitHub releases of {{github_owner}}/{{project-name}} |
-| Bug reports and crash logs | `App` (`CrashLog`), `AppShell`, `HomePage` | `/api/bug-reports…`, `/api/diagnostics/client-crash` |
+| Bug reports and crash logs | `App` (`CrashLog`), `AppShell`, `HomePage` | `/api/bug-reports…`, `/api/crash-reports` |
 | Offline banner | `HomePage` (`probeHealth`, `OfflineBanner`) | `/api/health` |
-| Settings forms | `AdminPages` (`SchemaPage`) | `/api/admin/settings…`, `/api/system/test/…` |
-| Diagnostics | `AdminPages` (`DiagnosticsScreen`, `AppCrashesSection`) | `/api/system/diagnostics` |
+| Settings forms | `AdminPages` (`SchemaPage`) | `/api/settings…`, `/api/diagnostics/…/test` |
+| Diagnostics | `AdminPages` (`DiagnosticsScreen`, `AppCrashesSection`) | `/api/diagnostics` |
 
 Signing in is the kit's phone sign-in: `POST /api/auth/login` with `{username, password, app: {device_id,
 device_name}}` answers `{user, token}`; the token goes with every request as `Authorization: Bearer <token>` (only

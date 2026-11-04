@@ -3,12 +3,12 @@
 What every kit server crate shares, so each one can be added to any app in a few lines:
 
 - **`Error`** — the error answer every route gives: `{"detail": "<plain sentence>"}` with an HTTP status,
-  exactly as Encore's `encore_core::error` answers (extra fields merge into the body).
-- **`Db`** — the app's database behind a small trait: JSON rows and JSON parameters, as Encore's
-  `encore_db`, so each crate keeps Encore's SQL. `p![…]` builds parameters; `RowExt` reads columns.
+  so every client shows a kit error the same way (extra fields merge into the body).
+- **`Db`** — the app's database behind a small trait: JSON rows and JSON parameters, SQLite's SQL.
+  `p![…]` builds parameters; `RowExt` reads columns.
 - **`Host`** — implemented once by the app for its state: the database and who is signed in. Handlers take
   `SignedIn` or `Admin`; the app's own 401/403 answers come through unchanged.
-- **`version`** — version numbers compared by their numeric parts; `base("0.36.0.17")` is `0.36.0`.
+- **`version`** — version numbers compared by their numeric parts; `base("1.4.0.17")` is `1.4.0`.
 - **`SqliteDb`** (feature `sqlite`) — a ready SQLite database for apps without one.
 - **`testing::TestHost`** (feature `testing`) — an app state for tests: SQLite in memory, accounts 1 (admin)
   and 2 (member), signed in by the `x-test-user` header.

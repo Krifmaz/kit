@@ -90,7 +90,7 @@ object KitApp {
  * @property settingsSchema the settings schema (`GET`).
  * @property settings the settings' values (`GET`, `PUT`).
  * @property settingsSecret one saved secret, shown to the owner (`GET /{key}`).
- * @property settingsTest a settings card's Test button (`POST /{test}`).
+ * @property settingsTest a settings card's Test button (`POST`; `{test}` is the card's check id).
  */
 data class KitRoutes(
     val health: String = "/api/health",
@@ -101,9 +101,9 @@ data class KitRoutes(
     val notices: String = "/api/notices",
     val bugReports: String = "/api/bug-reports",
     val diagnostics: String = "/api/diagnostics",
-    val clientCrash: String = "/api/diagnostics/client-crash",
+    val clientCrash: String = "/api/crash-reports",
     val settingsSchema: String = "/api/settings/schema",
     val settings: String = "/api/settings",
     val settingsSecret: String = "/api/settings/secret",
-    val settingsTest: String = "/api/settings/test",
+    val settingsTest: String = "/api/diagnostics/{test}/test",
 )

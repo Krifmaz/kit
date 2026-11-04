@@ -1,4 +1,4 @@
-//! Dates in UTC without a date crate (Encore's `encore_core::time`, Howard Hinnant's algorithm).
+//! Dates in UTC without a date crate (Howard Hinnant's algorithm).
 
 /// (year, month 1–12, day 1–31) of a day count since 1970-01-01.
 fn civil_from_days(z: i64) -> (i64, i64, i64) {
@@ -30,7 +30,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dates_as_encore_writes_them() {
+    fn dates_in_utc() {
         assert_eq!(ymd(0.0), "1970-01-01");
         assert_eq!(ymd(-5.0), "1970-01-01");
         assert_eq!(ymd(1_700_000_000.0), "2023-11-14");

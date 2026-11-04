@@ -153,7 +153,7 @@ impl Backend for Fake {
                     s.clone()
                 })),
                 ("GET", p) if p.starts_with("/settings/secret/") => Ok(json!({ "value": "demo-secret-value" })),
-                ("POST", "/diagnostics/test/mail") => {
+                ("POST", "/diagnostics/mail/test") => {
                     Ok(json!({ "ok": false, "message": "535 Authentication failed: the password was refused" }))
                 }
                 _ => Err(ApiError { status: 404, message: format!("The demo has no {method} {path}"), data: Value::Null }),

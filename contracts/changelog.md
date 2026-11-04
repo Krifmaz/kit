@@ -1,19 +1,20 @@
 # Changelog — What's new
 
-Release notes for the What's new popup (shown once after an update) and Settings → What's new. From Encore's
-`server/crates/api/src/routes/changelog.rs`.
+Release notes for the What's new popup (shown once after an update) and the full What's new list. The paths
+are the defaults; an app can serve them elsewhere (kit-server-changelog `ChangelogPaths`).
 
-The notes are `docs/releases/<version>.md` of the app, built into the server. What counts as new is per
+The notes are the app's own: a folder of `<MAJOR.MINOR.PATCH>.md`, built into the server or read at start,
+or a list the app makes. The app's name and version are the app's. What counts as new is per
 account: `prefs.whats_new_seen` holds the version the person last saw, and only releases with notes newer than
-it (and not newer than this server) are new. **Hotfix builds** (`0.36.0.17`) share their release's notes
+it (and not newer than this server) are new. **Hotfix builds** (`1.4.0.17`) share their release's notes
 (`MAJOR.MINOR.PATCH` of the version), so a hotfix alone never shows the popup again.
-`prefs.whats_new_popup = false` turns the popup off; Settings → What's new still lists everything.
+`prefs.whats_new_popup = false` turns the popup off; the full list still shows everything.
 
 ## `GET /api/changelog/new` (signed in)
 
 ```json
-{ "version": "0.36.4", "popup": true, "show": true,
-  "releases": [ { "version": "0.36.4", "title": "Encore 0.36.4", "summary": "…", "highlights": ["…"] } ] }
+{ "version": "1.4.0", "popup": true, "show": true,
+  "releases": [ { "version": "1.4.0", "title": "Demo 1.4.0", "summary": "…", "highlights": ["…"] } ] }
 ```
 
 | Field | Meaning |
@@ -26,7 +27,7 @@ it (and not newer than this server) are new. **Hotfix builds** (`0.36.0.17`) sha
 
 ## `POST /api/changelog/seen` (signed in)
 
-Marks this server's version seen for the account: `{ "ok": true, "seen": "0.36.4" }`.
+Marks this server's version seen for the account: `{ "ok": true, "seen": "1.4.0" }`.
 
 ## `GET /api/changelog` (signed in)
 

@@ -4,7 +4,7 @@ info:
   version: 0.1.0
   license: { name: MIT }
   description: >
-    The endpoints every kit server speaks, matching Encore's current API. The prose files next to this one
+    The endpoints every kit server speaks. Every path is a default an app can move (each crate's `XPaths`). The prose files next to this one
     (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md)
     say what the fields mean. Apps may add fields; clients ignore fields they do not know.
 components:
@@ -134,7 +134,7 @@ paths:
               schema: { type: object, properties: { ok: { type: boolean }, seen: { type: string } } }
   /api/notices:
     get:
-      summary: Every notice (kit default path; Encore serves its notice inside GET /api/requests/storage)
+      summary: Every notice (default path; an app may move it)
       responses:
         "200":
           description: notices
@@ -150,6 +150,32 @@ paths:
           content:
             application/json:
               schema: { type: object, properties: { notices: { type: array, items: { $ref: "#/components/schemas/Notice" } } } }
+  /api/notices/{id}:
+    get:
+      summary: One notice as it reads now
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: the notice's object
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notice" }
+        "404":
+          description: no notice with that id
+  /api/notices/{id}/check:
+    post:
+      summary: Check one notice again now
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: the notice after the check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Notice" }
+        "404":
+          description: no notice with that id
   /api/bug-reports:
     get:
       summary: List reports (a non-admin sees their own)
@@ -233,7 +259,7 @@ paths:
     get:
       summary: An attached file
       responses: { "200": { description: the file } }
-  /api/diagnostics/client-crash:
+  /api/crash-reports:
     post:
       summary: An app's crash report
       requestBody:
@@ -254,43 +280,50 @@ paths:
       responses:
         "200": { description: kept, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, id: { type: integer }, duplicate: { type: boolean } } } } } }
     get:
-      summary: The newest 50 crash reports (admin)
+      summary: The newest crash reports (50 by default; admin)
       responses: { "200": { description: crashes, content: { application/json: { schema: { type: object, properties: { crashes: { type: array, items: { type: object } } } } } } } }
     delete:
       summary: Clear crash reports (admin)
       responses: { "200": { description: cleared, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
-  /api/system/diagnostics:
+  /api/diagnostics:
     get:
       summary: Every check at once (admin)
       responses:
         "200": { description: checks, content: { application/json: { schema: { type: object, properties: { checks: { type: array, items: { $ref: "#/components/schemas/Check" } } } } } } }
-  /api/system/test/{service}:
-    parameters: [{ name: service, in: path, required: true, schema: { type: string } }]
+  /api/diagnostics/{id}/test:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
     post:
-      summary: Run one settings card's check (admin)
-      responses: { "200": { description: result, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, message: { type: string } } } } } } }
-  /api/admin/settings/schema:
+      summary: Run one check's test (admin)
+      responses:
+        "200": { description: result, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, message: { type: string } } } } } }
+        "404": { description: Unknown check }
+  /api/settings/schema:
     get:
       summary: The settings described as data (admin); see settings-schema.md
       responses: { "200": { description: the schema, content: { application/json: { schema: { type: object, properties: { sections: { type: array, items: { type: object } } } } } } } }
-  /api/admin/settings:
+  /api/settings:
     get:
       summary: The settings' values with _meta (admin)
       responses: { "200": { description: values, content: { application/json: { schema: { type: object } } } } }
     put:
-      summary: Save settings (admin); unknown, masked, locked and api_key values are left out
+      summary: Save settings (admin); unknown, masked, environment-locked and app-kept values are left out
       requestBody: { content: { application/json: { schema: { type: object } } } }
       responses: { "200": { description: saved, content: { application/json: { schema: { type: object } } } } }
-  /api/system/update:
+  /api/settings/secret/{key}:
+    parameters: [{ name: key, in: path, required: true, schema: { type: string } }]
+    get:
+      summary: One saved setting in plain text (owner); 404 Unknown setting
+      responses: { "200": { description: the value, content: { application/json: { schema: { type: object, properties: { key: { type: string }, value: { type: string } } } } } } }
+  /api/update:
     get:
       summary: The server's own update (admin); see update-feed.md
       parameters: [{ name: force, in: query, schema: { type: string } }]
       responses: { "200": { description: update state, content: { application/json: { schema: { type: object } } } } }
     post:
-      summary: Pull and start the new image (admin)
+      summary: Update the server to a release, the app's own way (admin)
       requestBody: { content: { application/json: { schema: { type: object, properties: { tag: { type: string } } } } } }
       responses: { "202": { description: started } }
-  /api/system/restart:
+  /api/restart:
     post:
       summary: Restart gracefully, exit code 75 (admin)
-      responses: { "202": { description: restarting } }
+      responses: { "202": { description: restarting, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }

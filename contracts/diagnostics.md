@@ -1,17 +1,17 @@
 # Diagnostics
 
-One page that checks every connection, folder and tool, and says what's wrong and how to fix it. From
-Encore's `GET /api/system/diagnostics` (`server/crates/api/src/routes/stats.rs`) and the Diagnostics page
-(`web-rs/src/settings/diagnostics.rs`, `DiagnosticsScreen.kt`).
+One page that checks every connection, folder and tool an app depends on, and says what's wrong and how to
+fix it. The checks are the app's own; the kit runs them and serves the answer. Both paths below are the
+defaults; an app may serve them elsewhere.
 
-## `GET /api/system/diagnostics` (admin)
+## `GET /api/diagnostics` (admin)
 
-Every check runs at once; the answer lists them:
+Every check runs at once; the answer lists them in the order the app registered them:
 
 ```json
 { "checks": [
-  { "name": "MusicBrainz", "kind": "service", "request": "GET https://musicbrainz.org/…", "ok": true, "detail": "200 OK · 180 ms" },
-  { "name": "Music library", "kind": "path", "ok": false, "detail": "…", "status": "fail", "fix": "…" }
+  { "name": "Mail server", "kind": "service", "request": "GET https://mail.example.com/health", "ok": true, "detail": "200 OK · 180 ms" },
+  { "name": "Data folder", "kind": "path", "ok": false, "detail": "…", "status": "fail", "fix": "…" }
 ] }
 ```
 
@@ -22,13 +22,14 @@ Every check runs at once; the answer lists them:
 | `ok` | passed |
 | `detail` | the result in one plain sentence (what happened) |
 | `request` | what was asked, when it was a request (shown so it can be copied) |
-| `status` | kit: `ok`, `warn` or `fail`; when left out (or not one of these words: Encore's service checks carry the HTTP status code here), `ok` → `ok`, otherwise `fail` |
-| `fix` | kit: how to fix it, in plain words; optional |
+| `status` | `ok`, `warn` or `fail`; when left out (or not one of these words, such as an HTTP status code), `ok` → `ok`, otherwise `fail` |
+| `fix` | how to fix it, in plain words; optional |
 
-Apps may add fields per check (Encore's Soulseek check carries `soulseek`).
+Apps may add fields per check (`ms`, a response `body`, …) and sections of their own next to `checks`
+(their version, the time, …).
 
-## `POST /api/system/test/{service}` (admin)
+## `POST /api/diagnostics/{id}/test` (admin)
 
 The Test button of a settings card (`test` in the settings schema) runs that one check and answers
-`{ok, message}` (plus fields of its own), as Encore does. A test that failed on the way answers
-`{ok: false, message}` with the whole error; a service without a test answers 404 "Unknown service".
+`{ok, message}` (plus fields of its own). A test that failed on the way answers `{ok: false, message}` with
+the whole error; an id without a test answers 404 "Unknown check".

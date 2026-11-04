@@ -286,7 +286,7 @@ pub struct Demo {
     typed: String,
     schema: Schema,
     form: Form,
-    /// The fake server's settings (what `GET /api/admin/settings` answers).
+    /// The fake server's settings (what `GET /api/settings` answers).
     server: Value,
     /// The fake server's secrets, in clear.
     secrets: HashMap<String, String>,
@@ -392,7 +392,7 @@ pub fn fake_notices() -> Value {
     json!({ "notices": [{ "id": "storage", "ok": false, "severity": "warn", "text": NOTICE_TEXT }, { "id": "mail", "ok": true }] })
 }
 
-/// The fake settings schema (`GET /api/admin/settings/schema`): a General card and an Email card whose
+/// The fake settings schema (`GET /api/settings/schema`): a General card and an Email card whose
 /// port fields follow the Security select, with secret fields.
 pub fn fake_schema() -> Value {
     json!({ "sections": [
@@ -421,7 +421,7 @@ pub fn fake_schema() -> Value {
     ] })
 }
 
-/// The fake settings (`GET /api/admin/settings`), with `_meta` saying where values come from.
+/// The fake settings (`GET /api/settings`), with `_meta` saying where values come from.
 pub fn fake_settings() -> Value {
     json!({
         "app_name": "Demo", "base_url": "https://demo.example.com", "signup_mode": "invite", "page_size": 50, "auto_approve": false,

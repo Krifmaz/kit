@@ -208,7 +208,7 @@ class SchemaFormState(
     /** The keys of a Save or a clear, to [target] or PUT <settings>: the values from then on. */
     private fun send(api: SchemaApi, body: JsonObject): JsonObject = target?.invoke(body) ?: api.save(body)
 
-    /** Test: saves the card quietly, then POST [KitRoutes.settingsTest]/<test>; the answer is the line under it. */
+    /** Test: saves the card quietly, then POST [KitRoutes.settingsTest] with its `{test}`; the answer is the line under it. */
     suspend fun test(api: SchemaApi, group: SchemaGroup, extra: JsonObject? = null, onSaved: (() -> Unit)? = null) {
         if (group.test.isEmpty() || testing[group.id] == true) return
         testing[group.id] = true

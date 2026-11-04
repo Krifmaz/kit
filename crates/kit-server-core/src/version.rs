@@ -1,13 +1,12 @@
-//! Version numbers of programs and releases, compared by their numeric dot parts (Encore's
-//! `encore_core::version`, same answers).
+//! Version numbers of programs and releases, compared by their numeric dot parts.
 
-/// The numeric dot parts of a version ("v2.4.10" → [2, 4, 10], "rip, version 2.4.9" → [2, 4, 9]).
+/// The numeric dot parts of a version ("v2.4.10" → [2, 4, 10], "tool, version 2.4.9" → [2, 4, 9]).
 pub fn parts(v: &str) -> Vec<u64> {
     let Some(s) = extract_version(v) else { return vec![] };
     s.split('.').map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().unwrap_or(0)).collect()
 }
 
-/// The first dotted version number in a text ("rip, version 2.4.9" → "2.4.9", "v2.5.0" → "2.5.0"); a bare
+/// The first dotted version number in a text ("tool, version 2.4.9" → "2.4.9", "v2.5.0" → "2.5.0"); a bare
 /// number ("v3") counts too.
 pub fn extract_version(text: &str) -> Option<String> {
     let b = text.as_bytes();
@@ -57,7 +56,7 @@ pub fn newer(latest: &str, installed: &str) -> bool {
     !parts(latest).is_empty() && compare(latest, installed) == std::cmp::Ordering::Greater
 }
 
-/// MAJOR.MINOR.PATCH of a version: a hotfix 0.36.0.17 is release 0.36.0.
+/// MAJOR.MINOR.PATCH of a version: a hotfix 1.4.0.17 is release 1.4.0.
 pub fn base(v: &str) -> String {
     let p = parts(v);
     (0..3).map(|i| p.get(i).copied().unwrap_or(0).to_string()).collect::<Vec<_>>().join(".")
@@ -77,7 +76,7 @@ mod tests {
         assert!(newer("2026.10.14", "2026.10.09"));
         assert!(!newer("2.4.9", "2.4.9"));
         assert!(!newer("", "2.4.9"));
-        assert_eq!(extract_version("rip, version 2.4.9\n").as_deref(), Some("2.4.9"));
+        assert_eq!(extract_version("tool, version 2.4.9\n").as_deref(), Some("2.4.9"));
         assert_eq!(extract_version("v2.5.0").as_deref(), Some("2.5.0"));
         assert_eq!(extract_version("Python 3.14.0").as_deref(), Some("3.14.0"));
         assert_eq!(extract_version("v3").as_deref(), Some("3"));
@@ -88,8 +87,8 @@ mod tests {
 
     #[test]
     fn a_hotfix_is_its_release() {
-        assert_eq!(base("0.36.0.17"), "0.36.0");
-        assert_eq!(base("0.36"), "0.36.0");
+        assert_eq!(base("1.4.0.17"), "1.4.0");
+        assert_eq!(base("1.4"), "1.4.0");
         assert_eq!(base("v1.2.3"), "1.2.3");
     }
 }

@@ -53,17 +53,12 @@ fn watch_connection(app: &str) {
     rt::on_window(&format!("{}:server-up", project()), |_| offline::conn_banner(false, ""));
 }
 
-/// The kit's configuration for this app: its id and name, and the paths of this server's settings and
-/// diagnostics routes (the kit's components default to `/api/settings` and `/api/diagnostics`).
+/// The kit's configuration for this app: its id and name, its script stem and where its What's new page is.
+/// The server uses the kit's default routes, so no path is set here.
 fn kit_config(app: &str) -> kit_leptos::config::AppConfig {
     let mut cfg = kit_leptos::config::AppConfig::new(kit_rules::app::App::new(project(), app));
     cfg.script = NAME.to_string();
     cfg.routes.changelog = "/settings?s=whats-new".into();
-    cfg.paths.diagnostics = "/system/diagnostics".into();
-    cfg.paths.test = "/system/test/{name}".into();
-    cfg.paths.settings = "/admin/settings".into();
-    cfg.paths.settings_schema = "/admin/settings/schema".into();
-    cfg.paths.settings_secret = "/admin/settings/secret/{key}".into();
     cfg
 }
 

@@ -31,7 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Server settings: the server's settings schema (`GET /api/admin/settings/schema`) drawn as the web's cards, one
+ * Server settings: the server's settings schema (`GET /api/settings/schema`) drawn as the web's cards, one
  * page of them at a time (a choice row picks the page), with each card's Test and Save. Admins only; the server's
  * owner may also show saved secrets.
  */
@@ -75,7 +75,7 @@ fun ServerSettingsPage(app: App, onBack: () -> Unit) {
 }
 
 /**
- * Diagnostics: the server's checks (`GET /api/system/diagnostics`) with Copy report and Run checks, then the crash
+ * Diagnostics: the server's checks (`GET /api/diagnostics`) with Copy report and Run checks, then the crash
  * reports the phone app sent (App crashes, with Clear). Admins only.
  */
 @Composable
@@ -84,12 +84,12 @@ fun DiagnosticsPage(app: App, onBack: () -> Unit) {
         title = "Diagnostics",
         subtitle = "What the server checks, with the raw answers. Copy report puts it all on the clipboard.",
         onBack = onBack,
-        load = { app.server.getObject("/api/system/diagnostics") },
+        load = { app.server.getObject("/api/diagnostics") },
         report = { DiagnosticsRules.report(it) },
         bottom = {
             AppCrashesSection(
-                load = { app.server.getObject("/api/diagnostics/client-crash") },
-                clear = { app.server.delete("/api/diagnostics/client-crash") },
+                load = { app.server.getObject("/api/crash-reports") },
+                clear = { app.server.delete("/api/crash-reports") },
             )
         },
     )
