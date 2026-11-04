@@ -1,0 +1,275 @@
+name: kit-android
+
+# An app's signed Android APK, taken from Encore's apps.yml `android-native` job. It builds the release APK with
+# Gradle (the version the wrapper properties name), runs the unit tests, checks the signature, the native libraries
+# the APK must carry, their 16 KB page alignment and (optionally) the Baseline Profile, and uploads the APK as the
+# artifact <app-name>-android (file <app-name>-android-<version>.apk), which kit-release attaches to the release.
+#
+# Signing: the permanent release key, passed by the caller as secrets (a called workflow sees no other secrets):
+#   android-keystore-base64 (base64 -w0 release.jks), android-keystore-password, android-key-alias,
+#   android-key-password. They reach Gradle as ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS
+#   and ANDROID_KEY_PASSWORD. Without them a release (version given) fails; a manual run warns and signs with the
+#   runner's debug key (installs, but won't update a release build).
+#
+#   android:
+#     needs: prepare
+#     uses: Krifmaz/kit/.github/workflows/kit-android.yml@v0.1.0
+#     with:
+#       app-name: Notes
+#       version: ${{ needs.prepare.outputs.version }}
+#       code: ${{ needs.prepare.outputs.code }}
+#     secrets:
+#       android-keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+#       …
+on:
+  workflow_call:
+    inputs:
+      app-name:
+        type: string
+        required: true
+      version:
+        description: "The release's version (empty: a manual build, dev.<run number>)"
+        type: string
+        required: false
+        default: ""
+      code:
+        description: "The versionCode (empty: the run number)"
+        type: string
+        required: false
+        default: ""
+      project-dir:
+        description: "The Gradle project"
+        type: string
+        required: false
+        default: android
+      module:
+        description: "The app module"
+        type: string
+        required: false
+        default: app
+      version-property:
+        description: "Gradle properties that take the version: -P<prefix>VersionName and -P<prefix>VersionCode"
+        type: string
+        required: false
+        default: app
+      android-packages:
+        type: string
+        required: false
+        default: "platform-tools platforms;android-36 build-tools;36.0.0"
+      build-tools:
+        description: "The build-tools version (apksigner, zipalign)"
+        type: string
+        required: false
+        default: "36.0.0"
+      ndk:
+        description: "The NDK version for Rust libraries (empty: no Rust)"
+        type: string
+        required: false
+        default: ""
+      rust-targets:
+        description: "Rust Android targets for cargo-ndk (empty: no Rust)"
+        type: string
+        required: false
+        default: ""
+      rust-dir:
+        description: "The Rust crate built into the APK (for the cache and its host tests)"
+        type: string
+        required: false
+        default: ""
+      cargo-ndk-version:
+        type: string
+        required: false
+        default: "4.1.2"
+      native-libs:
+        description: "Native libraries every ABI must carry, space-separated (e.g. libencore_cadenza.so)"
+        type: string
+        required: false
+        default: ""
+      abis:
+        description: "The ABIs native-libs are checked for"
+        type: string
+        required: false
+        default: "arm64-v8a armeabi-v7a"
+      baseline-profile:
+        description: "Fail when the APK has no Baseline Profile (assets/dexopt/baseline.prof)"
+        type: boolean
+        required: false
+        default: false
+      java-version:
+        type: string
+        required: false
+        default: "21"
+    secrets:
+      android-keystore-base64:
+        required: false
+      android-keystore-password:
+        required: false
+      android-key-alias:
+        required: false
+      android-key-password:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      APP: ${{ inputs.app-name }}
+      APP_VERSION: ${{ inputs.version || format('dev.{0}', github.run_number) }}
+      APP_CODE: ${{ inputs.code || github.run_number }}
+      IS_RELEASE: ${{ inputs.version != '' }}
+      PROJECT: ${{ inputs.project-dir }}
+      MODULE: ${{ inputs.module }}
+      BT: ${{ inputs.build-tools }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ${{ inputs.ndk != '' && format('{0} ndk;{1}', inputs.android-packages, inputs.ndk) || inputs.android-packages }}
+      # Rust on the phone: the Android targets + cargo-ndk, so the app's Gradle build can build its .so files
+      - uses: dtolnay/rust-toolchain@stable
+        if: inputs.rust-targets != ''
+        with:
+          targets: ${{ inputs.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+        if: inputs.rust-dir != ''
+        with:
+          workspaces: ${{ inputs.rust-dir }}
+          key: android-native
+      - name: cargo-ndk
+        if: inputs.rust-targets != ''
+        env:
+          CARGO_NDK: ${{ inputs.cargo-ndk-version }}
+        run: cargo install cargo-ndk --version "$CARGO_NDK" --locked
+      - name: NDK for cargo-ndk
+        # cargo-ndk also finds $ANDROID_HOME/ndk/<newest> on its own; be explicit so a second NDK can't win
+        if: inputs.ndk != ''
+        env:
+          NDK_VERSION: ${{ inputs.ndk }}
+        run: |
+          NDK="$ANDROID_HOME/ndk/$NDK_VERSION"
+          [ -d "$NDK" ] || { echo "::error::NDK not found at $NDK"; ls "$ANDROID_HOME/ndk" || true; exit 1; }
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+      - name: Rust crate tests (host)
+        if: inputs.rust-dir != ''
+        env:
+          RUST_DIR: ${{ inputs.rust-dir }}
+        run: cargo test --manifest-path "$RUST_DIR/Cargo.toml"
+      - name: Gradle version
+        # run the Gradle the wrapper properties name, so bumping the wrapper bumps CI too
+        id: gradle
+        run: |
+          P="$PROJECT/gradle/wrapper/gradle-wrapper.properties"
+          G=$(sed -n 's/^distributionUrl=.*gradle-\([0-9][0-9.]*\)-\(bin\|all\)\.zip.*/\1/p' "$P")
+          [ -n "$G" ] || { echo "::error::no Gradle version in $P"; exit 1; }
+          echo "Gradle $G"
+          echo "version=$G" >> "$GITHUB_OUTPUT"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: Signing key
+        env:
+          KS_B64: ${{ secrets.android-keystore-base64 }}
+          KS_PASS: ${{ secrets.android-keystore-password }}
+          KEY_ALIAS: ${{ secrets.android-key-alias }}
+          KEY_PASS: ${{ secrets.android-key-password }}
+        run: |
+          MISSING=""
+          [ -n "$KS_B64" ]    || MISSING="$MISSING ANDROID_KEYSTORE_BASE64"
+          [ -n "$KS_PASS" ]   || MISSING="$MISSING ANDROID_KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || MISSING="$MISSING ANDROID_KEY_ALIAS"
+          [ -n "$KEY_PASS" ]  || MISSING="$MISSING ANDROID_KEY_PASSWORD"
+          if [ -z "$MISSING" ]; then
+            KS="$RUNNER_TEMP/release.jks"
+            printf '%s' "$KS_B64" | base64 -d > "$KS" || { echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64 (create it with: base64 -w0 release.jks)"; exit 1; }
+            [ -s "$KS" ] || { echo "::error::ANDROID_KEYSTORE_BASE64 decodes to an empty file"; exit 1; }
+            {
+              echo "ANDROID_KEYSTORE_PATH=$KS"
+              echo "ANDROID_KEYSTORE_PASSWORD=$KS_PASS"
+              echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+              echo "ANDROID_KEY_PASSWORD=$KEY_PASS"
+            } >> "$GITHUB_ENV"
+            echo "Release key: $KS (alias $KEY_ALIAS)"
+            exit 0
+          fi
+          if [ "$IS_RELEASE" = true ]; then
+            echo "::error title=Android signing::missing secret(s):$MISSING. A release must be signed with the permanent release key, or phones can't update. Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "::warning title=Android signing::missing secret(s):$MISSING – this APK is signed with the runner's throw-away debug key. It installs fresh but can't update (or be updated by) a release build."
+          # the release build type falls back to the debug key; make sure the runner has one where AGP looks
+          D="$HOME/.android"
+          echo "ANDROID_USER_HOME=$D" >> "$GITHUB_ENV"
+          mkdir -p "$D"
+          [ -f "$D/debug.keystore" ] || keytool -genkeypair -v -keystore "$D/debug.keystore" -storepass android \
+            -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
+      - name: Build APK
+        env:
+          PROP: ${{ inputs.version-property }}
+        run: |
+          gradle -p "$PROJECT" --no-daemon --stacktrace ":$MODULE:assembleRelease" \
+            "-P${PROP}VersionName=$APP_VERSION" "-P${PROP}VersionCode=$APP_CODE"
+      - name: Unit tests
+        # debug is the build type AGP always gives unit tests
+        run: gradle -p "$PROJECT" --no-daemon --stacktrace ":$MODULE:testDebugUnitTest"
+      - name: Collect
+        env:
+          LIBS: ${{ inputs.native-libs }}
+          ABIS: ${{ inputs.abis }}
+          BASELINE: ${{ inputs.baseline-profile }}
+        run: |
+          APK=$(find "$PROJECT/$MODULE/build/outputs/apk/release" -name '*.apk' ! -name '*unsigned*' | head -1)
+          [ -n "$APK" ] || { echo "::error::no signed release APK built"; find "$PROJECT/$MODULE/build/outputs" -type f; exit 1; }
+          "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs "$APK"
+          # the native libraries a release APK must carry
+          for lib in $LIBS; do
+            for abi in $ABIS; do
+              unzip -l "$APK" | grep -q "lib/$abi/$lib" || { echo "::error::lib/$abi/$lib is missing from the APK"; unzip -l "$APK" | grep ' lib/' || true; exit 1; }
+            done
+          done
+          if [ "$BASELINE" = true ]; then
+            unzip -l "$APK" | grep -q 'assets/dexopt/baseline.prof' || { echo "::error::the APK has no Baseline Profile (assets/dexopt/baseline.prof)"; exit 1; }
+            echo "Baseline Profile: present"
+          fi
+          cp "$APK" "$APP-android-$APP_VERSION.apk" && ls -la "$APP"-android-*.apk
+      - name: 16 KB pages
+        # Phones with 16 KB memory pages (Android 15+) load a native library only when every LOAD segment is aligned
+        # to 16 KB and the APK keeps the uncompressed .so files 16 KB aligned (zipalign -P 16)
+        if: inputs.ndk != ''
+        run: |
+          APK="$APP-android-$APP_VERSION.apk"
+          READELF=$(find "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt" -path '*/bin/llvm-readelf' 2>/dev/null | head -1)
+          [ -n "$READELF" ] || { echo "::error::llvm-readelf not found under $ANDROID_NDK_HOME"; exit 1; }
+          D=$(mktemp -d)
+          unzip -q -o "$APK" 'lib/*' -d "$D"
+          BAD=0
+          for so in $(find "$D/lib" -name '*.so' | sort); do
+            ALIGNS=$("$READELF" -lW "$so" | awk '$1 == "LOAD" { print $NF }')
+            [ -n "$ALIGNS" ] || { echo "::error::${so#"$D"/}: no LOAD segments read"; BAD=1; continue; }
+            echo "${so#"$D"/}: LOAD alignment ${ALIGNS//$'\n'/ }"
+            for a in $ALIGNS; do
+              if [ $((a)) -lt $((0x4000)) ]; then
+                echo "::error::${so#"$D"/} has a LOAD segment aligned to $a, below 16 KB (0x4000)"
+                BAD=1
+              fi
+            done
+          done
+          rm -rf "$D"
+          [ "$BAD" = 0 ] || exit 1
+          "$ANDROID_HOME/build-tools/$BT/zipalign" -c -P 16 -v 4 "$APK" > zipalign.log 2>&1 \
+            || { tail -20 zipalign.log; echo "::error::the APK is not aligned for 16 KB pages (zipalign -c -P 16 -v 4)"; exit 1; }
+          tail -1 zipalign.log
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.app-name }}-android
+          path: ${{ inputs.app-name }}-android-*.apk
+          if-no-files-found: error
