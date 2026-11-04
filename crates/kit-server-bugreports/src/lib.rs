@@ -30,17 +30,34 @@
 //! `<data_dir>/reports/<report_id>/<file_id>.<ext>`; a path on disk is only ever built from a database row.
 //!
 //! An app adds the routes with `.merge(kit_server_bugreports::router())` (needs [`BugReportsHost`]) or
-//! `router_with(BugReportsConfig { … })`, and `.merge(kit_server_bugreports::crash::router())` (needs only
-//! [`kit_server_core::Host`]).
+//! `router_with(BugReportsConfig { … })`, and `.merge(kit_server_bugreports::crash::router())` (needs
+//! [`crash::CrashHost`]).
+//!
+//! What the routes keep is behind two traits ([`store`]): [`BugReportStore`] and [`CrashStore`]. The kit has them
+//! in SQLite ([`SqliteReports`], feature `sqlite`, on by default) and Postgres (`PgReports`, feature
+//! `postgres`), in tables of their own (`kit_bug_reports`, `kit_bug_report_messages`, `kit_bug_report_files`,
+//! `kit_client_crashes`); the app's own tables are never read.
 
 mod export;
 mod files;
+#[cfg(feature = "postgres")]
+mod pg;
 mod reports;
+#[cfg(feature = "sqlite")]
+mod sqlite;
 mod time;
 
 pub mod crash;
+pub mod store;
 
 pub use files::{check_file, safe_name};
+#[cfg(feature = "postgres")]
+pub use pg::PgReports;
+#[cfg(feature = "sqlite")]
+pub use sqlite::SqliteReports;
+pub use store::{
+    BugReportStore, Crash, CrashStore, FileRow, ListFilter, Message, NewCrash, NewFile, NewMessage, NewReport, Report, ReportSummary, Side,
+};
 
 use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
@@ -247,9 +264,13 @@ pub struct BugReportsConfig {
     pub words: Words,
 }
 
-/// What the bug reports need from the app besides [`Host`]: where files go, the app's name and version for the
-/// export, its rate limiter, and how it tells people about new reports and replies.
+/// What the bug reports need from the app besides [`Host`]: where they are kept, where files go, the app's name
+/// and version for the export, its rate limiter, and how it tells people about new reports and replies.
 pub trait BugReportsHost: Host {
+    /// Where the reports, their replies and the records of their files are kept: a `SqliteReports` or
+    /// `PgReports` the app made once at start, or the app's own [`BugReportStore`].
+    fn reports(&self) -> &dyn BugReportStore;
+
     /// The folder the reports' files are kept under (in `reports/`).
     fn data_dir(&self) -> PathBuf;
 
@@ -282,10 +303,11 @@ pub trait BugReportsHost: Host {
         false
     }
 
-    /// The mail address of account `user_id` ("" for none). Default: `SELECT email FROM users WHERE id=?`.
+    /// The mail address of account `user_id` ("" for none): the app knows its accounts, the kit has no table of
+    /// them. Default: "" (no reply mail is sent).
     fn mail_address(&self, user_id: i64) -> Result<String> {
-        use kit_server_core::RowExt;
-        Ok(self.db().one("SELECT email FROM users WHERE id=?", kit_server_core::p![user_id])?.map(|x| x.s("email")).unwrap_or_default())
+        let _ = user_id;
+        Ok(String::new())
     }
 
     /// The address the app is reached at (`https://app.example.com`), put before [`Words::report_link`] in a
@@ -347,51 +369,6 @@ fn cut(s: &str, max: usize) -> String {
 /// Bytes as whole MB for a sentence, rounded up (8 MiB → 8).
 pub(crate) fn mb(bytes: i64) -> i64 {
     (bytes + (1 << 20) - 1) >> 20
-}
-
-/// Create the bug report tables when they aren't there.
-fn ensure_table(st: &impl Host) -> Result<()> {
-    // created on first use: an older server simply never reads these
-    st.db().execute_batch(
-        "CREATE TABLE IF NOT EXISTS bug_reports (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            kind TEXT,
-            title TEXT,
-            body TEXT,
-            page TEXT,
-            app_version TEXT,
-            device TEXT,
-            status TEXT DEFAULT 'new',
-            created_at REAL,
-            updated_at REAL,
-            last_reply_by TEXT DEFAULT '',
-            user_seen_at REAL DEFAULT 0,
-            admin_seen_at REAL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS bug_report_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_id INTEGER,
-            user_id INTEGER,
-            username TEXT,
-            is_admin INTEGER,
-            body TEXT,
-            created_at REAL
-        );
-        CREATE TABLE IF NOT EXISTS bug_report_files (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_id INTEGER,
-            message_id INTEGER,
-            name TEXT,
-            mime TEXT,
-            size INTEGER,
-            path TEXT,
-            created_at REAL
-        );
-        CREATE INDEX IF NOT EXISTS idx_bug_report_messages_report ON bug_report_messages(report_id);
-        CREATE INDEX IF NOT EXISTS idx_bug_report_files_report ON bug_report_files(report_id);",
-    )
 }
 
 /// Where the reports' files are kept.

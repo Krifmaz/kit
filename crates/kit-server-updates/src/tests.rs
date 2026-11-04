@@ -7,8 +7,8 @@ use super::*;
 use axum::body::Body;
 use axum::http::request::Parts;
 use axum::http::Request;
+use kit_server_core::err;
 use kit_server_core::testing::TestHost;
-use kit_server_core::{err, Db};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tower::ServiceExt;
@@ -310,9 +310,6 @@ struct App {
 }
 
 impl Host for App {
-    fn db(&self) -> &dyn Db {
-        self.host.db()
-    }
     async fn signed_in(&self, parts: &mut Parts) -> Result<Account> {
         self.host.signed_in(parts).await
     }

@@ -8,13 +8,15 @@
 //! DELETE /api/crash-reports  (admin) → {ok}
 //! ```
 //!
-//! The path is [`CrashPaths`] (default `/api/crash-reports`).
+//! The path is [`CrashPaths`] (default `/api/crash-reports`). The reports are kept in the app's [`CrashStore`]
+//! ([`CrashHost::crashes`]).
 
+use crate::store::{crash_json, Crash, CrashStore, NewCrash};
 use axum::extract::State;
 use axum::routing::get;
 use axum::{Extension, Json, Router};
 use kit_server_core::db::now;
-use kit_server_core::{err, p, Admin, Host, Result, RowExt, SignedIn};
+use kit_server_core::{err, Admin, Host, Result, SignedIn};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -52,37 +54,22 @@ impl Default for CrashConfig {
 /// The configuration the handlers are given.
 type Cfg = Extension<Arc<CrashConfig>>;
 
+/// What the crash report routes need from the app besides [`Host`]: where the reports are kept.
+pub trait CrashHost: Host {
+    /// Where the crash reports are kept: a `SqliteReports` or `PgReports` the app made once at start (the same
+    /// one it gives as [`BugReportsHost::reports`](crate::BugReportsHost::reports)), or the app's own
+    /// [`CrashStore`].
+    fn crashes(&self) -> &dyn CrashStore;
+}
+
 /// The crash report route at its default path and limits ([`CrashConfig::default`]).
-pub fn router<S: Host>() -> Router<S> {
+pub fn router<S: CrashHost>() -> Router<S> {
     router_with(CrashConfig::default())
 }
 
 /// The crash report route (POST, GET, DELETE) at `config.paths`.
-pub fn router_with<S: Host>(config: CrashConfig) -> Router<S> {
+pub fn router_with<S: CrashHost>(config: CrashConfig) -> Router<S> {
     Router::new().route(&config.paths.crashes, get(list::<S>).post(upload::<S>).delete(clear::<S>)).layer(Extension(Arc::new(config)))
-}
-
-/// Create the client_crashes table when it isn't there.
-fn ensure_table(st: &impl Host) -> Result<()> {
-    // created on first use: an older server simply never reads it
-    st.db().execute_batch(
-        "CREATE TABLE IF NOT EXISTS client_crashes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            kind TEXT,
-            device TEXT,
-            device_id TEXT,
-            app_version TEXT,
-            os TEXT,
-            time REAL,
-            received_at REAL,
-            first_line TEXT,
-            text TEXT,
-            dedupe TEXT
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_client_crashes_dedupe ON client_crashes(dedupe);",
-    )
 }
 
 /// `POST /api/crash-reports` body.
@@ -128,66 +115,59 @@ pub fn first_line(summary: &str, text: &str) -> String {
 }
 
 /// POST /api/crash-reports: keep a crash report from an app.
-async fn upload<S: Host>(State(st): State<S>, Extension(cfg): Cfg, SignedIn(u): SignedIn, Json(b): Json<CrashBody>) -> Result<Json<Value>> {
+async fn upload<S: CrashHost>(
+    State(st): State<S>,
+    Extension(cfg): Cfg,
+    SignedIn(u): SignedIn,
+    Json(b): Json<CrashBody>,
+) -> Result<Json<Value>> {
     if b.text.trim().is_empty() && b.summary.trim().is_empty() {
         return Err(err(400, "Empty crash report"));
     }
-    ensure_table(&st)?;
     let kind = if b.kind.trim().is_empty() { "crash".to_string() } else { b.kind.trim().chars().take(40).collect() };
     let small = |s: &str| s.trim().chars().take(200).collect::<String>();
     let received = now();
     let time = if b.time > 0.0 && b.time.is_finite() { b.time } else { received };
     let dedupe = if b.key.trim().is_empty() { None } else { Some(format!("{}|{}|{}", u.id, small(&b.device_id), small(&b.key))) };
-    if let Some(d) = &dedupe {
-        if let Some(r) = st.db().one("SELECT id FROM client_crashes WHERE dedupe=?", p![d.clone()])? {
-            return Ok(Json(json!({ "ok": true, "id": r.i("id"), "duplicate": true })));
-        }
+    let crash = Crash {
+        id: 0,
+        user_id: u.id,
+        username: u.username.clone(),
+        kind,
+        device: small(&b.device),
+        device_id: small(&b.device_id),
+        app_version: small(&b.app_version),
+        os: small(&b.os),
+        time,
+        received_at: received,
+        first_line: first_line(&b.summary, &b.text),
+        text: cut(&b.text, cfg.max_text),
+    };
+    let (id, duplicate) = st.crashes().add_crash(&NewCrash { crash, dedupe }, cfg.keep).await?;
+    if !duplicate {
+        tracing::warn!("app crash report from {} ({}): {}", u.username, small(&b.device), first_line(&b.summary, &b.text));
     }
-    let id = st.db().execute(
-        "INSERT INTO client_crashes (user_id, username, kind, device, device_id, app_version, os, time, received_at, first_line, text, dedupe) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        p![
-            u.id,
-            u.username,
-            kind,
-            small(&b.device),
-            small(&b.device_id),
-            small(&b.app_version),
-            small(&b.os),
-            time,
-            received,
-            first_line(&b.summary, &b.text),
-            cut(&b.text, cfg.max_text),
-            dedupe
-        ],
-    )?;
-    st.db().execute("DELETE FROM client_crashes WHERE id NOT IN (SELECT id FROM client_crashes ORDER BY id DESC LIMIT ?)", p![cfg.keep])?;
-    tracing::warn!("app crash report from {} ({}): {}", u.username, small(&b.device), first_line(&b.summary, &b.text));
-    Ok(Json(json!({ "ok": true, "id": id, "duplicate": false })))
+    Ok(Json(json!({ "ok": true, "id": id, "duplicate": duplicate })))
 }
 
 /// GET /api/crash-reports: the crash reports, newest first (admins).
-async fn list<S: Host>(State(st): State<S>, Extension(cfg): Cfg, Admin(_): Admin) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let rows = st.db().query(
-        "SELECT id, kind, username user, device, device_id, app_version, os, time, received_at, first_line, text FROM client_crashes ORDER BY time DESC, id DESC LIMIT ?",
-        p![cfg.keep],
-    )?;
-    Ok(Json(json!({ "crashes": rows })))
+async fn list<S: CrashHost>(State(st): State<S>, Extension(cfg): Cfg, Admin(_): Admin) -> Result<Json<Value>> {
+    let crashes: Vec<Value> = st.crashes().crashes(cfg.keep).await?.iter().map(crash_json).collect();
+    Ok(Json(json!({ "crashes": crashes })))
 }
 
 /// DELETE /api/crash-reports: delete every crash report (admins).
-async fn clear<S: Host>(State(st): State<S>, Admin(_): Admin) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    st.db().execute("DELETE FROM client_crashes", p![])?;
+async fn clear<S: CrashHost>(State(st): State<S>, Admin(_): Admin) -> Result<Json<Value>> {
+    st.crashes().clear_crashes().await?;
     Ok(Json(json!({ "ok": true })))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::TestApp;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use kit_server_core::testing::TestHost;
     use tower::ServiceExt;
 
     async fn call(app: &Router, method: &str, user: i64, body: Option<Value>) -> (StatusCode, Value) {
@@ -208,7 +188,17 @@ mod tests {
 
     #[tokio::test]
     async fn upload_dedupe_list_cut_and_clear() {
-        let app = router().with_state(TestHost::new());
+        upload_dedupe_list_cut_and_clear_on(router().with_state(TestApp::sqlite())).await;
+    }
+
+    #[cfg(feature = "postgres")]
+    #[tokio::test]
+    async fn upload_dedupe_list_cut_and_clear_on_postgres() {
+        upload_dedupe_list_cut_and_clear_on(router().with_state(TestApp::postgres().await)).await;
+    }
+
+    /// Upload, the same crash twice, an empty one, list, a long text cut, clear: on the app's stores.
+    async fn upload_dedupe_list_cut_and_clear_on(app: Router) {
         let report =
             |key: &str, text: &str| json!({ "device": "Pixel 8", "device_id": "dev-1", "text": text, "key": key, "time": 1_700_000_000.0 });
         let r = call(&app, "POST", 2, Some(report("k1", "\n  java.lang.IllegalStateException: boom\n\tat X"))).await;
@@ -238,7 +228,7 @@ mod tests {
 
     #[tokio::test]
     async fn keeps_the_newest_fifty() {
-        let app = router().with_state(TestHost::new());
+        let app = router().with_state(TestApp::sqlite());
         for i in 0..55 {
             let r = call(
                 &app,
@@ -259,7 +249,7 @@ mod tests {
     #[tokio::test]
     async fn the_path_and_limits_are_the_apps() {
         let config = CrashConfig { paths: CrashPaths { crashes: "/crashes".into() }, keep: 2, max_text: 1024 };
-        let app = router_with(config).with_state(TestHost::new());
+        let app = router_with(config).with_state(TestApp::sqlite());
         for i in 0..3 {
             let body = json!({ "text": format!("Boom {i}\n{}", "x".repeat(2000)), "time": 1_700_000_000.0 + i as f64 });
             assert_eq!(call_at(&app, "/crashes", "POST", 2, Some(body)).await.0, StatusCode::OK);

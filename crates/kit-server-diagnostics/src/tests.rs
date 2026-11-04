@@ -5,7 +5,6 @@ use axum::body::Body;
 use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
 use kit_server_core::testing::TestHost;
-use kit_server_core::Db;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,9 +19,6 @@ struct App {
 }
 
 impl Host for App {
-    fn db(&self) -> &dyn Db {
-        self.host.db()
-    }
     async fn signed_in(&self, parts: &mut Parts) -> Result<Account> {
         self.host.signed_in(parts).await
     }
@@ -136,9 +132,6 @@ async fn a_failing_group_fails_the_page() {
     #[derive(Clone)]
     struct Broken(TestHost);
     impl Host for Broken {
-        fn db(&self) -> &dyn Db {
-            self.0.db()
-        }
         async fn signed_in(&self, parts: &mut Parts) -> Result<Account> {
             self.0.signed_in(parts).await
         }
@@ -156,7 +149,7 @@ async fn a_failing_group_fails_the_page() {
     assert_eq!(v, json!({ "detail": "spawn failed" }));
     // a registry without tests knows none
     let b = Broken(TestHost::new());
-    assert_eq!(run_test(&b, "email", Account::from_row(Default::default())).await.unwrap_err().detail, "Unknown check");
+    assert_eq!(run_test(&b, "email", Account::member(0, "")).await.unwrap_err().detail, "Unknown check");
 }
 
 #[tokio::test]

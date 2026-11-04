@@ -1,38 +1,42 @@
 //! Who is asking: the app tells the kit crates through [`Host`], and the crates' handlers take [`SignedIn`]
 //! or [`Admin`], which answer 401 / 403 with the app's own words when the request may not go on.
 
-use crate::{err, Db, Result, Row, RowExt};
+use crate::{err, Result, Row, RowExt};
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use std::future::Future;
 
-/// A signed-in account, as the app knows it.
-#[derive(Debug, Clone, PartialEq)]
+/// A signed-in account, as the app tells the kit: only what the kit's routes need. The app keeps its accounts
+/// wherever it likes; the kit never reads its tables.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
-    /// the account's id (`users.id`)
+    /// the account's id, the key of everything the kit keeps per account
     pub id: i64,
     /// the account's name, shown to admins
     pub username: String,
     /// whether the account may use admin routes
     pub admin: bool,
-    /// the account's whole row (the app's `users` row without the password hash): `prefs` and the like
-    pub row: Row,
+    /// whether the account is the server's owner (an admin who may also see saved secrets)
+    pub owner: bool,
 }
 
 impl Account {
-    /// An account from an app's `users` row: `id`, `username` and `role` (`admin` or `owner` may use admin
-    /// routes).
-    pub fn from_row(row: Row) -> Account {
-        let admin = matches!(row.s("role").as_str(), "admin" | "owner");
-        Account { id: row.i("id"), username: row.s("username"), admin, row }
+    /// An account that is neither an admin nor the owner.
+    pub fn member(id: i64, username: impl Into<String>) -> Account {
+        Account { id, username: username.into(), admin: false, owner: false }
+    }
+
+    /// An account from a row with `id`, `username` and `role`: `admin` may use admin routes, `owner` may also
+    /// see saved secrets. For an app that keeps roles that way; any other app fills the fields itself.
+    pub fn from_row(row: &Row) -> Account {
+        let role = row.s("role");
+        Account { id: row.i("id"), username: row.s("username"), admin: matches!(role.as_str(), "admin" | "owner"), owner: role == "owner" }
     }
 }
 
-/// The app state the kit crates are given. An app implements it once, for its own state type.
+/// The app state the kit crates are given. An app implements it once, for its own state type; each crate asks
+/// for its own store in a trait of its own (`ChangelogHost::prefs`, `BugReportsHost::reports` …).
 pub trait Host: Clone + Send + Sync + 'static {
-    /// The app's database.
-    fn db(&self) -> &dyn Db;
-
     /// The account that sent this request; the app's own error (401 "Not authenticated", 403 for a missing
     /// CSRF header …) when there is none or the request may not go on.
     fn signed_in(&self, parts: &mut Parts) -> impl Future<Output = Result<Account>> + Send;
@@ -79,9 +83,10 @@ mod tests {
     #[test]
     fn accounts_from_rows() {
         let row = |v: serde_json::Value| v.as_object().unwrap().clone();
-        let a = Account::from_row(row(json!({ "id": 3, "username": "ana", "role": "admin" })));
-        assert!(a.admin && a.id == 3 && a.username == "ana");
-        assert!(Account::from_row(row(json!({ "id": 1, "role": "owner" }))).admin);
-        assert!(!Account::from_row(row(json!({ "id": 2, "role": "member" }))).admin);
+        let a = Account::from_row(&row(json!({ "id": 3, "username": "ana", "role": "admin" })));
+        assert!(a.admin && !a.owner && a.id == 3 && a.username == "ana");
+        let o = Account::from_row(&row(json!({ "id": 1, "role": "owner" })));
+        assert!(o.admin && o.owner);
+        assert_eq!(Account::from_row(&row(json!({ "id": 2, "username": "bo", "role": "member" }))), Account::member(2, "bo"));
     }
 }

@@ -18,7 +18,7 @@ use axum::http::{HeaderMap, Method};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use kit_server_core::{err, p, Account, Db, Result, Row, RowExt, SqliteDb};
+use kit_server_core::{err, p, Account, Db, PrefsStore, Result, Row, RowExt, SqliteDb};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -60,7 +60,8 @@ pub fn bearer(headers: &HeaderMap) -> Option<String> {
     (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then(|| token.to_string())
 }
 
-/// The account and session tables (the columns that sign-in, What's new and bug reports read).
+/// The app's own account and session tables (the kit keeps its own data, preferences among it, in `kit_*`
+/// tables; it never reads these).
 pub fn migrate(db: &SqliteDb) -> anyhow::Result<()> {
     db.execute_batch(
         "CREATE TABLE IF NOT EXISTS users (
@@ -69,7 +70,6 @@ pub fn migrate(db: &SqliteDb) -> anyhow::Result<()> {
             email TEXT,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'user',
-            prefs TEXT NOT NULL DEFAULT '{}',
             disabled INTEGER NOT NULL DEFAULT 0,
             created_at REAL
         );
@@ -194,7 +194,7 @@ pub fn signed_in(st: &AppState, parts: &Parts) -> Result<Account> {
         }
     }
     row.remove("password_hash");
-    Ok(Account::from_row(row))
+    Ok(Account::from_row(&row))
 }
 
 /// The account these headers sign in as, and whether through the cookie; `None` when they don't.
@@ -225,13 +225,13 @@ fn user_of(st: &AppState, headers: &HeaderMap) -> Result<Option<(Row, bool)>> {
     Ok(st.db.one("SELECT * FROM users WHERE id=? AND disabled=0", p![s.i("user_id")])?.map(|u| (u, true)))
 }
 
-/// An account as the web app gets it: no password hash, `prefs` as an object and `is_admin`.
-pub fn public_user(u: &Row) -> Value {
+/// An account as the web app gets it: no password hash, `is_admin`, and its `prefs` (from the kit's store).
+pub async fn public_user(st: &AppState, u: &Row) -> Result<Value> {
     let mut m = u.clone();
     m.remove("password_hash");
     m.insert("is_admin".into(), json!(matches!(u.s("role").as_str(), "admin" | "owner")));
-    m.insert("prefs".into(), serde_json::from_str(&u.s("prefs")).unwrap_or(json!({})));
-    Value::Object(m)
+    m.insert("prefs".into(), st.prefs.prefs(u.i("id")).await?);
+    Ok(Value::Object(m))
 }
 
 /// The sign-in routes.
@@ -304,7 +304,7 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
             "INSERT INTO sessions (token, user_id, kind, created_at, expires_at) VALUES (?,?,'app',?,?)",
             p![app_token_key(&token), user.i("id"), now(), now() + APP_SESSION_SECS],
         )?;
-        return Ok((jar, Json(json!({ "user": public_user(&user), "token": token }))));
+        return Ok((jar, Json(json!({ "user": public_user(&st, &user).await?, "token": token }))));
     }
     let days = st.settings.int("session_days").max(1);
     let max_age = days * 86400;
@@ -321,7 +321,7 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
         .secure(https)
         .max_age(cookie::time::Duration::seconds(max_age))
         .build();
-    Ok((jar.add(cookie), Json(public_user(&user))))
+    Ok((jar.add(cookie), Json(public_user(&st, &user).await?)))
 }
 
 /// `POST /api/auth/logout`: end this session (the app token, or the cookie's).
@@ -339,12 +339,12 @@ async fn logout(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar) 
 /// `GET /api/auth/me`: the signed-in account.
 async fn me(State(st): State<AppState>, headers: HeaderMap) -> Result<Json<Value>> {
     let (u, _) = user_of(&st, &headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
-    Ok(Json(public_user(&u)))
+    Ok(Json(public_user(&st, &u).await?))
 }
 
 /// `GET /api/auth/prefs`: the account's preferences.
-async fn get_prefs(kit_server_core::SignedIn(u): kit_server_core::SignedIn) -> Json<Value> {
-    Json(serde_json::from_str(&u.row.s("prefs")).unwrap_or(json!({})))
+async fn get_prefs(State(st): State<AppState>, kit_server_core::SignedIn(u): kit_server_core::SignedIn) -> Result<Json<Value>> {
+    Ok(Json(st.prefs.prefs(u.id).await?))
 }
 
 /// `PUT /api/auth/prefs`: merge preferences into the account's (a null removes a key).
@@ -353,7 +353,7 @@ async fn put_prefs(
     kit_server_core::SignedIn(u): kit_server_core::SignedIn,
     Json(b): Json<Value>,
 ) -> Result<Json<Value>> {
-    let mut prefs: Value = serde_json::from_str(&u.row.s("prefs")).unwrap_or(json!({}));
+    let mut prefs = st.prefs.prefs(u.id).await?;
     if let (Some(p), Some(n)) = (prefs.as_object_mut(), b.as_object()) {
         for (k, v) in n {
             if v.is_null() {
@@ -363,10 +363,9 @@ async fn put_prefs(
             }
         }
     }
-    let s = prefs.to_string();
-    if s.len() > 20_000 {
+    if prefs.to_string().len() > 20_000 {
         return Err(err(400, "Preferences too large"));
     }
-    st.db.execute("UPDATE users SET prefs=? WHERE id=?", p![s, u.id])?;
+    st.prefs.save_prefs(u.id, &prefs).await?;
     Ok(Json(prefs))
 }

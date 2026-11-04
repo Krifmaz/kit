@@ -1,32 +1,33 @@
 //! The export: the matching reports as a zip (`reports.md`, `reports.json`, `files/…`), or with `format=txt` as
 //! one plain text file with the files listed by name and text files (a crash log) written out in whole.
 
-use crate::reports::{filter_sql, load_full, Full, ListQ};
+use crate::reports::{filter, load_full, Full, ListQ};
+use crate::store::FileRow;
 use crate::time::{when, ymd};
-use crate::{ensure_table, fill, mb, reports_dir, BugReportsHost, Cfg, Words};
+use crate::{fill, mb, reports_dir, BugReportsHost, Cfg, Words};
 use axum::body::Body;
 use axum::extract::{Query, State};
 use axum::http::{header, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use kit_server_core::db::now;
-use kit_server_core::{err, Admin, Result, Row, RowExt};
+use kit_server_core::{err, Admin, Result};
 use serde_json::{json, Value};
 use std::io::Write;
 
 /// The path of a file inside the zip.
-fn zip_path(report_id: i64, f: &Row) -> String {
-    format!("files/{report_id}/{}-{}", f.i("id"), f.s("name"))
+fn zip_path(report_id: i64, f: &FileRow) -> String {
+    format!("files/{report_id}/{}-{}", f.id, f.name)
 }
 
 /// A Markdown image or link to the file in the zip. The destination sits in angle brackets: a name like
 /// "Screenshot 2026-10-18 (1).png" has spaces and a parenthesis, which end a bare destination.
-fn md_file(report_id: i64, f: &Row) -> String {
+fn md_file(report_id: i64, f: &FileRow) -> String {
     let p = zip_path(report_id, f);
-    if f.s("mime").starts_with("image/") {
-        format!("![{}](<{p}>)", f.s("name"))
+    if f.mime.starts_with("image/") {
+        format!("![{}](<{p}>)", f.name)
     } else {
-        format!("[{}](<{p}>)", f.s("name"))
+        format!("[{}](<{p}>)", f.name)
     }
 }
 
@@ -45,23 +46,21 @@ fn render_md(reports: &[Full], exported: &str, app: &App) -> String {
     let mut out = format!("# {} ({}, exported {exported})\n", app.title, app.version);
     for full in reports {
         let r = &full.report;
-        let id = r.i("id");
-        let (kind, status) = (r.s("kind"), r.s("status"));
-        out.push_str(&format!("\n## #{id} [{}] {} — {}\n", app.words.kind_label(&kind), r.s("title"), app.words.status_label(&status)));
-        let mut meta = vec![format!("by {}", r.s("username")), when(r.f("created_at"))];
-        for (label, key) in [("page", "page"), ("app", "app_version"), ("device", "device")] {
-            let v = r.s(key);
+        let id = r.id;
+        out.push_str(&format!("\n## #{id} [{}] {} — {}\n", app.words.kind_label(&r.kind), r.title, app.words.status_label(&r.status)));
+        let mut meta = vec![format!("by {}", r.username), when(r.created_at)];
+        for (label, v) in [("page", &r.page), ("app", &r.app_version), ("device", &r.device)] {
             if !v.trim().is_empty() {
                 meta.push(format!("{label} {}", v.trim()));
             }
         }
-        out.push_str(&format!("_{}_\n\n{}\n", meta.join(", "), r.s("body").trim()));
+        out.push_str(&format!("_{}_\n\n{}\n", meta.join(", "), r.body.trim()));
         for f in &full.files {
             out.push_str(&format!("\n{}\n", md_file(id, f)));
         }
         for (m, files) in &full.messages {
-            let who = if m.b("is_admin") { format!("{} (admin)", m.s("username")) } else { m.s("username") };
-            out.push_str(&format!("\n**{who} — {}**\n\n{}\n", when(m.f("created_at")), m.s("body").trim()));
+            let who = if m.is_admin { format!("{} (admin)", m.username) } else { m.username.clone() };
+            out.push_str(&format!("\n**{who} — {}**\n\n{}\n", when(m.created_at), m.body.trim()));
             for f in files {
                 out.push_str(&format!("\n{}\n", md_file(id, f)));
             }
@@ -77,41 +76,39 @@ const TXT_INLINE_MAX: usize = 1 << 20;
 /// text files (a crash log) written in whole under the name.
 fn render_txt(reports: &[Full], exported: &str, base: &std::path::Path, app: &App) -> String {
     let rule = "=".repeat(72);
-    let names = |files: &[Row]| {
-        let mut out = files.iter().map(|f| f.s("name")).collect::<Vec<_>>().join(", ");
-        for f in files.iter().filter(|f| f.s("mime").starts_with("text/") && !f.s("path").is_empty()) {
-            let Ok(data) = std::fs::read(base.join(f.s("path"))) else { continue };
+    let names = |files: &[FileRow]| {
+        let mut out = files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join(", ");
+        for f in files.iter().filter(|f| f.mime.starts_with("text/") && !f.path.is_empty()) {
+            let Ok(data) = std::fs::read(base.join(&f.path)) else { continue };
             let text = String::from_utf8_lossy(&data[..data.len().min(TXT_INLINE_MAX)]).into_owned();
             let more = if data.len() > TXT_INLINE_MAX { "\n… (cut)" } else { "" };
-            out.push_str(&format!("\n\n----- {} -----\n{}{more}\n----- end of {} -----", f.s("name"), text.trim_end(), f.s("name")));
+            out.push_str(&format!("\n\n----- {} -----\n{}{more}\n----- end of {} -----", f.name, text.trim_end(), f.name));
         }
         out
     };
     let mut out = format!("{} ({}, exported {exported})\n", app.title, app.version);
     for full in reports {
         let r = &full.report;
-        let (kind, status) = (r.s("kind"), r.s("status"));
         out.push_str(&format!(
             "\n{rule}\n#{} [{}] {} - {}\n",
-            r.i("id"),
-            app.words.kind_label(&kind),
-            r.s("title"),
-            app.words.status_label(&status)
+            r.id,
+            app.words.kind_label(&r.kind),
+            r.title,
+            app.words.status_label(&r.status)
         ));
-        out.push_str(&format!("By: {}\nCreated: {}\n", r.s("username"), when(r.f("created_at"))));
-        for (label, key) in [("Page", "page"), ("App", "app_version"), ("Device", "device")] {
-            let v = r.s(key);
+        out.push_str(&format!("By: {}\nCreated: {}\n", r.username, when(r.created_at)));
+        for (label, v) in [("Page", &r.page), ("App", &r.app_version), ("Device", &r.device)] {
             if !v.trim().is_empty() {
                 out.push_str(&format!("{label}: {}\n", v.trim()));
             }
         }
-        out.push_str(&format!("{rule}\n\n{}\n", r.s("body").trim()));
+        out.push_str(&format!("{rule}\n\n{}\n", r.body.trim()));
         if !full.files.is_empty() {
             out.push_str(&format!("\nFiles: {}\n", names(&full.files)));
         }
         for (m, files) in &full.messages {
-            let who = if m.b("is_admin") { format!("{} (admin)", m.s("username")) } else { m.s("username") };
-            out.push_str(&format!("\n--- {who}, {} ---\n{}\n", when(m.f("created_at")), m.s("body").trim()));
+            let who = if m.is_admin { format!("{} (admin)", m.username) } else { m.username.clone() };
+            out.push_str(&format!("\n--- {who}, {} ---\n{}\n", when(m.created_at), m.body.trim()));
             if !files.is_empty() {
                 out.push_str(&format!("Files: {}\n", names(files)));
             }
@@ -122,20 +119,19 @@ fn render_txt(reports: &[Full], exported: &str, base: &std::path::Path, app: &Ap
 
 /// reports.json: the same shapes as the detail endpoint, with each file's `path` inside the zip.
 fn render_json(reports: &[Full], exported: &str, app: &App) -> Value {
-    let file = |rid: i64, f: &Row| json!({ "id": f.i("id"), "name": f.s("name"), "mime": f.s("mime"), "size": f.i("size"), "path": zip_path(rid, f) });
+    let file = |rid: i64, f: &FileRow| json!({ "id": f.id, "name": f.name, "mime": f.mime, "size": f.size, "path": zip_path(rid, f) });
     let list: Vec<Value> = reports
         .iter()
         .map(|full| {
             let r = &full.report;
-            let id = r.i("id");
-            let (kind, status) = (r.s("kind"), r.s("status"));
+            let id = r.id;
             json!({
-                "id": id, "kind": kind, "kind_label": app.words.kind_label(&kind), "title": r.s("title"), "body": r.s("body"), "page": r.s("page"),
-                "app_version": r.s("app_version"), "device": r.s("device"), "status": status, "status_label": app.words.status_label(&status),
-                "username": r.s("username"), "user_id": r.i("user_id"), "created_at": r.f("created_at"), "updated_at": r.f("updated_at"),
+                "id": id, "kind": r.kind, "kind_label": app.words.kind_label(&r.kind), "title": r.title, "body": r.body, "page": r.page,
+                "app_version": r.app_version, "device": r.device, "status": r.status, "status_label": app.words.status_label(&r.status),
+                "username": r.username, "user_id": r.user_id, "created_at": r.created_at, "updated_at": r.updated_at,
                 "files": full.files.iter().map(|f| file(id, f)).collect::<Vec<_>>(),
                 "messages": full.messages.iter().map(|(m, files)| json!({
-                    "id": m.i("id"), "username": m.s("username"), "is_admin": m.b("is_admin"), "body": m.s("body"), "created_at": m.f("created_at"),
+                    "id": m.id, "username": m.username, "is_admin": m.is_admin, "body": m.body, "created_at": m.created_at,
                     "files": files.iter().map(|f| file(id, f)).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
             })
@@ -157,16 +153,15 @@ fn build_zip(reports: &[Full], exported: &str, base: &std::path::Path, app: &App
     let js = serde_json::to_string_pretty(&render_json(reports, exported, app)).map_err(|e| fail(&e))?;
     z.write_all(js.as_bytes()).map_err(|e| fail(&e))?;
     for full in reports {
-        let id = full.report.i("id");
+        let id = full.report.id;
         let files = full.files.iter().chain(full.messages.iter().flat_map(|(_, f)| f.iter()));
         for f in files {
-            let rel = f.s("path");
-            if rel.is_empty() {
+            if f.path.is_empty() {
                 continue;
             }
             // a missing file is left out rather than failing the whole export
-            let Ok(data) = std::fs::read(base.join(&rel)) else { continue };
-            z.start_file(zip_path(id, f), if f.s("mime").starts_with("image/") { stored } else { text }).map_err(|e| fail(&e))?;
+            let Ok(data) = std::fs::read(base.join(&f.path)) else { continue };
+            z.start_file(zip_path(id, f), if f.mime.starts_with("image/") { stored } else { text }).map_err(|e| fail(&e))?;
             z.write_all(&data).map_err(|e| fail(&e))?;
         }
     }
@@ -193,17 +188,9 @@ pub(crate) async fn export<S: BugReportsHost>(
     Admin(u): Admin,
     Query(q): Query<ListQ>,
 ) -> Result<Response> {
-    ensure_table(&st)?;
-    let (where_, params) = filter_sql(&cfg, &q, &u, true);
+    let filter = filter(&cfg, &q, &u, true);
     // the zip is built in memory: the files it would hold have to fit
-    let held = st
-        .db()
-        .one(
-            &format!("SELECT COALESCE(SUM(f.size),0) n FROM bug_report_files f JOIN bug_reports r ON r.id=f.report_id WHERE {where_}"),
-            params.clone(),
-        )?
-        .map(|r| r.i("n"))
-        .unwrap_or(0);
+    let held = st.reports().export_bytes(&filter).await?;
     if held > cfg.limits.max_export_bytes {
         return Err(err(
             400,
@@ -213,8 +200,10 @@ pub(crate) async fn export<S: BugReportsHost>(
             ),
         ));
     }
-    let rows = st.db().query(&format!("SELECT * FROM bug_reports r WHERE {where_} ORDER BY r.id"), params)?;
-    let reports: Vec<Full> = rows.into_iter().map(|r| load_full(&st, r)).collect::<Result<_>>()?;
+    let mut reports: Vec<Full> = Vec::new();
+    for r in st.reports().export_reports(&filter).await? {
+        reports.push(load_full(&st, r).await?);
+    }
     let exported = ymd(now());
     let name = st.app_name();
     let stem = cfg.words.export_stem(&name, &exported);

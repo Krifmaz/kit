@@ -4,7 +4,9 @@
 //! An app registers its notices ([`NoticeCheck`]) in [`Notices`] and hands them to the kit through
 //! [`NoticesHost`]. Each notice has an id, a [`Severity`], how it reads now (`current`, cheap: no probing) and
 //! how it is checked again (`check`, on demand and, with [`NoticeCheck::every`], on a timer started by
-//! [`spawn_rechecks`]). [`NoticeCheck::kept`] makes one from a single probe and keeps its last result.
+//! [`spawn_rechecks`]). [`NoticeCheck::kept`] makes one from a single probe and keeps its last result; with
+//! [`Notices::keep_in`] that result is saved too ([`NoticeStore`]: [`SqliteNotices`], or `PgNotices` with
+//! feature `postgres`, in the kit's own `kit_notices` table) and [`Notices::restore`] reads it back at start.
 //!
 //! The routes ([`router`], or [`router_with`] at the app's own [`NoticePaths`]): `GET /api/notices` (signed
 //! in) → `{"notices": [<notice>…]}` and `POST /api/notices/check` (admin) → the same after every notice was
@@ -26,9 +28,13 @@
 
 mod notice;
 mod registry;
+pub mod store;
 
 pub use notice::{Notice, Severity, Toast, Toasts};
 pub use registry::{spawn_rechecks, NoticeCheck, Notices, CHECK_WAIT};
+#[cfg(feature = "postgres")]
+pub use store::PgNotices;
+pub use store::{NoticeStore, SqliteNotices};
 
 use axum::extract::{Path, State};
 use axum::routing::{get, post};

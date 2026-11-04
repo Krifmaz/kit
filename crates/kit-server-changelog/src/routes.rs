@@ -10,7 +10,7 @@ use crate::notes::{base, parse, unseen, Release};
 use axum::extract::{Query, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use kit_server_core::{p, version, Account, Host, Result, SignedIn};
+use kit_server_core::{version, Host, PrefsStore, Result, SignedIn};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -60,17 +60,9 @@ pub trait ChangelogHost: Host {
     /// The app's changelog.
     fn changelog(&self) -> &Changelog;
 
-    /// The account's preferences (`whats_new_seen`, `whats_new_popup`): by default the JSON text in the
-    /// `prefs` column of its row, `{}` when there is none.
-    fn prefs(&self, account: &Account) -> Value {
-        account.row.get("prefs").and_then(Value::as_str).and_then(|s| serde_json::from_str(s).ok()).unwrap_or(json!({}))
-    }
-
-    /// Keep the account's preferences: by default `UPDATE users SET prefs=? WHERE id=?`.
-    fn save_prefs(&self, account: &Account, prefs: &Value) -> Result<()> {
-        self.db().execute("UPDATE users SET prefs=? WHERE id=?", p![prefs.to_string(), account.id])?;
-        Ok(())
-    }
+    /// Where each account's preferences are kept (`whats_new_seen`, `whats_new_popup`): the kit's
+    /// `SqlitePrefs` or `pg::PgPrefs`, or the app's own [`PrefsStore`].
+    fn prefs(&self) -> &dyn PrefsStore;
 }
 
 /// Where the What's new routes are served.
@@ -114,42 +106,42 @@ struct AllQuery {
 }
 
 /// The full What's new list: every release this server includes, newest first.
-async fn all<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn, Query(q): Query<AllQuery>) -> Json<Value> {
+async fn all<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn, Query(q): Query<AllQuery>) -> Result<Json<Value>> {
     let c = st.changelog();
     let mut list = c.included();
     if let Some(n) = q.limit {
         list.truncate(n);
     }
-    let p = st.prefs(&u);
-    Json(json!({
+    let p = st.prefs().prefs(u.id).await?;
+    Ok(Json(json!({
         "version": c.version,
         "popup": popup_on(&p),
         "seen": p.get("whats_new_seen").cloned().unwrap_or(Value::Null),
         "releases": list,
-    }))
+    })))
 }
 
 /// The popup: `show` when it is on and something is new since this account last saw it.
-async fn new<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Json<Value> {
+async fn new<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
     let c = st.changelog();
-    let p = st.prefs(&u);
+    let p = st.prefs().prefs(u.id).await?;
     let on = popup_on(&p);
     let list = unseen(&c.releases, &c.version, p.get("whats_new_seen").and_then(Value::as_str));
     let list: Vec<Value> = list
         .into_iter()
         .map(|r| json!({ "version": r.version, "title": r.title, "summary": r.summary, "highlights": r.highlights }))
         .collect();
-    Json(json!({ "version": c.version, "popup": on, "show": on && !list.is_empty(), "releases": list }))
+    Ok(Json(json!({ "version": c.version, "popup": on, "show": on && !list.is_empty(), "releases": list })))
 }
 
 /// The popup was shown (or closed): this version is seen.
 async fn seen<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
     let version = st.changelog().version.clone();
-    let mut pr = st.prefs(&u);
+    let mut pr = st.prefs().prefs(u.id).await?;
     if let Some(o) = pr.as_object_mut() {
         o.insert("whats_new_seen".into(), json!(version));
     }
-    st.save_prefs(&u, &pr)?;
+    st.prefs().save_prefs(u.id, &pr).await?;
     Ok(Json(json!({ "ok": true, "seen": version })))
 }
 
@@ -159,7 +151,6 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request;
     use kit_server_core::testing::TestHost;
-    use kit_server_core::Db;
     use std::sync::{Arc, OnceLock};
     use tower::ServiceExt;
 
@@ -168,10 +159,7 @@ mod tests {
     struct App(TestHost, Arc<Changelog>);
 
     impl Host for App {
-        fn db(&self) -> &dyn Db {
-            self.0.db()
-        }
-        async fn signed_in(&self, parts: &mut axum::http::request::Parts) -> Result<Account> {
+        async fn signed_in(&self, parts: &mut axum::http::request::Parts) -> Result<kit_server_core::Account> {
             self.0.signed_in(parts).await
         }
     }
@@ -179,6 +167,9 @@ mod tests {
     impl ChangelogHost for App {
         fn changelog(&self) -> &Changelog {
             &self.1
+        }
+        fn prefs(&self) -> &dyn PrefsStore {
+            &self.0.prefs
         }
     }
 
@@ -219,8 +210,7 @@ mod tests {
         // seen: kept in the account's prefs; the next hotfix shows nothing again
         let (_, v) = call(&r, "POST", "/api/changelog/seen", 2).await;
         assert_eq!(v, json!({ "ok": true, "seen": "1.4.0.17" }));
-        let prefs = st.0.db.one("SELECT prefs FROM users WHERE id=2", p![]).unwrap().unwrap();
-        assert_eq!(prefs["prefs"], "{\"whats_new_seen\":\"1.4.0.17\"}");
+        assert_eq!(st.0.prefs.prefs(2).await.unwrap(), json!({ "whats_new_seen": "1.4.0.17" }));
         let (_, v) = call(&r, "GET", "/api/changelog/new", 2).await;
         assert_eq!((v["show"].as_bool(), v["releases"].as_array().unwrap().len()), (Some(false), 0));
     }
@@ -228,9 +218,7 @@ mod tests {
     #[tokio::test]
     async fn the_switch_turns_the_popup_off_but_not_the_list() {
         let (st, r) = app();
-        st.0.db
-            .execute("UPDATE users SET prefs=? WHERE id=1", p![json!({ "whats_new_popup": false, "whats_new_seen": "1.2.1" }).to_string()])
-            .unwrap();
+        st.0.prefs.save_prefs(1, &json!({ "whats_new_popup": false, "whats_new_seen": "1.2.1" })).await.unwrap();
         let (_, v) = call(&r, "GET", "/api/changelog/new", 1).await;
         assert_eq!((v["popup"].as_bool(), v["show"].as_bool()), (Some(false), Some(false)));
         assert_eq!(

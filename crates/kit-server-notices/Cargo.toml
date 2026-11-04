@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-kit-server-core.workspace = true
+kit-server-core = { workspace = true, features = ["sqlite"] }
 axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -20,6 +20,10 @@ futures-util.workspace = true
 kit-server-core = { workspace = true, features = ["testing"] }
 tokio = { workspace = true, features = ["test-util"] }
 tower.workspace = true
+
+[features]
+# `PgNotices`: the kept notices' last results in Postgres
+postgres = ["kit-server-core/postgres"]
 
 [lints]
 workspace = true

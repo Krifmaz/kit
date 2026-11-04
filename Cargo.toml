@@ -27,6 +27,12 @@ toml = { version = "0.8.23", default-features = false, features = ["parse", "pre
 futures-util = "0.3.34"
 sha2 = "0.10"
 kit-server-core = { path = "crates/kit-server-core" }
+# the storage traits are async, so an app can keep the kit's data on an async database (Postgres through sqlx)
+async-trait = "0.1.89"
+# feature `postgres` of the server crates: the Postgres stores, on sqlx's core and Postgres driver (not the `sqlx`
+# facade, whose optional SQLite driver links a second sqlite3 next to rusqlite's and can't resolve with it)
+sqlx-core = { version = "=0.8.6", default-features = false, features = ["_rt-tokio", "json"] }
+sqlx-postgres = { version = "=0.8.6", default-features = false, features = ["json"] }
 # pinned exactly: Leptos is before 1.0, so it is upgraded deliberately (DESIGN.md §10)
 leptos = { version = "=0.8.23", default-features = false }
 

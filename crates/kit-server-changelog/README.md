@@ -30,9 +30,11 @@ let changelog = Changelog::new("Demo", VERSION, generated::NOTES);
 // or, read at start: Changelog::from_dir("Demo", VERSION, Path::new("/app/releases"))?
 impl kit_server_changelog::ChangelogHost for AppState {
     fn changelog(&self) -> &kit_server_changelog::Changelog { &self.changelog }
+    fn prefs(&self) -> &dyn kit_server_core::PrefsStore { &self.prefs } // a SqlitePrefs or pg::PgPrefs
 }
 let app = app.merge(kit_server_changelog::router());
 ```
 
-Preferences default to the JSON text in the account row's `prefs` column, saved with
-`UPDATE users SET prefs=? WHERE id=?`; override `prefs` / `save_prefs` for another store.
+Preferences are kept by the app's `ChangelogHost::prefs()`, a `kit_server_core::PrefsStore`: the kit's
+`SqlitePrefs` or `pg::PgPrefs` (table `kit_account_prefs`, one JSON object per account id), or the app's own.
+The kit never reads the app's accounts table.

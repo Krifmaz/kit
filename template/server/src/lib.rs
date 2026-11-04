@@ -18,8 +18,8 @@ pub mod checks;
 use axum::http::{header, HeaderValue};
 use axum::Router;
 use kit_server_changelog::{Changelog, ChangelogHost};
-use kit_server_core::{Account, Db, Host, SqliteDb};
-use kit_server_settings::{DefaultValue, Field, Group, KeyDef, Section, SettingsHost, Store, Table, Values};
+use kit_server_core::{Account, Host, PrefsStore, SqliteDb, SqlitePrefs};
+use kit_server_settings::{DefaultValue, Field, Group, KeyDef, Section, SettingsHost, SqliteSettings, Store, Table, Values};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
@@ -59,10 +59,14 @@ pub fn port() -> u16 {
 /// The app's state, handed to every route; clones share everything.
 #[derive(Clone)]
 pub struct AppState {
-    /// The database (`<data>/app.db`).
+    /// The database (`<data>/app.db`): the app's own accounts and sessions, and the kit's `kit_*` tables.
     pub db: SqliteDb,
-    /// The settings in effect: environment, then saved, then settings.toml's defaults.
-    pub settings: Store<SqliteDb>,
+    /// The bug reports and crash logs, in the kit's `kit_bug_report*` and `kit_client_crashes` tables.
+    pub reports: kit_server_bugreports::SqliteReports,
+    /// Each account's preferences (What's new's seen version and switch), in the kit's `kit_account_prefs`.
+    pub prefs: SqlitePrefs,
+    /// The settings in effect: environment, then saved (the kit's `kit_settings`), then settings.toml's defaults.
+    pub settings: Store,
     /// The data folder: the database, bug report files. The only folder the server writes to.
     pub data_dir: PathBuf,
     /// The built web app (trunk's dist), served at `/`.
@@ -78,17 +82,17 @@ pub struct AppState {
 impl AppState {
     /// The state from the environment: the data folder `APP_DATA_DIR` (default /data) and the web app in
     /// `APP_STATIC_DIR` (default /app/static).
-    pub fn from_env() -> anyhow::Result<AppState> {
+    pub async fn from_env() -> anyhow::Result<AppState> {
         let data = PathBuf::from(std::env::var("APP_DATA_DIR").unwrap_or_else(|_| "/data".into()));
         let static_dir = PathBuf::from(std::env::var("APP_STATIC_DIR").unwrap_or_else(|_| "/app/static".into()));
-        let st = AppState::open(&data, static_dir, |name| std::env::var(name).ok())?;
+        let st = AppState::open(&data, static_dir, |name| std::env::var(name).ok()).await?;
         auth::ensure_owner(&st, std::env::var("APP_ADMIN_USER").ok(), std::env::var("APP_ADMIN_PASSWORD").ok())?;
         Ok(st)
     }
 
     /// The state on the data folder `data` (made when missing) with the web app in `static_dir`; `env` reads
     /// the settings' environment variables (a test passes its own).
-    pub fn open(
+    pub async fn open(
         data: &Path,
         static_dir: PathBuf,
         env: impl Fn(&str) -> Option<String> + Send + Sync + 'static,
@@ -96,16 +100,24 @@ impl AppState {
         std::fs::create_dir_all(data).map_err(|e| anyhow::anyhow!("The data folder {} can't be made: {e}", data.display()))?;
         let db = SqliteDb::open(&data.join("app.db")).map_err(|e| anyhow::anyhow!("The database can't be opened: {}", e.detail))?;
         auth::migrate(&db)?;
+        let kit = |e: kit_server_core::Error| anyhow::anyhow!("The kit's tables can't be made: {}", e.detail);
+        let prefs = SqlitePrefs::new(db.clone()).map_err(kit)?;
+        let reports = kit_server_bugreports::SqliteReports::new(db.clone()).map_err(kit)?;
+        let saved = SqliteSettings::new(db.clone()).map_err(kit)?;
+        let notices = checks::notices().keep_in(Arc::new(kit_server_notices::SqliteNotices::new(db.clone()).map_err(kit)?));
+        notices.restore().await.map_err(kit)?;
         let settings =
-            Store::load_with(db.clone(), SETTINGS, env).map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
+            Store::load_with(saved, SETTINGS, env).await.map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
         let changelog = Arc::new(Changelog::new(&settings.str("app_name"), VERSION, changelog_gen::NOTES));
         Ok(AppState {
             db,
+            reports,
+            prefs,
             settings,
             data_dir: data.to_path_buf(),
             static_dir,
             changelog,
-            notices: checks::notices(),
+            notices,
             limits: Arc::new(auth::Limits::default()),
         })
     }
@@ -117,10 +129,6 @@ impl AppState {
 }
 
 impl Host for AppState {
-    fn db(&self) -> &dyn Db {
-        &self.db
-    }
-
     async fn signed_in(&self, parts: &mut axum::http::request::Parts) -> kit_server_core::Result<Account> {
         auth::signed_in(self, parts)
     }
@@ -129,6 +137,10 @@ impl Host for AppState {
 impl ChangelogHost for AppState {
     fn changelog(&self) -> &Changelog {
         &self.changelog
+    }
+
+    fn prefs(&self) -> &dyn PrefsStore {
+        &self.prefs
     }
 }
 
@@ -153,6 +165,21 @@ impl kit_server_bugreports::BugReportsHost for AppState {
 
     fn limited(&self, key: &str, limit: usize, window_secs: f64) -> bool {
         self.limits.limited(key, limit, window_secs, true)
+    }
+
+    fn reports(&self) -> &dyn kit_server_bugreports::BugReportStore {
+        &self.reports
+    }
+
+    fn mail_address(&self, user_id: i64) -> kit_server_core::Result<String> {
+        use kit_server_core::{Db, RowExt};
+        Ok(self.db.one("SELECT email FROM users WHERE id=?", kit_server_core::p![user_id])?.map(|r| r.s("email")).unwrap_or_default())
+    }
+}
+
+impl kit_server_bugreports::crash::CrashHost for AppState {
+    fn crashes(&self) -> &dyn kit_server_bugreports::CrashStore {
+        &self.reports
     }
 }
 

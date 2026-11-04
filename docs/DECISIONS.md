@@ -159,5 +159,13 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · Template web: `index.html` sets no `data-theme`, since the default look is the tokens' `:root`; `dark`, `oled` and `light` are the only `data-theme` values.
 - 2026-11-04 · Template web: Sign out asks first (`kit_leptos::modal::confirm`, danger), the template's one confirm dialog on every platform; the web's text says "This browser" where the desktop's says "This computer".
 - 2026-11-04 · Server routes and clients joined up: a settings card's Test is `POST /api/diagnostics/{name}/test` in every client (kit-leptos `Paths::test`, kit-iced, the template's web and desktop); the template's web app sets no paths of its own any more, and its data-folder notice is `/api/notices/data`.
+- 2026-11-04 · Storage: each server crate's data is behind an async trait of its own (async-trait, so `&dyn` works) with SQLite and Postgres implementations; tables are `kit_*`, made by numbered migration steps recorded in `kit_migrations` (supersedes "SQL table names are kept": nothing on the old names had shipped in a kit release).
+- 2026-11-04 · Postgres uses `sqlx-core` and `sqlx-postgres` directly, not the `sqlx` facade: the facade's optional SQLite driver links a second `sqlite3` and Cargo can't resolve it next to rusqlite. TLS is the app's sqlx feature.
+- 2026-11-04 · The SQLite stores stay on rusqlite (synchronous calls under a lock, answering at once inside the async methods); the template keeps SQLite.
+- 2026-11-04 · `Account` carries `owner` instead of the app's whole row, so settings' owner-only secret no longer reads a `role` column.
+- 2026-11-04 · Postgres tests need `KIT_TEST_POSTGRES_URL` and fail without it (never pass untested); each test gets a schema of its own; CI's `postgres` job provides the database.
+- 2026-11-04 · Notices gained a store only for kept notices' last results (restored at start); notices an app reads itself stay the app's.
+- 2026-11-04 · Bug reports and crash logs are two traits that one store type (`SqliteReports` / `PgReports`) implements, so an app makes one store and hands it out twice; the crash routes need only the small `CrashHost`.
+- 2026-11-04 · The bug report stores share their list and unread SQL in one place and differ only in placeholders and LIKE vs ILIKE, so filters behave the same on SQLite and Postgres.
 - 2026-11-04 · The `--player`/`--player-h` tokens keep their names (apps' stylesheets use them); they are documented as the room for a bar along the bottom, 0 by default.
 - 2026-11-04 · Merged branches are deleted by a kit workflow (cleanup-branches.yml, GITHUB_TOKEN) because this environment's proxy refuses ref deletes; it only deletes a branch with no open PR whose head is a merged PR's head.

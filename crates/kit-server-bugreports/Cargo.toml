@@ -22,5 +22,14 @@ urlencoding.workspace = true
 kit-server-core = { workspace = true, features = ["testing"] }
 tower.workspace = true
 
+[features]
+default = ["sqlite"]
+# `SqliteReports`: the reports and crash reports in SQLite, on `kit_server_core::SqliteDb`
+sqlite = ["kit-server-core/sqlite"]
+# `PgReports`: the reports and crash reports in Postgres, on `kit_server_core::pg::PgDb`
+postgres = ["kit-server-core/postgres"]
+# `store::reports_contract` and `store::crash_contract`, for the tests of an app's own stores
+testing = ["kit-server-core/testing"]
+
 [lints]
 workspace = true

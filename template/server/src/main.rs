@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
-    let st = server::AppState::from_env()?;
+    let st = server::AppState::from_env().await?;
     let addr = SocketAddr::from(([0, 0, 0, 0], server::port()));
     tracing::info!("{name} {} listening on {addr}", server::VERSION);
     let listener = tokio::net::TcpListener::bind(addr).await?;

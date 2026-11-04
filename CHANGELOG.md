@@ -9,6 +9,28 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   no commits since.
 
 ### Changed
+- The server crates no longer assume one app's database. What each keeps is behind a small async trait with a
+  SQLite and a Postgres implementation, in tables of the kit's own (`kit_*`) made by migrations (`Migrations`,
+  recorded in `kit_migrations`):
+  - `kit-server-core`: `Host::db()` is gone; `Account` is `{id, username, admin, owner}` (no app row);
+    `PrefsStore` (`SqlitePrefs`, `pg::PgPrefs`; `kit_account_prefs`); `SqliteDb::migrate`; feature `postgres`
+    adds `pg::PgDb` (sqlx core and Postgres driver, JSON rows, `$1` parameters) and, with `testing`,
+    `pg::test_db()`. `TestHost` has fixed accounts and no `users` table.
+  - `kit-server-changelog`: `ChangelogHost::prefs()` returns the app's `PrefsStore` (was a read of the account
+    row and `UPDATE users`).
+  - `kit-server-settings`: `Store` is no longer generic; it keeps saved values in a `SettingsStore`
+    (`SqliteSettings`, `PgSettings` with feature `postgres`; `kit_settings`, was `settings`); `Store::load`,
+    `load_with`, `reload`, `saved` and `set_many` are async and `set_many` reports a failed save; `Values` is
+    async-trait. The owner check reads `Account::owner`.
+  - `kit-server-notices`: `NoticeStore` (`SqliteNotices`, `PgNotices`; `kit_notices`) keeps each kept notice's last
+    result: `Notices::keep_in(store)` saves them, `Notices::restore()` reads them back at start.
+  - `kit-server-bugreports`: reports, their messages and files are behind `BugReportStore` and the crash logs
+    behind `CrashStore`, both implemented by `SqliteReports` (default feature `sqlite`) and `PgReports` (feature
+    `postgres`) in `kit_bug_reports`, `kit_bug_report_messages`, `kit_bug_report_files` and `kit_client_crashes`
+    (were `bug_reports…` and `client_crashes`, made on first use). Apps implement `BugReportsHost::reports()` and
+    the new `crash::CrashHost::crashes()`; `mail_address` no longer reads a `users` table (default "").
+  - The template's server keeps the kit's data in its SQLite database through those stores; its own `users` table
+    loses `prefs`. CI runs the stores and the crates' tests on Postgres (`postgres` job).
 - kit-compose's `KitRoutes` follow the neutral server routes: `clientCrash` is `/api/crash-reports` and
   `settingsTest` is `/api/diagnostics/{test}/test` (the card's check id goes in `{test}`).
 - Clients follow the neutral server routes: kit-leptos `Paths::test` defaults to `/api/diagnostics/{name}/test`;

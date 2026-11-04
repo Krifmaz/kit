@@ -8,7 +8,9 @@
 //! - [`when`]: a field's visibility rule (`key=value`, `key!=value`).
 //! - [`schema`]: the answer of `GET /api/settings/schema` (contracts/settings-schema.md).
 //! - [`values`]: how values take their setting's type, the secret mask, and the [`Values`] trait.
-//! - [`Store`] (feature `server`): the values on the app's database; environment, then saved, then default.
+//! - [`Store`] (feature `server`): the values in effect (environment, then saved, then default), with the saved
+//!   ones behind [`SettingsStore`]: [`SqliteSettings`] or, with feature `postgres`, `PgSettings` (table
+//!   `kit_settings`), or the app's own.
 //! - [`router`] (feature `server`): `GET/PUT /api/settings`, the schema and a saved secret, for any app
 //!   that implements [`SettingsHost`], on paths the app may change ([`SettingsPaths`]).
 
@@ -25,7 +27,13 @@ pub mod when;
 
 #[cfg(feature = "server")]
 pub use router::{router, router_with, Owner, SettingsHost, SettingsPaths};
+#[cfg(feature = "postgres")]
+pub use store::PgSettings;
 #[cfg(feature = "server")]
 pub use store::Store;
+#[cfg(feature = "server")]
+pub use store::{SettingsStore, SqliteSettings};
 pub use table::{DefaultValue, Field, Group, KeyDef, Section, Table};
-pub use values::{coerce, is_masked, Def, EnvLookup, Values, MASK};
+#[cfg(feature = "server")]
+pub use values::Values;
+pub use values::{coerce, is_masked, Def, EnvLookup, MASK};

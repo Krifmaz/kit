@@ -2,6 +2,7 @@
 //! mask a secret is sent as ([`MASK`]), and [`Values`], what the settings routes need from wherever an app
 //! keeps its values ([`crate::Store`] is the kit's own, on the app's database).
 
+#[cfg(feature = "server")]
 use crate::table::Table;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -75,7 +76,9 @@ pub fn masked(v: &Value) -> Value {
 }
 
 /// What the settings routes read and write: the app's values, wherever it keeps them. [`crate::Store`]
-/// implements it; an app with its own settings type may too.
+/// implements it; an app with its own settings type may too. (Feature `server`.)
+#[cfg(feature = "server")]
+#[kit_server_core::async_trait]
 pub trait Values: Send + Sync {
     /// The table the values follow.
     fn table(&self) -> Table;
@@ -88,7 +91,7 @@ pub trait Values: Send + Sync {
     /// Whether an environment variable sets `key` (the UI shows it locked).
     fn env_locked(&self, key: &str) -> bool;
     /// Save `values` (`{key: value}`), each coerced to its setting's type; unknown keys are skipped.
-    fn set_many(&self, values: &Value);
+    async fn set_many(&self, values: &Value) -> kit_server_core::Result<()>;
     /// Every setting for the admin UI, secrets masked, with `_meta` (`{source, env}` per key).
     fn dump(&self) -> Value;
 }

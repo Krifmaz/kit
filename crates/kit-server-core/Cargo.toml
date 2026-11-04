@@ -13,6 +13,10 @@ serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 rusqlite = { workspace = true, optional = true }
+async-trait.workspace = true
+sqlx-core = { workspace = true, optional = true }
+sqlx-postgres = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
@@ -23,6 +27,8 @@ tower.workspace = true
 sqlite = ["dep:rusqlite"]
 # `testing::TestHost`: an app state for the crates' tests (SQLite in memory, accounts by request header)
 testing = ["sqlite"]
+# the Postgres stores: `pg::connect`, `pg::migrate` and `pg::PgPrefs` (sqlx; the app picks its TLS through its own sqlx features)
+postgres = ["dep:sqlx-core", "dep:sqlx-postgres", "dep:tokio"]
 
 [lints]
 workspace = true
