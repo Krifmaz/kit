@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 kit-server-core = { workspace = true, optional = true }
+kit-rules = { path = "../kit-rules", optional = true }
 axum = { workspace = true, optional = true }
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
@@ -21,7 +22,7 @@ tower.workspace = true
 [features]
 default = ["server"]
 # the routes; without it the crate is only the notes parser and `build::embed`, for an app's build script
-server = ["dep:kit-server-core", "dep:axum", "dep:serde_json"]
+server = ["dep:kit-rules", "dep:kit-server-core", "dep:axum", "dep:serde_json"]
 
 [lints]
 workspace = true
