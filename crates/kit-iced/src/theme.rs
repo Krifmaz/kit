@@ -179,7 +179,7 @@ pub fn set(p: Palette) {
 
 /// Encore's own look: the `encore` theme with the logo accent, solid background.
 pub fn encore() -> Palette {
-    palette("encore", "logo", "", "solid", true)
+    palette("encore", "cream", "", "solid", true)
 }
 
 /// The active look (the default Encore look before [`set`] was called).
@@ -683,7 +683,7 @@ mod tests {
 
     #[test]
     fn tokens_follow_the_css() {
-        let p = palette("encore", "logo", "", "solid", true);
+        let p = palette("encore", "cream", "", "solid", true);
         assert_eq!(to_hex(p.bg), "#161617");
         assert_eq!(to_hex(p.text), "#f0ead6");
         assert_eq!(to_hex(p.accent), "#f0ead6");
