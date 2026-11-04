@@ -1,6 +1,6 @@
 [package]
 name = "kit-server-diagnostics"
-description = "The diagnostics page of a kit server: a registry of checks (connections, folders, tools) with their status, message and fix, run all at once, and the settings cards' Test buttons."
+description = "The diagnostics page of a kit server: a registry of the app's checks (connections, folders, tools) with their status, message and fix, run all at once, and the settings cards' Test buttons, at configurable paths."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

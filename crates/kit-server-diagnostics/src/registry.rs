@@ -20,7 +20,7 @@ type FallbackFn<S> = Arc<dyn Fn(S, String, Account) -> Boxed<Option<TestResult>>
 /// `{ok: false, message}`, see [`test_failed`]).
 pub type TestResult = std::result::Result<Value, String>;
 
-/// The answer of a test that failed on the way: `{"ok": false, "message": why}` (Encore's words, never cut).
+/// The answer of a test that failed on the way: `{"ok": false, "message": why}` (the whole sentence, never cut).
 pub fn test_failed(why: impl Into<String>) -> Value {
     json!({ "ok": false, "message": why.into() })
 }
@@ -53,7 +53,7 @@ impl<S: Clone + Send + Sync + 'static> Registry<S> {
         Self::default()
     }
 
-    /// Add a group of checks named `id`: none (a service that is not set up), one or several (every folder).
+    /// Add a group of checks named `id`: none (something that is not set up), one or several (every folder).
     /// The page lists the groups in the order they were added; all of them run at once. A group's error fails
     /// the whole page with that error.
     pub fn group<F, Fut>(mut self, id: impl Into<String>, f: F) -> Self
@@ -78,19 +78,19 @@ impl<S: Clone + Send + Sync + 'static> Registry<S> {
         })
     }
 
-    /// Add the Test button `service` of a settings card (`POST /api/system/test/{service}`); the test is run as
-    /// the admin who pressed it.
-    pub fn test<F, Fut>(mut self, service: impl Into<String>, f: F) -> Self
+    /// Add the Test button `id` of a settings card (`POST /api/diagnostics/{id}/test`); the test is run as the
+    /// admin who pressed it.
+    pub fn test<F, Fut>(mut self, id: impl Into<String>, f: F) -> Self
     where
         F: Fn(S, Account) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = TestResult> + Send + 'static,
     {
-        self.tests.push((service.into(), Arc::new(move |s, a| Box::pin(f(s, a)))));
+        self.tests.push((id.into(), Arc::new(move |s, a| Box::pin(f(s, a)))));
         self
     }
 
-    /// Let the app answer every test not added with [`Registry::test`] itself (Encore's tests are one function
-    /// its plugins share); `None` for a service there is no test for.
+    /// Let the app answer every test not added with [`Registry::test`] itself (for an app whose tests are one
+    /// function that looks the id up); `None` for an id there is no test for.
     pub fn tests<F, Fut>(mut self, f: F) -> Self
     where
         F: Fn(S, String, Account) -> Fut + Send + Sync + 'static,
@@ -121,13 +121,13 @@ impl<S: Clone + Send + Sync + 'static> Registry<S> {
         Some(f(st.clone()).await)
     }
 
-    /// The test `service` as `who`; `None` when there is no such test.
-    pub async fn run_test(&self, st: &S, service: &str, who: Account) -> Option<TestResult> {
-        if let Some((_, f)) = self.tests.iter().find(|(n, _)| n == service) {
+    /// The test `id` as `who`; `None` when there is no such test.
+    pub async fn run_test(&self, st: &S, id: &str, who: Account) -> Option<TestResult> {
+        if let Some((_, f)) = self.tests.iter().find(|(n, _)| n == id) {
             return Some(f(st.clone(), who).await);
         }
         match &self.fallback {
-            Some(f) => f(st.clone(), service.to_string(), who).await,
+            Some(f) => f(st.clone(), id.to_string(), who).await,
             None => None,
         }
     }
