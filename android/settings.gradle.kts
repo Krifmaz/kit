@@ -19,3 +19,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "krifmaz-kit-android"
 include(":kit-compose")
+// the demo app (every component on one screen) and its Baseline Profile generator and Macrobenchmarks; only when
+// this build runs on its own: an app that includes it (includeBuild) needs just the library
+if (gradle.parent == null) {
+    include(":demo")
+    include(":baselineprofile")
+    include(":benchmark")
+}

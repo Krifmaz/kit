@@ -69,7 +69,12 @@ publishing {
                 name.set("kit-compose")
                 description.set("Encore's look and ease-of-use features for Jetpack Compose apps.")
                 url.set("https://github.com/Krifmaz/kit")
-                licenses { license { name.set("MIT"); url.set("https://opensource.org/licenses/MIT") } }
+                licenses {
+                    license {
+                        name.set("MIT")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
             }
         }
     }

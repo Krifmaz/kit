@@ -102,23 +102,19 @@ fun CopyIconButton(text: String, modifier: Modifier = Modifier, size: Dp = 32.dp
     }
 }
 
-
-
 /**
  * Puts text on the clipboard ("Copied to clipboard", or "Copy failed – select and copy manually"); [sensitive] hides
  * it from the keyboard's clipboard preview. True when it worked (a sheet or dialog above the toasts says so itself).
  */
-fun copyToClipboard(context: Context, text: String, sensitive: Boolean = false): Boolean =
-    try {
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: throw IllegalStateException()
-        val clip = ClipData.newPlainText(KitApp.name, text)
-        // ClipDescription.EXTRA_IS_SENSITIVE (API 33); older versions ignore the extra
-        if (sensitive) clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-        cm.setPrimaryClip(clip)
-        Toasts.show("Copied to clipboard", "ok")
-        true
-    } catch (_: Exception) {
-        Toasts.show(Toasts.COPY_FAILED, "err")
-        false
-    }
-
+fun copyToClipboard(context: Context, text: String, sensitive: Boolean = false): Boolean = try {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: throw IllegalStateException()
+    val clip = ClipData.newPlainText(KitApp.name, text)
+    // ClipDescription.EXTRA_IS_SENSITIVE (API 33); older versions ignore the extra
+    if (sensitive) clip.description.extras = PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+    cm.setPrimaryClip(clip)
+    Toasts.show("Copied to clipboard", "ok")
+    true
+} catch (_: Exception) {
+    Toasts.show(Toasts.COPY_FAILED, "err")
+    false
+}

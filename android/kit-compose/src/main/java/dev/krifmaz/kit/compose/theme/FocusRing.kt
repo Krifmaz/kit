@@ -1,4 +1,6 @@
-/**
+package dev.krifmaz.kit.compose.theme
+
+/*
  * The focus ring: a visible outline on whatever has the focus when the app is driven by a D-pad (an Android TV /
  * Google TV remote) or a keyboard instead of touch.
  *
@@ -10,7 +12,6 @@
  * - [focusRing]: a modifier for Material components that pick their own ripple and ignore `LocalIndication`
  *   (the bottom navigation bar's items).
  */
-package dev.krifmaz.kit.compose.theme
 
 import androidx.compose.foundation.Indication
 import androidx.compose.foundation.IndicationNodeFactory

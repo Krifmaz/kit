@@ -76,12 +76,12 @@ import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.details.copyToClipboard
 import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Toasts like the web's `toast(msg, type)` (web-rs/src/ui.rs): panels with a coloured left border at the bottom of
@@ -177,8 +177,10 @@ fun ToastHost(bottomPadding: Dp, topPadding: Dp? = null) {
     LaunchedEffect(window, any, newest) {
         when {
             !any || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) -> window.remove()
+
             // added now, so above every sheet and dialog open now
             !window.shown -> window.add()
+
             // a new toast: above a sheet or dialog that opened since
             newest > window.raisedFor -> window.raiseIfCovered()
         }
@@ -393,7 +395,10 @@ private fun ToastCard(t: ToastItem) {
                 Text(t.message, style = MaterialTheme.typography.bodyMedium)
             }
             if (act != null && t.action.isNotEmpty()) {
-                TextButton(onClick = { Toasts.close(t.id); act() }) {
+                TextButton(onClick = {
+                    Toasts.close(t.id)
+                    act()
+                }) {
                     Text(t.action, color = p.accent, fontWeight = FontWeight.SemiBold)
                 }
             }

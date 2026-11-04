@@ -92,8 +92,7 @@ object ToastRules {
      * The toasts when the time of toast [id] as it arrived the [seq]th time is up: it goes unless it is an error or
      * came again since (a new time started then).
      */
-    fun expire(stack: List<ToastItem>, id: Long, seq: Long): List<ToastItem> =
-        stack.filter { it.id != id || it.seq != seq || it.stays }
+    fun expire(stack: List<ToastItem>, id: Long, seq: Long): List<ToastItem> = stack.filter { it.id != id || it.seq != seq || it.stays }
 
     /** The newest arrival on screen (0 when none): when it goes up, the toasts' window is put back on top. */
     fun newest(stack: List<ToastItem>): Long = stack.maxOfOrNull { it.seq } ?: 0L
@@ -115,8 +114,7 @@ object ToastRules {
      * above the keyboard while it is open. [imeDp] and [navDp] are the keyboard's and the navigation bar's bottom
      * insets (the keyboard's counts from the bottom of the screen, the navigation bar included).
      */
-    fun lift(base: Float, imeDp: Float, navDp: Float): Float =
-        if (imeDp <= navDp) base else maxOf(base, imeDp - navDp + KEYBOARD_GAP)
+    fun lift(base: Float, imeDp: Float, navDp: Float): Float = if (imeDp <= navDp) base else maxOf(base, imeDp - navDp + KEYBOARD_GAP)
 
     /**
      * How far below the top of the screen the toasts sit when they are at the top (over the full player, whose seek bar
