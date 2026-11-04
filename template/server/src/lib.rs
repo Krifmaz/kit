@@ -3,7 +3,7 @@
 //! | Route | From |
 //! | --- | --- |
 //! | `GET /api/health` | kit-server-health |
-//! | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` (What's new) | kit-server-changelog |
+//! | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` (What's new), `/api/auth/prefs` (the popup switch) | kit-server-changelog |
 //! | `/api/notices`, `/api/notices/check`, `/api/notices/{id}`, `/api/notices/{id}/check` | kit-server-notices |
 //! | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports |
 //! | `/api/diagnostics`, `/api/diagnostics/{id}/test` | kit-server-diagnostics |
@@ -207,6 +207,7 @@ pub fn app(st: AppState) -> Router {
     Router::new()
         .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web)))
         .merge(kit_server_changelog::router())
+        .merge(kit_server_changelog::prefs_router("/api/auth/prefs"))
         .merge(kit_server_notices::router())
         .merge(kit_server_bugreports::router())
         .merge(kit_server_bugreports::crash::router())

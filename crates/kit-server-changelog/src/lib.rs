@@ -23,4 +23,4 @@ pub mod routes;
 #[cfg(feature = "server")]
 pub use notes::{base, parse, plain, unseen, Block, Release, HIGHLIGHTS, POPUP_RELEASES};
 #[cfg(feature = "server")]
-pub use routes::{router, router_with, Changelog, ChangelogHost, ChangelogPaths};
+pub use routes::{prefs_router, router, router_with, Changelog, ChangelogHost, ChangelogPaths, PREFS_MAX_BYTES};

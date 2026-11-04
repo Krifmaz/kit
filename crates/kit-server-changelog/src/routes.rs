@@ -5,6 +5,9 @@
 //!   the account's popup switch and the version it last saw.
 //! - `GET /api/changelog/new` (signed in): the popup — `show` when it is on and something is new.
 //! - `POST /api/changelog/seen` (signed in): the popup was shown (or closed); this version is seen.
+//!
+//! [`prefs_router`] adds the account's preferences, where the popup switch lives, for an app that keeps no
+//! route of its own for them: `GET /api/auth/prefs` and `PUT /api/auth/prefs` (merge; a null removes a key).
 
 use crate::notes::{base, parse, unseen, Release};
 use axum::extract::{Query, State};
@@ -90,6 +93,44 @@ pub fn router<S: ChangelogHost>() -> Router<S> {
 /// The What's new routes at `paths`.
 pub fn router_with<S: ChangelogHost>(paths: ChangelogPaths) -> Router<S> {
     Router::new().route(&paths.all, get(all::<S>)).route(&paths.new, get(new::<S>)).route(&paths.seen, post(seen::<S>))
+}
+
+/// The largest preferences object [`prefs_router`] keeps, as JSON text.
+pub const PREFS_MAX_BYTES: usize = 20_000;
+
+/// The account's preferences at `path` (`/api/auth/prefs` is the path kit clients use by default), signed in:
+/// `GET` answers the object, `PUT` merges a JSON object into it (a null removes a key) and answers the result;
+/// 400 "Preferences too large" past [`PREFS_MAX_BYTES`]. For an app with no preferences route of its own; an
+/// app that has one keeps it and leaves this out.
+pub fn prefs_router<S: ChangelogHost>(path: &str) -> Router<S> {
+    Router::new().route(path, get(get_prefs::<S>).put(put_prefs::<S>))
+}
+
+/// `GET` preferences: the account's object (`{}` when none were saved).
+async fn get_prefs<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
+    Ok(Json(st.prefs().prefs(u.id).await?))
+}
+
+/// `PUT` preferences: merge the body into the account's object; a null removes that key.
+async fn put_prefs<S: ChangelogHost>(State(st): State<S>, SignedIn(u): SignedIn, Json(body): Json<Value>) -> Result<Json<Value>> {
+    let Some(changes) = body.as_object() else {
+        return Err(kit_server_core::err(400, "Preferences must be a JSON object"));
+    };
+    let mut prefs = st.prefs().prefs(u.id).await?;
+    if let Some(p) = prefs.as_object_mut() {
+        for (k, v) in changes {
+            if v.is_null() {
+                p.remove(k);
+            } else {
+                p.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if prefs.to_string().len() > PREFS_MAX_BYTES {
+        return Err(kit_server_core::err(400, "Preferences too large"));
+    }
+    st.prefs().save_prefs(u.id, &prefs).await?;
+    Ok(Json(prefs))
 }
 
 /// The popup is on unless the person switched it off.
@@ -268,5 +309,37 @@ mod tests {
         let (s, v) = call(&r, "GET", "/api/changelog/new", 0).await;
         assert_eq!((s, v), (401, json!({ "detail": "Not authenticated" })));
         assert_eq!(call(&r, "POST", "/api/changelog/seen", 0).await.0, 401);
+    }
+
+    async fn send(r: &Router, method: &str, uri: &str, user: i64, body: Value) -> (u16, Value) {
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("x-test-user", user.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let res = r.clone().oneshot(req).await.unwrap();
+        let status = res.status().as_u16();
+        let b = axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap();
+        (status, serde_json::from_slice(&b).unwrap())
+    }
+
+    #[tokio::test]
+    async fn prefs_merge_remove_and_switch_the_popup_off() {
+        let (st, _) = app();
+        let r = router().merge(prefs_router("/api/auth/prefs")).with_state(st);
+        assert_eq!(call(&r, "GET", "/api/auth/prefs", 2).await, (200, json!({})));
+        let (s, v) = send(&r, "PUT", "/api/auth/prefs", 2, json!({ "whats_new_popup": false, "theme": "dark" })).await;
+        assert_eq!((s, v), (200, json!({ "whats_new_popup": false, "theme": "dark" })));
+        assert_eq!(call(&r, "GET", "/api/changelog/new", 2).await.1["show"], json!(false));
+        let (_, v) = send(&r, "PUT", "/api/auth/prefs", 2, json!({ "theme": null })).await;
+        assert_eq!(v, json!({ "whats_new_popup": false }));
+        // another account's are its own
+        assert_eq!(call(&r, "GET", "/api/auth/prefs", 3).await.1, json!({}));
+        let (s, v) = send(&r, "PUT", "/api/auth/prefs", 2, json!({ "big": "x".repeat(PREFS_MAX_BYTES) })).await;
+        assert_eq!((s, v), (400, json!({ "detail": "Preferences too large" })));
+        assert_eq!(send(&r, "PUT", "/api/auth/prefs", 2, json!([1])).await.0, 400);
+        assert_eq!(call(&r, "GET", "/api/auth/prefs", 0).await.0, 401);
     }
 }
