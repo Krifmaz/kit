@@ -13,7 +13,7 @@ from Encore's `encore_system::update`, `routes/update.rs`, Android's `UpdateRule
   `parse_sums`, `verify`, `verify_digest`, `sha256_hex`; `notes` cut to 4000 characters; `MAX_APK_BYTES`.
 - **`newer_release`** — the updaters' rule: by number, and a build without a release number (`0.0.1-dev`)
   takes every release.
-- **`server`** — the server's own update: `parse_release`, `pick_newest` (the hotfix channel), `Channel`,
+- **`server`** — the server's own update: `parse_release`, `pick_newest` (the highest release a channel counts, never GitHub's "Latest" alone), `Channel`,
   `is_newer` (with the dev flag) and `answer`, the shared part of `GET /api/system/update`.
 - **`Restart`** — "Restart server", planned `RESTART_DELAY` later so the answer gets out first; the app's
   server loop waits for `requested()` and exits with `EXIT_RESTART` (75).
