@@ -43,22 +43,7 @@ data class KitPalette(
 
 /** The palettes, by theme. */
 object KitPalettes {
-    /** The Dark theme (:root). */
-    val Default: KitPalette = KitPalette(
-        bg = Color(0xFF0B0B12),
-        bg2 = Color(0xFF12121C),
-        panel = Color(0xFF161624),
-        panel2 = Color(0xFF1D1D2E),
-        border = Color(0xFF2A2A40),
-        text = Color(0xFFECECF4),
-        muted = Color(0xFF9A9AB3),
-        faint = Color(0xFF6B6B85),
-        accent = Color(0xFFF0EAD6),
-        accent2 = Color(0xFFD6C49A),
-        onAccent = Color(0xFF16161F),
-        dark = true,
-    )
-    /** The Encore theme (:root[data-theme='encore']). */
+    /** The Encore theme (:root). */
     val Encore: KitPalette = KitPalette(
         bg = Color(0xFF161617),
         bg2 = Color(0xFF1C1C1E),
@@ -70,7 +55,22 @@ object KitPalettes {
         faint = Color(0xFF77725F),
         accent = Color(0xFFF0EAD6),
         accent2 = Color(0xFFD6C49A),
-        onAccent = Color(0xFF161617),
+        onAccent = Color(0xFF16161F),
+        dark = true,
+    )
+    /** The Dark theme (:root[data-theme='dark']). */
+    val Dark: KitPalette = KitPalette(
+        bg = Color(0xFF0B0B12),
+        bg2 = Color(0xFF12121C),
+        panel = Color(0xFF161624),
+        panel2 = Color(0xFF1D1D2E),
+        border = Color(0xFF2A2A40),
+        text = Color(0xFFECECF4),
+        muted = Color(0xFF9A9AB3),
+        faint = Color(0xFF6B6B85),
+        accent = Color(0xFF8B5CF6),
+        accent2 = Color(0xFFEC4899),
+        onAccent = Color(0xFFFFFFFF),
         dark = true,
     )
     /** The OLED black theme (:root[data-theme='oled']). */
@@ -80,12 +80,12 @@ object KitPalettes {
         panel = Color(0xFF0B0B0D),
         panel2 = Color(0xFF17171B),
         border = Color(0xFF232329),
-        text = Color(0xFFF0EAD6),
+        text = Color(0xFFECECF4),
         muted = Color(0xFF9A9AA8),
         faint = Color(0xFF66666F),
         accent = Color(0xFFF0EAD6),
         accent2 = Color(0xFFD6C49A),
-        onAccent = Color(0xFF000000),
+        onAccent = Color(0xFF16161F),
         dark = true,
     )
     /** The Light theme (:root[data-theme='light']). */
@@ -114,9 +114,9 @@ data class KitPreset(val id: String, val name: String, val theme: String, val ac
 /** The accents and presets of Settings → Appearance, in their order. */
 object KitAppearance {
     val ACCENTS: List<KitAccent> = listOf(
-        KitAccent("logo", "Logo", "#f0ead6", "#d6c49a"),
+        KitAccent("cream", "Cream", "#f0ead6", "#d6c49a"),
         KitAccent("violet", "Violet", "#8b5cf6", "#ec4899"),
-        KitAccent("encore", "Encore", "#f2a7e4", "#9fd2fb"),
+        KitAccent("pastel", "Pastel", "#f2a7e4", "#9fd2fb"),
         KitAccent("lilac", "Lilac", "#b48cf2", "#7cc4fa"),
         KitAccent("pink", "Pink", "#ec4899", "#f97316"),
         KitAccent("sky", "Sky", "#0ea5e9", "#8b5cf6"),
@@ -127,10 +127,10 @@ object KitAppearance {
     )
 
     val PRESETS: List<KitPreset> = listOf(
-        KitPreset("encore", "Encore", "encore", "logo", null, "solid"),
+        KitPreset("encore", "Encore", "encore", "cream", null, "solid"),
         KitPreset("default", "Violet dark", "dark", "violet", null, "fade"),
         KitPreset("oled", "OLED black", "oled", "violet", null, "solid"),
-        KitPreset("pastel", "Pastel", "dark", "encore", null, "fade"),
+        KitPreset("pastel", "Pastel", "dark", "pastel", null, "fade"),
         KitPreset("light", "Daylight", "light", "sky", null, "fade"),
         KitPreset("mono", "Mono", "oled", "custom", "#e5e5e5", "solid"),
     )

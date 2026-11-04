@@ -5,6 +5,12 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
+  carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
+  `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
+  overrides are gone. `docs/DESIGN.md` and `CLAUDE.md` describe the kit as a neutral base.
+
+### Changed
 - `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
   DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
   without Leptos' placeholders; the components keep Encore's attribute order and the white space between its

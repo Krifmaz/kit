@@ -100,29 +100,9 @@ class KitPalette extends ThemeExtension<KitPalette> {
   }
 }
 
-/// The palettes, by theme, with the logo accent.
+/// The palettes, by theme, each with its own accent.
 class KitPalettes {
   KitPalettes._();
-
-  /// The Dark theme.
-  static const KitPalette default = KitPalette(
-    bg: Color(0xFF0B0B12),
-    bg2: Color(0xFF12121C),
-    panel: Color(0xFF161624),
-    panel2: Color(0xFF1D1D2E),
-    border: Color(0xFF2A2A40),
-    text: Color(0xFFECECF4),
-    muted: Color(0xFF9A9AB3),
-    faint: Color(0xFF6B6B85),
-    accent: Color(0xFFF0EAD6),
-    accent2: Color(0xFFD6C49A),
-    onAccent: Color(0xFF16161F),
-    ok: Color(0xFF22C55E),
-    warn: Color(0xFFF59E0B),
-    err: Color(0xFFEF4444),
-    info: Color(0xFF38BDF8),
-    dark: true,
-  );
 
   /// The Encore theme.
   static const KitPalette encore = KitPalette(
@@ -137,6 +117,26 @@ class KitPalettes {
     accent: Color(0xFFF0EAD6),
     accent2: Color(0xFFD6C49A),
     onAccent: Color(0xFF16161F),
+    ok: Color(0xFF22C55E),
+    warn: Color(0xFFF59E0B),
+    err: Color(0xFFEF4444),
+    info: Color(0xFF38BDF8),
+    dark: true,
+  );
+
+  /// The Dark theme.
+  static const KitPalette dark = KitPalette(
+    bg: Color(0xFF0B0B12),
+    bg2: Color(0xFF12121C),
+    panel: Color(0xFF161624),
+    panel2: Color(0xFF1D1D2E),
+    border: Color(0xFF2A2A40),
+    text: Color(0xFFECECF4),
+    muted: Color(0xFF9A9AB3),
+    faint: Color(0xFF6B6B85),
+    accent: Color(0xFF8B5CF6),
+    accent2: Color(0xFFEC4899),
+    onAccent: Color(0xFFFFFFFF),
     ok: Color(0xFF22C55E),
     warn: Color(0xFFF59E0B),
     err: Color(0xFFEF4444),
@@ -174,9 +174,9 @@ class KitPalettes {
     text: Color(0xFF16161F),
     muted: Color(0xFF5D5D75),
     faint: Color(0xFF8D8DA5),
-    accent: Color(0xFFF0EAD6),
-    accent2: Color(0xFFD6C49A),
-    onAccent: Color(0xFF16161F),
+    accent: Color(0xFF2A2A2D),
+    accent2: Color(0xFF8A7A4E),
+    onAccent: Color(0xFFF0EAD6),
     ok: Color(0xFF22C55E),
     warn: Color(0xFFF59E0B),
     err: Color(0xFFEF4444),
@@ -186,7 +186,7 @@ class KitPalettes {
 
 }
 
-/// Material `ThemeData` for a palette: Encore's colours, radii and type sizes.
+/// Material `ThemeData` for a palette: the kit's colours, radii and type sizes.
 ThemeData kitThemeData(KitPalette p) {
   final scheme = ColorScheme(
     brightness: p.dark ? Brightness.dark : Brightness.light,
