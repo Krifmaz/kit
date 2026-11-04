@@ -1,0 +1,23 @@
+[package]
+name = "kit-server-bugreports"
+description = "TODO"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kit-server-core.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+kit-server-core = { workspace = true, features = ["testing"] }
+tokio.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true
