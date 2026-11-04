@@ -31,4 +31,4 @@ prompt = "Add the Android app (Compose, kit-compose, Baseline Profile and benchm
 default = false
 
 [conditional.'android == false']
-ignore = ["android", ".github/workflows/android.yml"]
+ignore = ["android"]

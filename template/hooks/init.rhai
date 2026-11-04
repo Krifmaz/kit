@@ -20,3 +20,7 @@ let lower = owner;
 lower.make_lower();
 variable::set("image", "ghcr.io/" + lower + "/" + name);
 variable::set("android_package", "dev.krifmaz." + variable::get("crate_name"));
+// file names (the APK, release artifacts) take the title without spaces: "Demo App" → DemoApp-android-0.1.0.apk
+let file = variable::get("app_title");
+file.replace(" ", "");
+variable::set("app_file", file);

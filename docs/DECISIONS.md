@@ -26,3 +26,8 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · details: the web's blank-title rule (`trim().is_empty()`) is `details::title`, Android's empty-only rule is `details::title_android`; Encore has no "is it cut off" rule in code (CSS/Compose decide), so kit-rules has none.
 - 2026-11-04 · Offline reasons are classified from a platform-neutral `Failure` enum (Dns, Timeout, Refused, Tls, Other) that each client maps its errors to, with Android's words.
 - 2026-11-04 · Android-only window placement (`ToastRules.covered`, `lift`, `drop`) stays in kit-compose: it is Android window and inset logic, not shared rules.
+- 2026-11-04 · Template: server/ and web/ are separate Cargo workspaces, as Encore's server/ and web-rs/, so the shared workflows take them as `rust-dirs: server`, `wasm-dirs: web`.
+- 2026-11-04 · Template: the app reads `APP_PORT`, `APP_DATA_DIR`, `APP_STATIC_DIR` (Encore's `ENCORE_*` without the app name), so its Rust files carry no Liquid.
+- 2026-11-04 · Template image: `gcr.io/distroless/cc-debian13:nonroot` (same glibc as the trixie builder); the health check is the binary's own `healthcheck` command, since distroless has no curl.
+- 2026-11-04 · Template releases: the APK is built only on a manual run with "apps" ticked (it needs the app's signing secrets), as Encore's; the template has no desktop app (DESIGN.md §13 lists none), so kit-desktop is wired in when an app adds one.
+- 2026-11-04 · Template CI: the kit's `template` job rewrites the generated app's `git = …Krifmaz/kit, tag = …` lines to path dependencies on the PR's own crates (a `[patch]` still needs the tag to exist).
