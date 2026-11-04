@@ -21,3 +21,12 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · details: the web's blank-title rule (`trim().is_empty()`) is `details::title`, Android's empty-only rule is `details::title_android`; Encore has no "is it cut off" rule in code (CSS/Compose decide), so kit-rules has none.
 - 2026-11-04 · Offline reasons are classified from a platform-neutral `Failure` enum (Dns, Timeout, Refused, Tls, Other) that each client maps its errors to, with Android's words.
 - 2026-11-04 · Android-only window placement (`ToastRules.covered`, `lift`, `drop`) stays in kit-compose: it is Android window and inset logic, not shared rules.
+- 2026-11-04 · kit-iced components hold no network code: they keep state, draw it and return what the app must request (Encore keeps reqwest, rfd and its API paths), so any app can use them.
+- 2026-11-04 · kit-iced has one active look (`theme::set`/`look`, as Encore's desktop); Encore's `theme.rs` re-exports it, so Encore and the kit share one look.
+- 2026-11-04 · App names in kit-iced words are parameters (`update::describe(p, "Encore")`, `whats_new::changelog(state, "Encore")`), giving Encore's exact words.
+- 2026-11-04 · Encore desktop tests of code that moved into kit-iced move with it (ported, same assertions); tests of Encore's own code stay in Encore.
+- 2026-11-04 · kit-iced `bug_report` keeps Encore desktop's checks (title and description required, 6 files, 8 MB each); the 200/20 000/120-character limits of contracts/bug-reports.md stay the server's, as in Encore.
+- 2026-11-04 · kit-iced turns on iced's `image` feature: the bug report picker's thumbnails need `image::Handle::from_path`, as in Encore.
+- 2026-11-04 · kit-iced form: table texts are `Cow<'static, str>` and option lists a static-or-owned enum, so Encore's const table and the server schema share one `Field`/`Card`; Encore's `Card { .. }` literal becomes `card! { .. }`.
+- 2026-11-04 · kit-iced form: Encore's hard-coded "no Show saved for vpn_wireguard_config" becomes `Form::never_shown(keys)`, set by the app; a `key!=value` rule is `When { not: true }`; clearing a secret is its own `Msg::Cleared` (same toasts).
+- 2026-11-04 · kit-iced diagnostics: a `status` of ok/warn/fail is the kit's level, any other `status` stays Encore's HTTP badge; warn draws in the warn colour; `fix` is a muted line under the detail (Encore never sends it).
