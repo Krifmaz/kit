@@ -2,7 +2,7 @@ name: kit-desktop
 
 # An app's desktop installers for Windows, Linux and macOS. Each system runs the app's tests (not on the Mac, to
 # save its 10× minutes), then the app's own `package` command, checks that the files the app's updater looks for
-# were made, and uploads them as the artifact <app-name>-desktop-<OS>, which kit-release attaches to the release
+# were made, and uploads them as the artifact kit-app-desktop-<OS>, which kit-release attaches to the release
 # (and SHA256SUMS covers).
 #
 # `package` is a bash command run at the repository root (Git Bash on Windows) with these variables set:
@@ -287,6 +287,7 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then security delete-keychain kit-build.keychain 2>/dev/null || true; fi
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.app-name }}-desktop-${{ runner.os }}
+          # kit-app-*: the one prefix kit-release's publish stage collects, whatever the app's name
+          name: kit-app-desktop-${{ runner.os }}
           path: out/*
           if-no-files-found: error

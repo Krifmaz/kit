@@ -30,7 +30,7 @@ on:
         type: string
         required: true
       app-name:
-        description: "The app's name in release titles (\"Notes 1.2.0\") and artifact names"
+        description: "The app's name in release titles (\"Notes 1.2.0\")"
         type: string
         required: true
       # --- version (prepare) ---
@@ -331,7 +331,8 @@ jobs:
         if: inputs.apps-result != 'skipped'
         continue-on-error: true
         with:
-          pattern: ${{ inputs.app-name }}-*
+          # what kit-android and kit-desktop upload (kit-app-android, kit-app-desktop-<OS>), whatever the app's name
+          pattern: kit-app-*
           path: out
           merge-multiple: true
       - name: Files and notes
