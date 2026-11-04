@@ -17,3 +17,8 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   `kit-docker.yml` (multi-arch GHCR `:<version>` and `:latest`), `kit-android.yml` (signed APK, optional Baseline
   Profile check) and `kit-desktop.yml` (Windows, Linux and macOS installers). The kit's CI now runs through
   `kit-ci.yml` and lints every workflow with actionlint.
+- `crates/kit-rules`: the client-side decisions Encore writes once per client, as plain Rust (no UI, builds
+  for wasm32): toasts (web, desktop and Android presets), the details dialog, What's new (notes parsing,
+  grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
+  notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
+  with Encore's words as constants and Encore's tests ported.

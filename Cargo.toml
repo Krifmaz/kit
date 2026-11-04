@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["design/gen"]
+members = ["design/gen", "crates/kit-rules"]
 
 [workspace.package]
 version = "0.1.0"
