@@ -35,10 +35,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn rules_parse_as_encore_reads_them() {
-        assert_eq!(parse("torrent_client=qbittorrent"), Ok(When { key: "torrent_client", value: "qbittorrent", equal: true }));
-        assert_eq!(parse("nzb_client!=blackhole"), Ok(When { key: "nzb_client", value: "blackhole", equal: false }));
-        for bad in ["", "torrent_client", "=qbittorrent", "torrent_client=", "Torrent=x", "a b=c", "a=b=c", "a= b", "a!="] {
+    fn rules_parse_as_key_and_value() {
+        assert_eq!(parse("storage=s3"), Ok(When { key: "storage", value: "s3", equal: true }));
+        assert_eq!(parse("mail_mode!=off"), Ok(When { key: "mail_mode", value: "off", equal: false }));
+        for bad in ["", "storage", "=s3", "storage=", "Storage=x", "a b=c", "a=b=c", "a= b", "a!="] {
             assert!(parse(bad).is_err(), "{bad:?} should not parse");
         }
         assert_eq!(parse("x").unwrap_err(), "\"x\": expected key=value or key!=value");

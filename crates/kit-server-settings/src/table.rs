@@ -90,7 +90,7 @@ pub struct Group {
     pub part: &'static str,
     /// its description
     pub desc: &'static str,
-    /// the card's Test button: POST /api/system/test/<test>
+    /// the id of the check the card's Test button runs (the kit's clients call `POST /api/diagnostics/<test>/test`)
     pub test: Option<&'static str>,
     /// the Test button's text
     pub test_label: Option<&'static str>,
@@ -98,14 +98,14 @@ pub struct Group {
     pub fields: &'static [Field],
 }
 
-/// A page under Settings → Server. A page with no groups is drawn by its own code in the web app.
+/// A page of the Settings screen. A page with no groups is drawn by its own code in the web app.
 #[derive(Debug)]
 pub struct Section {
-    /// the page's id (`?s=`)
+    /// the page's id (in links to it)
     pub id: &'static str,
     /// its title in the nav
     pub title: &'static str,
-    /// old `?s=` names that open this page
+    /// other names that open this page in a link
     pub aliases: &'static [&'static str],
     /// its cards, in order
     pub groups: &'static [Group],
@@ -115,7 +115,7 @@ pub struct Section {
 /// generated statics (`Table { keys: TABLE, sections: SCHEMA }`).
 #[derive(Debug, Clone, Copy)]
 pub struct Table {
-    /// every setting (Encore: A to Z, then the keys settings.toml lists last)
+    /// every setting, A to Z
     pub keys: &'static [KeyDef],
     /// the Settings pages, their cards and fields
     pub sections: &'static [Section],

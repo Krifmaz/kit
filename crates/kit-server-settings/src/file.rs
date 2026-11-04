@@ -4,14 +4,12 @@
 //! no label, a card or page that does not exist, a `when` rule that does not parse or names a missing setting or
 //! option, an accessor name that a method of the app's settings type or a Rust keyword already takes.
 //!
-//! The file's form (Encore's `server/crates/config/settings.toml` is the example):
+//! The file's form:
 //!
 //! ```toml
-//! listed_last = ["late_key"]        # keys that follow the A-to-Z run of the table, in this order
-//!
-//! [sections.general]                # a page under Settings → Server, in nav order
+//! [sections.general]                # a page of the Settings screen, in nav order
 //! title = "General"
-//! aliases = ["main"]                # old ?s= names that open it
+//! aliases = ["main"]                # other link names that open it
 //!
 //! [groups.general]                  # a card, in page order
 //! section = "general"
@@ -21,13 +19,14 @@
 //!
 //! [keys.app_name]                   # a setting
 //! env = "APP_NAME"
-//! default = "Encore"                # its TOML type is the setting's type
+//! default = "Demo"                  # its TOML type is the setting's type
 //! group = "general"                 # shown on that card (then label is needed)
 //! label = "App name"
 //! # secret, help, type, options, when, unit, min, max, step, full, advanced
 //!
-//! [keys.late_key]
-//! default = 1
+//! [keys.api_key]                    # a setting no card shows
+//! default = ""
+//! secret = true
 //! ```
 
 use crate::table::{DefaultValue, Field, Group, KeyDef, Section, Table};
@@ -52,9 +51,9 @@ pub const KEYWORDS: &[&str] = &[
 /// How [`generate`] writes the code.
 #[derive(Debug, Clone, Copy)]
 pub struct Codegen<'a> {
-    /// the type that gets an accessor per setting (Encore: `"crate::Config"`); `None` for no accessors
+    /// the type that gets an accessor per setting (for example `"crate::Settings"`); `None` for no accessors
     pub accessors_on: Option<&'a str>,
-    /// that type's own methods, which no setting may be named (Encore: `load`, `reload`, `get`, `str`, …)
+    /// that type's own methods, which no setting may be named (for example `load`, `get`, `str`)
     pub methods: &'a [&'a str],
 }
 
@@ -140,13 +139,12 @@ fn leak_opt(v: Option<&str>) -> Option<&'static str> {
     v.map(leak)
 }
 
-/// Check settings.toml (`text`) and read it as a [`Table`]: the keys in the loader's order (A to Z, then
-/// `listed_last` in its order) and the pages with their cards and fields. `methods` are names no setting may
+/// Check settings.toml (`text`) and read it as a [`Table`]: the keys A to Z and the pages with their cards and fields. `methods` are names no setting may
 /// take (see [`Codegen::methods`]). The table's strings live as long as the program: read a file once.
 pub fn parse(text: &str, methods: &[&str]) -> Result<Table, String> {
     let root: TomlTable = text.parse().map_err(|e| format!("{e}"))?;
     for k in root.keys() {
-        if !["listed_last", "sections", "groups", "keys"].contains(&k.as_str()) {
+        if !["sections", "groups", "keys"].contains(&k.as_str()) {
             return Err(format!("unknown top-level entry {k}"));
         }
     }
@@ -180,7 +178,7 @@ pub fn parse(text: &str, methods: &[&str]) -> Result<Table, String> {
         }
     }
     let group_ids: HashSet<&str> = groups.iter().map(|(id, _)| *id).collect();
-    // `#/settings?s=<name>` opens the page of that name, alias or card: each name leads to one page only
+    // a link to a page names it by its id, an alias or one of its cards: each name leads to one page only
     let mut opens: HashMap<&str, &str> = HashMap::new();
     let mut names: Vec<(&str, &str)> = sections.iter().map(|(id, _)| (*id, *id)).collect();
     for (id, t) in &sections {
@@ -191,7 +189,7 @@ pub fn parse(text: &str, methods: &[&str]) -> Result<Table, String> {
     names.extend(groups.iter().filter_map(|(id, t)| Some((*id, t.get("section")?.as_str()?))));
     for (name, page) in names {
         match opens.insert(name, page) {
-            Some(other) if other != page => return Err(format!("?s={name} would open both {other} and {page}")),
+            Some(other) if other != page => return Err(format!("the name {name} would open both {other} and {page}")),
             _ => {}
         }
     }
@@ -206,7 +204,7 @@ pub fn parse(text: &str, methods: &[&str]) -> Result<Table, String> {
             return Err(format!("{at}: a key is lower case letters, digits and _"));
         }
         if methods.contains(name) || KEYWORDS.contains(name) {
-            return Err(format!("{at}: the name is taken by a Config method or a Rust keyword"));
+            return Err(format!("{at}: the name is taken by a method of the settings type or a Rust keyword"));
         }
         for attr in t.keys() {
             if !KEY_ATTRS.contains(&attr.as_str()) {
@@ -296,23 +294,8 @@ pub fn parse(text: &str, methods: &[&str]) -> Result<Table, String> {
         }
     }
 
-    // TABLE order: A to Z, then listed_last in its order
-    let last: Vec<&str> = match root.get("listed_last") {
-        None => vec![],
-        Some(Value::Array(a)) => a.iter().map(|v| v.as_str().ok_or("listed_last holds key names".to_string())).collect::<Result<_, _>>()?,
-        Some(_) => return Err("listed_last must be a list of key names".into()),
-    };
-    let mut seen = HashSet::new();
-    for k in &last {
-        if !by_name.contains_key(k) {
-            return Err(format!("listed_last: no key {k}"));
-        }
-        if !seen.insert(*k) {
-            return Err(format!("listed_last: {k} twice"));
-        }
-    }
-    let mut order: Vec<&str> = by_name.keys().copied().filter(|k| !seen.contains(k)).collect();
-    order.extend(last.iter().copied());
+    // TABLE order: A to Z
+    let order: Vec<&str> = by_name.keys().copied().collect();
 
     // the table, in the loader's order
     let mut defs: Vec<KeyDef> = vec![];
@@ -411,11 +394,11 @@ fn what(k: &KeyDef) -> &str {
 /// or `str` method. The source names [`KeyDef`], [`DefaultValue`], [`Section`], [`Group`] and [`Field`]
 /// unqualified: include it where those are in scope.
 ///
-/// An app's build.rs (Encore's `server/crates/config/build.rs`):
+/// An app's build.rs:
 ///
 /// ```no_run
 /// let text = std::fs::read_to_string("settings.toml").expect("settings.toml");
-/// let gen = kit_server_settings::file::Codegen { accessors_on: Some("crate::Config"), methods: &["load", "get", "str"] };
+/// let gen = kit_server_settings::file::Codegen { accessors_on: Some("crate::Settings"), methods: &["load", "get", "str"] };
 /// let code = kit_server_settings::file::generate(&text, &gen).unwrap_or_else(|e| panic!("settings.toml: {e}"));
 /// std::fs::write(std::path::Path::new(&std::env::var("OUT_DIR").unwrap()).join("settings_gen.rs"), code).unwrap();
 /// ```
@@ -436,7 +419,7 @@ pub fn generate(text: &str, gen: &Codegen) -> Result<String, String> {
     o.push_str("}\n\n");
 
     // TABLE
-    o.push_str("/// Every setting: A to Z, then the keys settings.toml lists last. `Config::defs` keeps this order.\n");
+    o.push_str("/// Every setting, A to Z.\n");
     o.push_str("pub static TABLE: &[KeyDef] = &[\n");
     for k in table.keys {
         let default = match k.default {

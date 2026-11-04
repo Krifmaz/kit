@@ -21,7 +21,7 @@ tower.workspace = true
 
 [features]
 default = ["server", "toml"]
-# `Store` (the values on the app's database) and `router` (GET/PUT /api/admin/settings, the schema, a secret)
+# `Store` (the values on the app's database) and `router` (GET/PUT /api/settings, the schema, a secret)
 server = ["dep:kit-server-core", "dep:axum", "dep:tracing"]
 # `file`: read and check a settings.toml, and generate an app's `Keys`/`TABLE`/`SCHEMA`/accessors from it
 # (an app's build script takes the crate with `default-features = false, features = ["toml"]`, which leaves out axum)

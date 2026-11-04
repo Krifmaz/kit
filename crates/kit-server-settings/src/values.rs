@@ -68,14 +68,14 @@ pub fn clean_env(raw: &str) -> String {
     v.to_string()
 }
 
-/// A secret's value as `GET /api/admin/settings` shows it: `"•••• (saved)"` when one is set, `""` when not.
+/// A secret's value as `GET /api/settings` shows it: `"•••• (saved)"` when one is set, `""` when not.
 pub fn masked(v: &Value) -> Value {
     let set = !matches!(v, Value::String(s) if s.is_empty()) && !v.is_null();
     json!(if set { format!("{MASK} (saved)") } else { String::new() })
 }
 
 /// What the settings routes read and write: the app's values, wherever it keeps them. [`crate::Store`]
-/// implements it; Encore's `Config` does (by its own store).
+/// implements it; an app with its own settings type may too.
 pub trait Values: Send + Sync {
     /// The table the values follow.
     fn table(&self) -> Table;
