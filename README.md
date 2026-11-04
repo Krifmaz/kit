@@ -17,4 +17,4 @@ building blocks — built once, configured per app.
 | Shared CI and release workflows | [`.github/workflows`](.github/workflows) |
 | New-app template | [`template/`](template) — `cargo generate krifmaz/kit template` |
 
-Apps pin a tag (`tag = "v0.1.0"`). Design: [docs/DESIGN.md](docs/DESIGN.md). MIT licensed.
+Apps pin a tag (`tag = "v0.1.0"`). Design: [docs/DESIGN.md](docs/DESIGN.md). Goals: [docs/GOALS.md](docs/GOALS.md). MIT licensed.
