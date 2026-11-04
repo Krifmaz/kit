@@ -1,8 +1,7 @@
-//! The look: Encore's theme tokens (generated from `design/tokens.json` into
-//! `design/out/iced_tokens.rs`, the same values as web-rs/static/css/app.css `:root` and the
-//! `[data-theme=…]` blocks, and the accents of web-rs/src/appearance.rs) as colours the widget
-//! styles read. One look is active at a time ([`set`]); styles call [`look`]. [`encore`] is
-//! Encore's own look; [`palette`] builds any theme, accent and background.
+//! The look: the kit's theme tokens (generated from `design/tokens.json` into
+//! `design/out/iced_tokens.rs`, the same values as the web's `design/out/tokens.css`) as colours the
+//! widget styles read. One look is active at a time ([`set`]); styles call [`look`]. [`default_look`]
+//! is the default theme; [`palette`] builds any theme, accent and background.
 
 use iced::border::Radius;
 use iced::widget::{button, container, overlay::menu, pick_list, progress_bar, rule, scrollable, slider, text_input, toggler};
@@ -15,14 +14,14 @@ pub mod tokens {
     include!("../../../design/out/iced_tokens.rs");
 }
 
-pub use tokens::{ACCENTS, PLAYER_H, PRESETS, RADIUS, SIDEBAR, THEMES};
+pub use tokens::{ACCENTS, PRESETS, RADIUS, SIDEBAR, THEMES};
 
 /// The colour tokens of one theme with one accent.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     /// `--bg`: the page.
     pub bg: Color,
-    /// `--bg-2`: the sidebar and the player bar.
+    /// `--bg-2`: the sidebar and the bars along the edges.
     pub bg2: Color,
     /// `--panel`: cards.
     pub panel: Color,
@@ -177,20 +176,20 @@ pub fn set(p: Palette) {
     *LOOK.write().unwrap_or_else(|e| e.into_inner()) = Some(p);
 }
 
-/// Encore's own look: the `encore` theme with the logo accent, solid background.
-pub fn encore() -> Palette {
+/// The default look: the default theme (`encore`) with its own accent, solid background.
+pub fn default_look() -> Palette {
     palette("encore", "logo", "", "solid", true)
 }
 
-/// The active look (the default Encore look before [`set`] was called).
+/// The active look ([`default_look`] before [`set`] was called).
 pub fn look() -> Palette {
-    (*LOOK.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_else(encore)
+    (*LOOK.read().unwrap_or_else(|e| e.into_inner())).unwrap_or_else(default_look)
 }
 
 /// The iced theme built from the look, so built-in widgets (menus, defaults) match.
 pub fn iced_theme(p: &Palette) -> Theme {
     Theme::custom(
-        "Encore".to_string(),
+        "Kit".to_string(),
         iced::theme::Palette { background: p.bg, text: p.text, primary: p.accent, success: p.ok, warning: p.warn, danger: p.err },
     )
 }
@@ -525,8 +524,8 @@ pub fn sidebar(_: &Theme) -> container::Style {
     }
 }
 
-/// `.player`: the bar along the bottom.
-pub fn player_bar(_: &Theme) -> container::Style {
+/// A bar along the bottom of the window (`--bg-2`).
+pub fn bottom_bar(_: &Theme) -> container::Style {
     let p = look();
     container::Style { text_color: Some(p.text), background: Some(Background::Color(p.bg2)), ..container::Style::default() }
 }

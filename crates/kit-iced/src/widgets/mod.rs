@@ -1,6 +1,6 @@
-//! The building blocks every screen uses, styled like Encore's web components (`app.css`): text styles,
+//! The building blocks every screen uses, styled like the kit's web components (kit-leptos): text styles,
 //! buttons, cards, fields, the modal, badges, skeletons, tabs and the segmented control, the icon set and the text area. Every
-//! component of the kit is drawn with these, so an app that uses them looks like Encore.
+//! component of the kit is drawn with these, so an app that uses them looks the same on web and desktop.
 
 pub mod badge;
 pub mod icons;
@@ -10,7 +10,7 @@ pub mod tabs;
 pub mod text_area;
 
 pub use badge::badge;
-pub use icons::{icon, logo, Icon};
+pub use icons::{icon, logo, Icon, Logo};
 pub use modal::{confirm, modal};
 pub use skeleton::{skeleton_rows, skeleton_tiles};
 pub use tabs::{seg, tabs, tabs_maybe};
