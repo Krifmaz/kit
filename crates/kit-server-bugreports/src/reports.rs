@@ -1,7 +1,8 @@
 //! The report handlers: file, list, count unread, read, reply, set the status, delete, and fetch a file.
 
 use crate::files::{check_quota, read_form, store_files};
-use crate::{cut, ensure_table, fill, line, or_list, reports_dir, BugReportsConfig, BugReportsHost, Cfg, STATUSES};
+use crate::store::{FileRow, ListFilter, Message, NewMessage, NewReport, Report, Side};
+use crate::{cut, fill, line, or_list, reports_dir, BugReportsConfig, BugReportsHost, Cfg, STATUSES};
 use axum::body::Body;
 use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{header, HeaderValue};
@@ -9,14 +10,14 @@ use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use axum::Json;
 use kit_server_core::db::now;
-use kit_server_core::{err, p, Account, Admin, Result, Row, RowExt, SignedIn};
+use kit_server_core::{err, Account, Admin, Result, SignedIn};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 /// The report, or 404 – also when it is someone else's and the viewer is no admin.
-pub(crate) fn load(st: &impl BugReportsHost, id: i64, u: &Account) -> Result<Row> {
-    let r = st.db().one("SELECT * FROM bug_reports WHERE id=?", p![id])?.ok_or_else(|| err(404, "Report not found"))?;
-    if !u.admin && r.i("user_id") != u.id {
+pub(crate) async fn load(st: &impl BugReportsHost, id: i64, u: &Account) -> Result<Report> {
+    let r = st.reports().report(id).await?.ok_or_else(|| err(404, "Report not found"))?;
+    if !u.admin && r.user_id != u.id {
         return Err(err(404, "Report not found"));
     }
     Ok(r)
@@ -24,25 +25,25 @@ pub(crate) fn load(st: &impl BugReportsHost, id: i64, u: &Account) -> Result<Row
 
 /// A report with its files and its thread.
 pub(crate) struct Full {
-    /// the report's row
-    pub(crate) report: Row,
+    /// the report
+    pub(crate) report: Report,
     /// the files attached to the report itself
-    pub(crate) files: Vec<Row>,
+    pub(crate) files: Vec<FileRow>,
     /// the replies, each with its files
-    pub(crate) messages: Vec<(Row, Vec<Row>)>,
+    pub(crate) messages: Vec<(Message, Vec<FileRow>)>,
 }
 
 /// A report with its files and its replies.
-pub(crate) fn load_full(st: &impl BugReportsHost, report: Row) -> Result<Full> {
-    let id = report.i("id");
-    let all = st.db().query("SELECT id, message_id, name, mime, size, path FROM bug_report_files WHERE report_id=? ORDER BY id", p![id])?;
-    let files = all.iter().filter(|f| f.get("message_id").is_none_or(Value::is_null)).cloned().collect();
+pub(crate) async fn load_full(st: &impl BugReportsHost, report: Report) -> Result<Full> {
+    let all = st.reports().files(report.id).await?;
+    let files = all.iter().filter(|f| f.message_id.is_none()).cloned().collect();
     let messages = st
-        .db()
-        .query("SELECT id, user_id, username, is_admin, body, created_at FROM bug_report_messages WHERE report_id=? ORDER BY id", p![id])?
+        .reports()
+        .messages(report.id)
+        .await?
         .into_iter()
         .map(|m| {
-            let mine = all.iter().filter(|f| f.i("message_id") == m.i("id")).cloned().collect();
+            let mine = all.iter().filter(|f| f.message_id == Some(m.id)).cloned().collect();
             (m, mine)
         })
         .collect();
@@ -50,42 +51,29 @@ pub(crate) fn load_full(st: &impl BugReportsHost, report: Row) -> Result<Full> {
 }
 
 /// A file as the API gives it, with its download URL under the routes' `base`.
-fn file_json(base: &str, report_id: i64, f: &Row) -> Value {
-    json!({ "id": f.i("id"), "name": f.s("name"), "mime": f.s("mime"), "size": f.i("size"), "url": format!("{base}/{report_id}/files/{}", f.i("id")) })
+fn file_json(base: &str, report_id: i64, f: &FileRow) -> Value {
+    json!({ "id": f.id, "name": f.name, "mime": f.mime, "size": f.size, "url": format!("{base}/{report_id}/files/{}", f.id) })
 }
 
 /// A reply as the API gives it.
-fn message_json(base: &str, report_id: i64, m: &Row, files: &[Row]) -> Value {
-    json!({ "id": m.i("id"), "username": m.s("username"), "is_admin": m.b("is_admin"), "body": m.s("body"), "created_at": m.f("created_at"),
+fn message_json(base: &str, report_id: i64, m: &Message, files: &[FileRow]) -> Value {
+    json!({ "id": m.id, "username": m.username, "is_admin": m.is_admin, "body": m.body, "created_at": m.created_at,
             "files": files.iter().map(|f| file_json(base, report_id, f)).collect::<Vec<_>>() })
 }
 
 /// A report as the API gives it, with its files and its thread.
 fn report_json(base: &str, full: &Full) -> Value {
     let r = &full.report;
-    let id = r.i("id");
+    let id = r.id;
     json!({
         "report": {
-            "id": id, "kind": r.s("kind"), "title": r.s("title"), "body": r.s("body"), "page": r.s("page"), "app_version": r.s("app_version"),
-            "device": r.s("device"), "status": r.s("status"), "username": r.s("username"), "user_id": r.i("user_id"),
-            "created_at": r.f("created_at"), "updated_at": r.f("updated_at"),
+            "id": id, "kind": r.kind, "title": r.title, "body": r.body, "page": r.page, "app_version": r.app_version,
+            "device": r.device, "status": r.status, "username": r.username, "user_id": r.user_id,
+            "created_at": r.created_at, "updated_at": r.updated_at,
             "files": full.files.iter().map(|f| file_json(base, id, f)).collect::<Vec<_>>(),
         },
         "messages": full.messages.iter().map(|(m, files)| message_json(base, id, m, files)).collect::<Vec<_>>(),
     })
-}
-
-/// SQL: when the report's last reply came (0 without one).
-const LAST_MESSAGE: &str = "COALESCE((SELECT MAX(m.created_at) FROM bug_report_messages m WHERE m.report_id=r.id), 0)";
-
-/// The SQL of "this report has something the viewer hasn't seen": for an admin a report nobody looked at
-/// yet, or a user's reply after the last look; for the reporter an admin's reply after the last look.
-fn unread_sql(admin: bool) -> String {
-    if admin {
-        format!("(r.admin_seen_at < r.created_at OR (r.last_reply_by='user' AND {LAST_MESSAGE} > r.admin_seen_at))")
-    } else {
-        format!("(r.last_reply_by='admin' AND {LAST_MESSAGE} > r.user_seen_at)")
-    }
 }
 
 /// `GET /api/bug-reports` (and export) query.
@@ -106,34 +94,26 @@ pub(crate) struct ListQ {
     pub(crate) format: String,
 }
 
-/// WHERE … for a list: the filters that are set, and the viewer's own reports unless an admin asks for all.
-pub(crate) fn filter_sql(cfg: &BugReportsConfig, q: &ListQ, u: &Account, admin: bool) -> (String, Vec<Value>) {
-    let mut where_ = vec!["1=1".to_string()];
-    let mut params = p![];
-    if STATUSES.contains(&q.status.as_str()) {
-        where_.push("r.status=?".into());
-        params.push(json!(q.status));
-    }
-    if cfg.words.has_kind(&q.kind) {
-        where_.push("r.kind=?".into());
-        params.push(json!(q.kind));
-    }
+/// The reports a list takes: the filters that are set (a status or kind the app doesn't know is no filter), and the
+/// viewer's own reports unless an admin asks for all.
+pub(crate) fn filter(cfg: &BugReportsConfig, q: &ListQ, u: &Account, admin: bool) -> ListFilter {
     let search = q.q.trim();
-    if !search.is_empty() {
-        where_.push("(r.title LIKE ? ESCAPE '\\' OR r.body LIKE ? ESCAPE '\\' OR r.username LIKE ? ESCAPE '\\')".into());
-        let like = format!("%{}%", search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
-        params.extend([json!(like), json!(like), json!(like)]);
+    ListFilter {
+        status: STATUSES.contains(&q.status.as_str()).then(|| q.status.clone()),
+        kind: cfg.words.has_kind(&q.kind).then(|| q.kind.clone()),
+        search: (!search.is_empty()).then(|| search.to_string()),
+        user_id: (!admin || matches!(q.mine.as_str(), "1" | "true")).then_some(u.id),
+        ids: q.ids.split(',').filter_map(|s| s.trim().parse().ok()).collect(),
     }
-    if !admin || matches!(q.mine.as_str(), "1" | "true") {
-        where_.push("r.user_id=?".into());
-        params.push(json!(u.id));
+}
+
+/// The side the viewer sees a report from: the admins' for an admin, the reporter's for anyone else.
+fn side(u: &Account) -> Side {
+    if u.admin {
+        Side::Admin
+    } else {
+        Side::Reporter
     }
-    let ids: Vec<i64> = q.ids.split(',').filter_map(|s| s.trim().parse().ok()).collect();
-    if !ids.is_empty() {
-        where_.push(format!("r.id IN ({})", vec!["?"; ids.len()].join(",")));
-        params.extend(ids.into_iter().map(Value::from));
-    }
-    (where_.join(" AND "), params)
 }
 
 /// POST /api/bug-reports: file a report with up to [`crate::Limits::max_files`] files (a few an hour for
@@ -144,7 +124,6 @@ pub(crate) async fn create<S: BugReportsHost>(
     SignedIn(u): SignedIn,
     form: Multipart,
 ) -> Result<Json<Value>> {
-    ensure_table(&st)?;
     let (admin, lim, words) = (u.admin, &cfg.limits, &cfg.words);
     if !admin && st.limited(&format!("bugreport:{}", u.id), lim.reports_per_hour, 3600.0) {
         return Err(err(429, "Too many reports in a short time – try again later"));
@@ -172,28 +151,22 @@ pub(crate) async fn create<S: BugReportsHost>(
     } else {
         return Err(err(400, format!("Pick a kind: {}", or_list(words.kinds.iter().map(|(_, l)| l.as_str())))));
     };
-    check_quota(&st, lim, &u, &form.files)?;
+    check_quota(&st, lim, &u, &form.files).await?;
     let t = now();
-    // an admin's own report is not news to them
-    let admin_seen = if admin { t } else { 0.0 };
-    let id = st.db().execute(
-        "INSERT INTO bug_reports (user_id, username, kind, title, body, page, app_version, device, status, created_at, updated_at, last_reply_by, user_seen_at, admin_seen_at)
-         VALUES (?,?,?,?,?,?,?,?,'new',?,?,'',?,?)",
-        p![
-            u.id,
-            u.username,
-            kind,
-            title,
-            body,
-            cut(&line(form.text("page")), 300),
-            cut(&line(form.text("app_version")), 60),
-            cut(&line(form.text("device")), 300),
-            t,
-            t,
-            t,
-            admin_seen
-        ],
-    )?;
+    let report = NewReport {
+        user_id: u.id,
+        username: u.username.clone(),
+        kind: kind.to_string(),
+        title: title.clone(),
+        body,
+        page: cut(&line(form.text("page")), 300),
+        app_version: cut(&line(form.text("app_version")), 60),
+        device: cut(&line(form.text("device")), 300),
+        created_at: t,
+        // an admin's own report is not news to them
+        admin_seen_at: if admin { t } else { 0.0 },
+    };
+    let id = st.reports().create_report(&report).await?;
     store_files(&st, id, None, form.files).await?;
     st.log("info", &format!("{} filed bug report #{id}: {title}", u.username));
     tokio::spawn(st.notify(words.notify_new.clone(), format!("{}: {title}", u.username)));
@@ -207,27 +180,15 @@ pub(crate) async fn list<S: BugReportsHost>(
     SignedIn(u): SignedIn,
     Query(q): Query<ListQ>,
 ) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let admin = u.admin;
-    let (where_, params) = filter_sql(&cfg, &q, &u, admin);
-    let rows = st.db().query(
-        &format!(
-            "SELECT r.id, r.kind, r.title, r.status, r.username, r.user_id, r.created_at, r.updated_at,
-                    (SELECT COUNT(*) FROM bug_report_messages m WHERE m.report_id=r.id) message_count,
-                    (SELECT COUNT(*) FROM bug_report_files f WHERE f.report_id=r.id) file_count,
-                    {} unread
-             FROM bug_reports r WHERE {where_} ORDER BY r.updated_at DESC, r.id DESC",
-            unread_sql(admin)
-        ),
-        params,
-    )?;
+    let rows = st.reports().list_reports(&filter(&cfg, &q, &u, u.admin), side(&u)).await?;
     let reports: Vec<Value> = rows
         .iter()
-        .map(|r| {
+        .map(|s| {
+            let r = &s.report;
             json!({
-                "id": r.i("id"), "kind": r.s("kind"), "title": r.s("title"), "status": r.s("status"), "username": r.s("username"), "user_id": r.i("user_id"),
-                "created_at": r.f("created_at"), "updated_at": r.f("updated_at"), "message_count": r.i("message_count"), "file_count": r.i("file_count"),
-                "unread": r.b("unread"),
+                "id": r.id, "kind": r.kind, "title": r.title, "status": r.status, "username": r.username, "user_id": r.user_id,
+                "created_at": r.created_at, "updated_at": r.updated_at, "message_count": s.message_count, "file_count": s.file_count,
+                "unread": s.unread,
             })
         })
         .collect();
@@ -236,12 +197,8 @@ pub(crate) async fn list<S: BugReportsHost>(
 
 /// GET /api/bug-reports/unread: how many reports have something the caller hasn't seen.
 pub(crate) async fn unread<S: BugReportsHost>(State(st): State<S>, SignedIn(u): SignedIn) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let admin = u.admin;
-    let own = if admin { "" } else { "AND r.user_id=?" };
-    let params = if admin { p![] } else { p![u.id] };
-    let r = st.db().one(&format!("SELECT COUNT(*) n FROM bug_reports r WHERE {} {own}", unread_sql(admin)), params)?;
-    Ok(Json(json!({ "count": r.map(|r| r.i("n")).unwrap_or(0) })))
+    let own = ListFilter { user_id: (!u.admin).then_some(u.id), ..ListFilter::default() };
+    Ok(Json(json!({ "count": st.reports().unread_count(&own, side(&u)).await? })))
 }
 
 /// GET /api/bug-reports/{id}: a report with its thread; marks it seen.
@@ -251,16 +208,15 @@ pub(crate) async fn detail<S: BugReportsHost>(
     SignedIn(u): SignedIn,
     Path(id): Path<i64>,
 ) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let r = load(&st, id, &u)?;
+    let r = load(&st, id, &u).await?;
     let t = now();
     if u.admin {
-        st.db().execute("UPDATE bug_reports SET admin_seen_at=? WHERE id=?", p![t, id])?;
+        st.reports().mark_seen(id, Side::Admin, t).await?;
     }
-    if r.i("user_id") == u.id {
-        st.db().execute("UPDATE bug_reports SET user_seen_at=? WHERE id=?", p![t, id])?;
+    if r.user_id == u.id {
+        st.reports().mark_seen(id, Side::Reporter, t).await?;
     }
-    Ok(Json(report_json(cfg.paths.base.trim_end_matches('/'), &load_full(&st, r)?)))
+    Ok(Json(report_json(cfg.paths.base.trim_end_matches('/'), &load_full(&st, r).await?)))
 }
 
 /// POST /api/bug-reports/{id}/messages: reply to a report.
@@ -271,8 +227,7 @@ pub(crate) async fn reply<S: BugReportsHost>(
     Path(id): Path<i64>,
     form: Multipart,
 ) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let r = load(&st, id, &u)?;
+    let r = load(&st, id, &u).await?;
     let (admin, lim, words) = (u.admin, &cfg.limits, &cfg.words);
     if !admin && st.limited(&format!("bugreply:{}", u.id), lim.replies_per_hour, 3600.0) {
         return Err(err(429, "Too many replies in a short time – try again later"));
@@ -285,25 +240,20 @@ pub(crate) async fn reply<S: BugReportsHost>(
     if body.chars().count() > lim.max_body {
         return Err(err(400, format!("A reply can have at most {} characters", lim.max_body)));
     }
-    check_quota(&st, lim, &u, &form.files)?;
+    check_quota(&st, lim, &u, &form.files).await?;
     let t = now();
-    let mid = st.db().execute(
-        "INSERT INTO bug_report_messages (report_id, user_id, username, is_admin, body, created_at) VALUES (?,?,?,?,?,?)",
-        p![id, u.id, u.username, admin as i64, body, t],
-    )?;
+    let message =
+        NewMessage { report_id: id, user_id: u.id, username: u.username.clone(), is_admin: admin, body: body.clone(), created_at: t };
+    let mid = st.reports().add_message(&message).await?;
     store_files(&st, id, Some(mid), form.files).await?;
-    let status = r.s("status");
-    let title = r.s("title");
+    let (status, title) = (r.status, r.title);
     if admin {
         let status = if status == "new" { "answered".to_string() } else { status };
-        st.db().execute(
-            "UPDATE bug_reports SET last_reply_by='admin', status=?, updated_at=?, admin_seen_at=? WHERE id=?",
-            p![status, t, t, id],
-        )?;
+        st.reports().record_reply(id, Side::Admin, &status, t).await?;
         // the reporter hears about it by mail, when mail is set up and they have an address (not for a reply
         // to one's own report)
-        if st.mail_enabled() && r.i("user_id") != u.id {
-            let to = st.mail_address(r.i("user_id"))?;
+        if st.mail_enabled() && r.user_id != u.id {
+            let to = st.mail_address(r.user_id)?;
             if !to.trim().is_empty() {
                 let base = st.base_url();
                 let link = fill(&words.report_link, &[("id", &id.to_string())]);
@@ -324,10 +274,7 @@ pub(crate) async fn reply<S: BugReportsHost>(
         }
     } else {
         let status = if status == "answered" { "new".to_string() } else { status };
-        st.db().execute(
-            "UPDATE bug_reports SET last_reply_by='user', status=?, updated_at=?, user_seen_at=? WHERE id=?",
-            p![status, t, t, id],
-        )?;
+        st.reports().record_reply(id, Side::Reporter, &status, t).await?;
         let who = &u.username;
         let text = if body.is_empty() {
             format!("{who} on #{id} {title}: (a file)")
@@ -355,26 +302,22 @@ pub(crate) async fn set_status<S: BugReportsHost>(
     Path(id): Path<i64>,
     Json(b): Json<StatusBody>,
 ) -> Result<Json<Value>> {
-    ensure_table(&st)?;
     let status = b.status.trim();
     if !STATUSES.contains(&status) {
         return Err(err(400, format!("Pick a status: {}", or_list(STATUSES.iter().map(|s| cfg.words.status_label(s))))));
     }
-    let r = load(&st, id, &u)?;
-    st.db().execute("UPDATE bug_reports SET status=?, updated_at=? WHERE id=?", p![status, now(), id])?;
-    st.log("info", &format!("{} set bug report #{id} ({}) to {}", u.username, r.s("title"), cfg.words.status_label(status)));
+    let r = load(&st, id, &u).await?;
+    st.reports().set_status(id, status, now()).await?;
+    st.log("info", &format!("{} set bug report #{id} ({}) to {}", u.username, r.title, cfg.words.status_label(status)));
     Ok(Json(json!({ "ok": true })))
 }
 
 /// DELETE /api/bug-reports/{id}: delete a report and its files (admins).
 pub(crate) async fn remove<S: BugReportsHost>(State(st): State<S>, Admin(u): Admin, Path(id): Path<i64>) -> Result<Json<Value>> {
-    ensure_table(&st)?;
-    let r = load(&st, id, &u)?;
-    st.db().execute("DELETE FROM bug_report_files WHERE report_id=?", p![id])?;
-    st.db().execute("DELETE FROM bug_report_messages WHERE report_id=?", p![id])?;
-    st.db().execute("DELETE FROM bug_reports WHERE id=?", p![id])?;
+    let r = load(&st, id, &u).await?;
+    st.reports().delete_report(id).await?;
     let _ = tokio::fs::remove_dir_all(reports_dir(&st).join(id.to_string())).await;
-    st.log("info", &format!("{} deleted bug report #{id} ({})", u.username, r.s("title")));
+    st.log("info", &format!("{} deleted bug report #{id} ({})", u.username, r.title));
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -392,23 +335,18 @@ pub(crate) async fn file<S: BugReportsHost>(
     SignedIn(u): SignedIn,
     Path((id, fid)): Path<(i64, i64)>,
 ) -> Result<Response> {
-    ensure_table(&st)?;
-    load(&st, id, &u)?;
-    let f = st
-        .db()
-        .one("SELECT name, mime, path FROM bug_report_files WHERE id=? AND report_id=?", p![fid, id])?
-        .ok_or_else(|| err(404, "File not found"))?;
-    let rel = f.s("path");
-    if rel.is_empty() {
+    load(&st, id, &u).await?;
+    let f = st.reports().file(id, fid).await?.ok_or_else(|| err(404, "File not found"))?;
+    if f.path.is_empty() {
         return Err(err(404, "File not found"));
     }
-    let data = tokio::fs::read(reports_dir(&st).join(&rel)).await.map_err(|_| err(404, "File not found"))?;
-    let mime = f.s("mime");
+    let data = tokio::fs::read(reports_dir(&st).join(&f.path)).await.map_err(|_| err(404, "File not found"))?;
+    let mime = f.mime;
     let inline = mime.starts_with("image/");
     let mut resp = Body::from(data).into_response();
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&mime).unwrap_or(HeaderValue::from_static("application/octet-stream")));
-    h.insert(header::CONTENT_DISPOSITION, disposition(inline, &f.s("name")));
+    h.insert(header::CONTENT_DISPOSITION, disposition(inline, &f.name));
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=3600"));
     Ok(resp)

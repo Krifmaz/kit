@@ -14,7 +14,28 @@ Bug reports and crash logs for any kit app. The contract is [contracts/bug-repor
 - **App crash reports** (`crash` module) — `POST/GET/DELETE /api/crash-reports`: an app uploads the crash
   reports it wrote, de-duplicated by `key`; admins see the newest 50.
 
-The tables (`bug_reports`, `bug_report_messages`, `bug_report_files`, `client_crashes`) are created on first use.
+## Storage
+
+What the routes keep is behind two async traits (module `store`), so the crate assumes no app's database:
+
+- `BugReportStore`: reports (`Report`, `NewReport`), replies (`Message`, `NewMessage`), file records
+  (`FileRow`, `NewFile`), lists and counts by a `ListFilter` (status, kind, search, account, ids), unread
+  counts and seen marks per `Side` (admin or reporter), status, delete, and the export's reports and bytes.
+- `CrashStore`: the crash reports apps upload (`Crash`, `NewCrash`): add (de-duplicated, keeping the newest),
+  list, clear.
+
+Two ready implementations keep them in tables of their own, made by `kit_server_core::Migrations` (components
+`bug-reports` and `crash-reports`, recorded in `kit_migrations`): `kit_bug_reports`, `kit_bug_report_messages`,
+`kit_bug_report_files` and `kit_client_crashes`. The app's own tables (its accounts among them) are never read.
+
+| Feature | What |
+| --- | --- |
+| `sqlite` (default) | `SqliteReports::new(db: SqliteDb) -> Result<_>`, on `kit_server_core::SqliteDb` |
+| `postgres` | `PgReports::new(db: PgDb).await -> Result<_>`, on `kit_server_core::pg::PgDb` (BIGSERIAL ids, DOUBLE PRECISION times, BOOLEAN flags) |
+| `testing` | `store::reports_contract` and `store::crash_contract`: what an app's own store must do, as async test functions |
+
+Each implementation serves both traits; an app makes one at start and hands it out twice. An app with another
+database implements the traits itself and runs the contracts in its tests.
 
 ## Configuration
 
@@ -31,12 +52,23 @@ reports are kept (50) and how long a text may be (256 KiB).
 
 ## Using it
 
-The app implements `kit_server_core::Host` and `BugReportsHost` for its state, then merges the routers:
+The app implements `kit_server_core::Host`, `BugReportsHost` and `crash::CrashHost` for its state, then merges
+the routers:
 
 ```rust
-use kit_server_bugreports::{BugReportsConfig, BugReportsHost, Words};
+use kit_server_bugreports::crash::CrashHost;
+use kit_server_bugreports::{BugReportStore, BugReportsConfig, BugReportsHost, CrashStore, SqliteReports, Words};
+
+// once, at start: the tables are made or brought up to date
+let reports = SqliteReports::new(kit_server_core::SqliteDb::open(&data_dir.join("kit.db"))?)?;
+// or, with feature `postgres`: PgReports::new(kit_server_core::pg::PgDb::connect(&url).await?).await?
+
+impl CrashHost for App {
+    fn crashes(&self) -> &dyn CrashStore { &self.reports }
+}
 
 impl BugReportsHost for App {
+    fn reports(&self) -> &dyn BugReportStore { &self.reports }
     fn data_dir(&self) -> std::path::PathBuf { self.data_dir.clone() }
     fn app_name(&self) -> String { "Demo".into() }
     fn app_version(&self) -> String { env!("CARGO_PKG_VERSION").into() }
@@ -52,6 +84,7 @@ let app = axum::Router::new()
 ```
 
 The optional methods are how the app tells people: `notify` (a chat webhook, a push message …) for a new report
-and a user's reply, and `send_mail` for an admin's reply to the reporter (when `mail_enabled`; the link is
+and a user's reply, and `send_mail` for an admin's reply to the reporter (when `mail_enabled` and `mail_address` gives the reporter's
+address: the kit has no accounts table, so the default is "" and no mail is sent; the link is
 `base_url` followed by `Words::report_link`). `decodes` limits how many uploads are decoded at once (two by
 default).

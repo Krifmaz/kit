@@ -1,11 +1,12 @@
 //! Attached files: the form is read, each file checked by its bytes and named safely, the user's quota kept,
 //! and the files written under `<data_dir>/reports/<report_id>/<file_id>.<ext>`.
 
+use crate::store::NewFile;
 use crate::{mb, reports_dir, BugReportsHost, Limits, MAX_NAME};
 use axum::extract::Multipart;
 use axum::http::StatusCode;
 use kit_server_core::db::now;
-use kit_server_core::{err, p, Account, Error, Result, RowExt};
+use kit_server_core::{err, Account, Error, Result};
 use std::collections::HashMap;
 
 /// A file taken from the form, checked and ready to be written.
@@ -161,15 +162,11 @@ pub(crate) async fn read_form(st: &impl BugReportsHost, lim: &Limits, mut form: 
 
 /// The files a user's reports may hold in all: refuses `files` when they would take the user over
 /// [`Limits::max_user_bytes`]. Admins are not held back.
-pub(crate) fn check_quota(st: &impl BugReportsHost, lim: &Limits, u: &Account, files: &[Pending]) -> Result<()> {
+pub(crate) async fn check_quota(st: &impl BugReportsHost, lim: &Limits, u: &Account, files: &[Pending]) -> Result<()> {
     if files.is_empty() || u.admin {
         return Ok(());
     }
-    let held = st
-        .db()
-        .one("SELECT COALESCE(SUM(f.size),0) n FROM bug_report_files f JOIN bug_reports r ON r.id=f.report_id WHERE r.user_id=?", p![u.id])?
-        .map(|r| r.i("n"))
-        .unwrap_or(0);
+    let held = st.reports().user_bytes(u.id).await?;
     let adding: i64 = files.iter().map(|f| f.data.len() as i64).sum();
     if held + adding > lim.max_user_bytes {
         return Err(err(
@@ -192,13 +189,11 @@ pub(crate) async fn store_files(st: &impl BugReportsHost, report_id: i64, messag
     let dir = reports_dir(st).join(report_id.to_string());
     tokio::fs::create_dir_all(&dir).await.map_err(|e| err(500, format!("Could not save the file: {e}")))?;
     for f in files {
-        let fid = st.db().execute(
-            "INSERT INTO bug_report_files (report_id, message_id, name, mime, size, path, created_at) VALUES (?,?,?,?,?,?,?)",
-            p![report_id, message_id, f.name, f.mime, f.data.len(), "", now()],
-        )?;
+        let row = NewFile { report_id, message_id, name: f.name, mime: f.mime.to_string(), size: f.data.len() as i64, created_at: now() };
+        let fid = st.reports().add_file(&row).await?;
         let file_name = format!("{fid}.{}", f.ext);
         tokio::fs::write(dir.join(&file_name), &f.data).await.map_err(|e| err(500, format!("Could not save the file: {e}")))?;
-        st.db().execute("UPDATE bug_report_files SET path=? WHERE id=?", p![format!("{report_id}/{file_name}"), fid])?;
+        st.reports().set_file_path(fid, &format!("{report_id}/{file_name}")).await?;
     }
     Ok(())
 }

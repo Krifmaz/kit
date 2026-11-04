@@ -1,11 +1,14 @@
-//! The bug report routes through the router on [`TestHost`]: file, list, unread, read, reply, status, export
-//! (zip and text), delete; who may see what; the refused uploads; the limits; and what the app is told.
+//! The bug report routes through the router on [`TestApp`] (the kit's [`TestHost`] with the reports in SQLite, or
+//! in Postgres with feature `postgres`): file, list, unread, read, reply, status, export (zip and text), delete;
+//! who may see what; the refused uploads; the limits; and what the app is told.
 
 use super::*;
+use crate::crash::CrashHost;
 use axum::body::Body;
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, Request, StatusCode};
 use kit_server_core::testing::TestHost;
-use kit_server_core::{p, Db};
+use kit_server_core::Account;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Read;
@@ -17,9 +20,51 @@ static TOLD: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 /// The test rate limiter's counts.
 static COUNTS: LazyLock<Mutex<HashMap<String, usize>>> = LazyLock::new(Default::default);
 
-impl BugReportsHost for TestHost {
+/// The tests' app: the kit's [`TestHost`] (its fixed accounts and data folder) with the reports' stores.
+#[derive(Clone)]
+pub(crate) struct TestApp {
+    /// the accounts, the database and the data folder
+    pub(crate) host: TestHost,
+    /// the bug reports
+    reports: Arc<dyn BugReportStore>,
+    /// the crash reports
+    crashes: Arc<dyn CrashStore>,
+}
+
+impl TestApp {
+    /// A fresh app with the reports in SQLite, on the host's database.
+    pub(crate) fn sqlite() -> TestApp {
+        let host = TestHost::new();
+        let store = SqliteReports::new(host.db.clone()).expect("the report tables");
+        TestApp { host, reports: Arc::new(store.clone()), crashes: Arc::new(store) }
+    }
+
+    /// A fresh app with the reports in a Postgres schema of its own (`KIT_TEST_POSTGRES_URL`).
+    #[cfg(feature = "postgres")]
+    pub(crate) async fn postgres() -> TestApp {
+        let store = PgReports::new(kit_server_core::pg::test_db().await).await.expect("the report tables");
+        TestApp { host: TestHost::new(), reports: Arc::new(store.clone()), crashes: Arc::new(store) }
+    }
+}
+
+impl Host for TestApp {
+    async fn signed_in(&self, parts: &mut Parts) -> Result<Account> {
+        self.host.signed_in(parts).await
+    }
+}
+
+impl CrashHost for TestApp {
+    fn crashes(&self) -> &dyn CrashStore {
+        self.crashes.as_ref()
+    }
+}
+
+impl BugReportsHost for TestApp {
+    fn reports(&self) -> &dyn BugReportStore {
+        self.reports.as_ref()
+    }
     fn data_dir(&self) -> PathBuf {
-        self.data_dir.clone()
+        self.host.data_dir.clone()
     }
     fn app_name(&self) -> String {
         "Demo".into()
@@ -29,7 +74,7 @@ impl BugReportsHost for TestHost {
     }
     fn limited(&self, key: &str, limit: usize, _window_secs: f64) -> bool {
         let mut m = COUNTS.lock().unwrap();
-        let n = m.entry(format!("{}|{key}", self.data_dir.display())).or_default();
+        let n = m.entry(format!("{}|{key}", self.host.data_dir.display())).or_default();
         if *n >= limit {
             return true;
         }
@@ -57,9 +102,13 @@ const ADMIN: i64 = 1;
 const USER: i64 = 2;
 const OTHER: i64 = 3;
 
-fn app() -> (Router, TestHost) {
-    let st = TestHost::new();
-    st.db.execute_batch("INSERT INTO users (id, username, role) VALUES (3, 'other', 'member')").unwrap();
+/// The routes on a fresh [`TestApp`] with the reports in SQLite.
+fn app() -> (Router, TestApp) {
+    on(TestApp::sqlite())
+}
+
+/// The routes on `st`.
+fn on(st: TestApp) -> (Router, TestApp) {
     (router().with_state(st.clone()), st)
 }
 
@@ -178,7 +227,11 @@ async fn unread_count(app: &Router, user: i64) -> i64 {
 
 #[tokio::test]
 async fn report_reply_status_export_and_delete() {
-    let (app, st) = app();
+    report_reply_status_export_and_delete_on(app()).await;
+}
+
+/// The whole life of a report, on the stores of `st`.
+async fn report_reply_status_export_and_delete_on((app, st): (Router, TestApp)) {
     let shot = png(6, 4);
     let (status, body) = post_form(
         &app,
@@ -196,7 +249,7 @@ async fn report_reply_status_export_and_delete() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let id = body["id"].as_i64().unwrap();
-    let folder = st.data_dir.join("reports").join(id.to_string());
+    let folder = st.host.data_dir.join("reports").join(id.to_string());
     assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
     assert!(TOLD.lock().unwrap().contains(&("New bug report".into(), "ana: Save button does nothing".into())));
 
@@ -349,7 +402,7 @@ async fn bad_uploads_are_refused_with_a_sentence() {
         refused(post_form(&app, "/api/bug-reports", USER, &[("kind", "feature"), ("title", "T"), ("body", "x")], &[]).await),
         "Pick a kind: Bug, Not a bug, How do I… or Crash log"
     );
-    assert!(!st.data_dir.join("reports").exists());
+    assert!(!st.host.data_dir.join("reports").exists());
     // a PNG called .html is kept as .png; the title stays on one line
     let (status, body) = post_form(
         &app,
@@ -379,12 +432,9 @@ async fn too_many_or_too_much_is_refused() {
     }
     // 500 MB a user, admins exempt
     let rid = post_form(&app, "/api/bug-reports", OTHER, &fields, &[]).await.1["id"].as_i64().unwrap();
-    st.db
-        .execute(
-            "INSERT INTO bug_report_files (report_id, message_id, name, mime, size, path, created_at) VALUES (?,NULL,'old.log','text/plain',?,'',0)",
-            p![rid, 600i64 << 20],
-        )
-        .unwrap();
+    let old =
+        NewFile { report_id: rid, message_id: None, name: "old.log".into(), mime: "text/plain".into(), size: 600 << 20, created_at: 0.0 };
+    st.reports().add_file(&old).await.unwrap();
     let r = post_form(&app, &format!("/api/bug-reports/{rid}/messages"), OTHER, &[], &[("more.log", "text/plain", b"line\n")]).await;
     assert_eq!(r.1["detail"], json!("Your reports already hold 600 MB of files (the most is 500 MB); the admin can delete old ones"));
     assert_eq!(post_form(&app, &format!("/api/bug-reports/{rid}/messages"), OTHER, &[("body", "words")], &[]).await.0, StatusCode::OK);
@@ -430,7 +480,7 @@ fn names_labels_and_checks() {
 
 #[tokio::test]
 async fn paths_limits_and_words_are_the_apps() {
-    let st = TestHost::new();
+    let st = TestApp::sqlite();
     let words = Words {
         kinds: vec![("idea".into(), "Idea".into()), ("problem".into(), "Problem".into())],
         export_title: "{app} feedback".into(),
@@ -476,4 +526,10 @@ async fn paths_limits_and_words_are_the_apps() {
     assert!(txt.starts_with("Demo feedback (1.4.0, exported "), "{txt}");
     assert!(txt.contains(&format!("#{id} [Idea] Dark mode - Answered")), "{txt}");
     assert_eq!(call(&app, "GET", "/api/bug-reports", USER, None).await.0, StatusCode::NOT_FOUND);
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn report_reply_status_export_and_delete_on_postgres() {
+    report_reply_status_export_and_delete_on(on(TestApp::postgres().await)).await;
 }

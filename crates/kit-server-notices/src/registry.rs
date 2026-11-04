@@ -1,6 +1,6 @@
 //! [`NoticeCheck`] (one registered notice), [`Notices`] (the app's list) and [`spawn_rechecks`].
 
-use crate::{Notice, NoticesHost, Severity, Toasts};
+use crate::{Notice, NoticeStore, NoticesHost, Severity, Toasts};
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -32,7 +32,21 @@ pub struct NoticeCheck<S> {
     current: CurrentFn<S>,
     /// check it again
     check: CheckFn<S>,
+    /// what a [`NoticeCheck::kept`] notice keeps, and where it saves it
+    kept: Option<KeptRef>,
 }
+
+/// A kept notice's last result and where it is saved (set by [`Notices::keep_in`]).
+#[derive(Clone)]
+struct KeptRef {
+    /// the last result
+    kept: Arc<Mutex<Kept>>,
+    /// where each new result is saved
+    store: Saver,
+}
+
+/// Where a kept notice saves its results, once the app says.
+type Saver = Arc<Mutex<Option<Arc<dyn NoticeStore>>>>;
 
 impl<S> Clone for NoticeCheck<S> {
     fn clone(&self) -> Self {
@@ -43,6 +57,7 @@ impl<S> Clone for NoticeCheck<S> {
             every: self.every,
             current: self.current.clone(),
             check: self.check.clone(),
+            kept: self.kept.clone(),
         }
     }
 }
@@ -72,18 +87,22 @@ impl<S: Clone + Send + Sync + 'static> NoticeCheck<S> {
             every: None,
             current: Arc::new(move |s, admin| current(&s, admin)),
             check: Arc::new(move |s, admin| Box::pin(check(s, admin))),
+            kept: None,
         }
     }
 
     /// A notice from one probe; the kit keeps its last result. Until the first probe ends it reads as fine,
     /// with `checking` while a probe runs. Check again starts a probe (or joins the one that runs) and waits
-    /// for it up to [`CHECK_WAIT`]. Admins get the whole notice, everyone else `{ok}`.
+    /// for it up to [`CHECK_WAIT`]. Admins get the whole notice, everyone else `{ok}`. With
+    /// [`Notices::keep_in`], each result is also saved, and [`Notices::restore`] reads the saved ones back.
     pub fn kept<P, Fut>(id: impl Into<String>, severity: Severity, probe: P) -> Self
     where
         P: Fn(S) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Notice> + Send + 'static,
     {
         let kept = Arc::new(Mutex::new(Kept { last: None, running: false }));
+        let saver: Saver = Arc::new(Mutex::new(None));
+        let id: String = id.into();
         let (done, _) = tokio::sync::watch::channel(0u64);
         let done = Arc::new(done);
         let probe = Arc::new(probe);
@@ -104,8 +123,10 @@ impl<S: Clone + Send + Sync + 'static> NoticeCheck<S> {
             let read = read.clone();
             move |_: &S, admin: bool| read(admin)
         };
+        let (kept_ref, saving, nid) = (KeptRef { kept: kept.clone(), store: saver.clone() }, saver, id.clone());
         let check = move |s: S, admin: bool| {
             let (kept, done, probe, read) = (kept.clone(), done.clone(), probe.clone(), read.clone());
+            let (saving, nid) = (saving.clone(), nid.clone());
             async move {
                 let mut rx = done.subscribe();
                 let seen = *rx.borrow_and_update();
@@ -117,19 +138,28 @@ impl<S: Clone + Send + Sync + 'static> NoticeCheck<S> {
                     let (kept, done) = (kept.clone(), done.clone());
                     tokio::spawn(async move {
                         let n = probe(s).await;
+                        let saved = n.clone().into_json();
                         {
                             let mut k = kept.lock().unwrap_or_else(|e| e.into_inner());
                             k.last = Some(n);
                             k.running = false;
                         }
                         done.send_modify(|g| *g += 1);
+                        let store = saving.lock().unwrap_or_else(|e| e.into_inner()).clone();
+                        if let Some(store) = store {
+                            if let Err(e) = store.save(&nid, &saved).await {
+                                tracing::error!("notice {nid}: its result can't be saved: {e}");
+                            }
+                        }
                     });
                 }
                 let _ = tokio::time::timeout(CHECK_WAIT, rx.wait_for(|g| *g > seen)).await;
                 read(admin)
             }
         };
-        Self::new(id, severity, current, check)
+        let mut n = Self::new(id, severity, current, check);
+        n.kept = Some(kept_ref);
+        n
     }
 
     /// The same notice with the three Check again toasts.
@@ -240,6 +270,34 @@ impl<S: Clone + Send + Sync + 'static> Notices<S> {
     pub async fn current_all(&self, st: &S, admin: bool) -> Vec<Value> {
         let futs = self.list.iter().map(|n| async move { n.listed(n.current(st, admin).await, admin) });
         futures_util::future::join_all(futs).await
+    }
+
+    /// The same notices with every [`NoticeCheck::kept`] one saving each new result in `store`. Keep this
+    /// registry in the app's state (the results live in it) and call [`Notices::restore`] once at start.
+    pub fn keep_in(self, store: Arc<dyn NoticeStore>) -> Self {
+        for n in &self.list {
+            if let Some(k) = &n.kept {
+                *k.store.lock().unwrap_or_else(|e| e.into_inner()) = Some(store.clone());
+            }
+        }
+        self
+    }
+
+    /// Read back the results saved by [`Notices::keep_in`]: each kept notice that has no result yet reads as
+    /// its saved one until its next check ends.
+    pub async fn restore(&self) -> kit_server_core::Result<()> {
+        let Some(store) = self.list.iter().find_map(|n| n.kept.as_ref()?.store.lock().unwrap_or_else(|e| e.into_inner()).clone()) else {
+            return Ok(());
+        };
+        let saved = store.load().await?;
+        for n in &self.list {
+            let (Some(k), Some(v)) = (&n.kept, saved.get(&n.id)) else { continue };
+            let mut kept = k.kept.lock().unwrap_or_else(|e| e.into_inner());
+            if kept.last.is_none() {
+                kept.last = Some(Notice::from(v.clone()));
+            }
+        }
+        Ok(())
     }
 
     /// Every notice checked again at once (as an admin), as `POST /api/notices/check` lists them.

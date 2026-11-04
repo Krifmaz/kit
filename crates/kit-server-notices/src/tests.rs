@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::request::Parts;
 use axum::http::{Request, StatusCode};
 use kit_server_core::testing::TestHost;
-use kit_server_core::{Account, Db};
+use kit_server_core::Account;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,9 +25,6 @@ struct App {
 }
 
 impl Host for App {
-    fn db(&self) -> &dyn Db {
-        self.host.db()
-    }
     async fn signed_in(&self, parts: &mut Parts) -> kit_server_core::Result<Account> {
         self.host.signed_in(parts).await
     }
@@ -233,4 +230,31 @@ async fn notices_with_an_interval_are_checked_on_a_timer() {
     for h in handles {
         h.abort();
     }
+}
+
+#[tokio::test]
+async fn a_kept_result_is_saved_and_read_back_after_a_restart() {
+    let host = TestHost::new();
+    let store: Arc<dyn NoticeStore> = Arc::new(SqliteNotices::new(host.db.clone()).unwrap());
+    let probe = || {
+        NoticeCheck::kept("disk", Severity::Warn, |_: TestHost| async { Notice::failing("The data folder is full").with("free", json!(0)) })
+    };
+    let notices = Notices::new().register(probe()).keep_in(store.clone());
+    notices.restore().await.unwrap();
+    assert!(notices.current(&host, "disk", true).await.unwrap().ok(), "nothing saved yet: fine");
+    let n = notices.check(&host, "disk", true).await.unwrap();
+    assert_eq!(n.text(), Some("The data folder is full"));
+    for _ in 0..50 {
+        if !store.load().await.unwrap().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // a new registry, as after a restart: the saved result shows until the next check
+    let again = Notices::new().register(probe()).keep_in(store.clone());
+    assert!(again.current(&host, "disk", true).await.unwrap().ok());
+    again.restore().await.unwrap();
+    let n = again.current(&host, "disk", true).await.unwrap();
+    assert_eq!((n.ok(), n.text(), n.get("free").cloned()), (false, Some("The data folder is full"), Some(json!(0))));
+    assert_eq!(again.current(&host, "disk", false).await.unwrap().into_json(), json!({ "ok": false }));
 }

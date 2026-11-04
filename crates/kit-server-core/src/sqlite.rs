@@ -1,7 +1,9 @@
-//! [`SqliteDb`]: the kit's own SQLite database, one connection behind a lock, for an app that has no database
-//! layer of its own (the template's apps) and for the crates' tests. An app with its own database implements [`Db`] for it.
+//! [`SqliteDb`]: a SQLite database, one connection behind a lock, for the kit's SQLite stores, for an app that
+//! has no database layer of its own (the template's apps) and for the crates' tests; [`SqliteDb::migrate`] makes
+//! the kit's `kit_*` tables, and [`SqlitePrefs`] keeps the account preferences on it.
 
-use crate::{Db, Error, Result, Row};
+use crate::store::{async_trait, prefs_from_text, Migrations, PrefsStore, PREFS_SQLITE};
+use crate::{p, Db, Error, Result, Row, RowExt};
 use rusqlite::types::{Value as SqlValue, ValueRef};
 use rusqlite::{params_from_iter, Connection};
 use serde_json::Value;
@@ -27,6 +29,34 @@ impl SqliteDb {
     pub fn memory() -> SqliteDb {
         let conn = Connection::open_in_memory().expect("SQLite in memory");
         SqliteDb { conn: Arc::new(Mutex::new(conn)) }
+    }
+
+    /// Run the steps of `m` this database has not run yet, each in a transaction with its record in
+    /// `kit_migrations`.
+    pub fn migrate(&self, m: &Migrations) -> Result<()> {
+        let mut conn = self.lock();
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS kit_migrations (component TEXT NOT NULL, step INTEGER NOT NULL, applied_at REAL NOT NULL, PRIMARY KEY (component, step))",
+        )
+        .map_err(Error::database)?;
+        let done: i64 = conn
+            .query_row("SELECT COALESCE(MAX(step), 0) FROM kit_migrations WHERE component = ?", [m.component], |r| r.get(0))
+            .map_err(Error::database)?;
+        for (i, step) in m.steps.iter().enumerate() {
+            let n = i as i64 + 1;
+            if n <= done {
+                continue;
+            }
+            let tx = conn.transaction().map_err(Error::database)?;
+            tx.execute_batch(step).map_err(Error::database)?;
+            tx.execute(
+                "INSERT INTO kit_migrations (component, step, applied_at) VALUES (?, ?, ?)",
+                rusqlite::params![m.component, n, crate::db::now()],
+            )
+            .map_err(Error::database)?;
+            tx.commit().map_err(Error::database)?;
+        }
+        Ok(())
     }
 
     /// The connection, even after a panic in another thread held it.
@@ -84,10 +114,71 @@ impl Db for SqliteDb {
     }
 }
 
+/// The account preferences in SQLite, in `kit_account_prefs`.
+#[derive(Clone)]
+pub struct SqlitePrefs {
+    /// the database
+    db: SqliteDb,
+}
+
+impl SqlitePrefs {
+    /// The preferences on `db`, its table made or brought up to date.
+    pub fn new(db: SqliteDb) -> Result<SqlitePrefs> {
+        db.migrate(&PREFS_SQLITE)?;
+        Ok(SqlitePrefs { db })
+    }
+}
+
+#[async_trait]
+impl PrefsStore for SqlitePrefs {
+    async fn prefs(&self, account: i64) -> Result<serde_json::Value> {
+        let row = self.db.one("SELECT prefs FROM kit_account_prefs WHERE account_id = ?", p![account])?;
+        Ok(prefs_from_text(&row.map(|r| r.s("prefs")).unwrap_or_default()))
+    }
+
+    async fn save_prefs(&self, account: i64, prefs: &serde_json::Value) -> Result<()> {
+        self.db.execute(
+            "INSERT INTO kit_account_prefs (account_id, prefs, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT (account_id) DO UPDATE SET prefs = excluded.prefs, updated_at = excluded.updated_at",
+            p![account, prefs.to_string(), crate::db::now()],
+        )?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{p, RowExt};
+
+    #[test]
+    fn migrations_run_once_in_order() {
+        let db = SqliteDb::memory();
+        const M: Migrations = Migrations {
+            component: "t",
+            steps: &["CREATE TABLE kit_t (id INTEGER PRIMARY KEY)", "ALTER TABLE kit_t ADD COLUMN n INTEGER DEFAULT 3"],
+        };
+        db.migrate(&M).unwrap();
+        db.migrate(&M).unwrap();
+        db.execute("INSERT INTO kit_t (id) VALUES (1)", p![]).unwrap();
+        assert_eq!(db.one("SELECT n FROM kit_t", p![]).unwrap().unwrap().i("n"), 3);
+        assert_eq!(db.one("SELECT COUNT(*) n FROM kit_migrations", p![]).unwrap().unwrap().i("n"), 2);
+        const BAD: Migrations = Migrations { component: "bad", steps: &["CREATE TABLE kit_b (id INTEGER)", "NOT SQL"] };
+        assert!(db.migrate(&BAD).is_err());
+        assert_eq!(db.one("SELECT MAX(step) s FROM kit_migrations WHERE component='bad'", p![]).unwrap().unwrap().i("s"), 1);
+    }
+
+    #[cfg(feature = "testing")]
+    #[test]
+    fn prefs_keep_their_contract() {
+        let prefs = SqlitePrefs::new(SqliteDb::memory()).unwrap();
+        futures_lite_block_on(crate::store::prefs_contract(&prefs));
+    }
+
+    /// Runs a future to its end on this thread (the SQLite stores never wait).
+    #[cfg(feature = "testing")]
+    fn futures_lite_block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(f)
+    }
 
     #[test]
     fn rows_and_parameters_are_json() {

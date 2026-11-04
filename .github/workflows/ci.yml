@@ -6,7 +6,8 @@ name: ci
 # and linted for wasm32. `template` generates an app from template/ against this checkout and proves it builds,
 # runs, shows every kit feature in a browser, packages its desktop app, walks the desktop app's requests and ships a
 # healthy read-only Docker image (scripts/template-check.sh);
-# `template-android` builds and tests the generated app's Android part on kit-compose from source. `workflows` lints every workflow file with actionlint (and
+# `template-android` builds and tests the generated app's Android part on kit-compose from source. `postgres` runs
+# the server crates' Postgres stores and their tests on a Postgres service. `workflows` lints every workflow file with actionlint (and
 # shellcheck on their scripts). Required to pass before a merge.
 on:
   pull_request:
@@ -47,6 +48,35 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+
+  # The server crates' Postgres stores (feature `postgres`), on a real Postgres: clippy with the feature on, and
+  # every store's contract test plus the crates' own tests against it (each test in a schema of its own).
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: kit
+          POSTGRES_DB: kit_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      KIT_TEST_POSTGRES_URL: postgres://postgres:kit@localhost:5432/kit_test
+      FEATURES: kit-server-core/postgres,kit-server-core/testing,kit-server-settings/postgres,kit-server-notices/postgres,kit-server-bugreports/postgres,kit-server-bugreports/testing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: postgres
+      - name: clippy with the Postgres stores
+        run: cargo clippy -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports --all-targets --locked --features "$FEATURES" -- -D warnings
+      - name: tests on Postgres
+        run: cargo test -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports --locked --features "$FEATURES"
 
   template:
     runs-on: ubuntu-latest

@@ -9,7 +9,7 @@ use axum::extract::{FromRequestParts, Path, State};
 use axum::http::request::Parts;
 use axum::routing::get;
 use axum::{Json, Router};
-use kit_server_core::{err, Account, Admin, Host, Result, RowExt};
+use kit_server_core::{err, Account, Admin, Host, Result};
 use serde_json::{json, Map, Value};
 use std::future::Future;
 
@@ -20,11 +20,11 @@ pub trait SettingsHost: Host {
     fn settings(&self) -> &dyn Values;
 
     /// The signed-in owner, who alone may see a saved secret; 403 "Only the server owner can do this" for
-    /// any other account (the default takes the account whose `role` is `owner`).
+    /// any other account (the default takes the account the app marks as [`Account::owner`]).
     fn owner(&self, parts: &mut Parts) -> impl Future<Output = Result<Account>> + Send {
         async move {
             let a = self.signed_in(parts).await?;
-            if a.row.s("role") != "owner" {
+            if !a.owner {
                 return Err(err(403, "Only the server owner can do this"));
             }
             Ok(a)
@@ -142,7 +142,7 @@ async fn put_settings<S: SettingsHost>(
     keys.sort();
     st.log(&format!("{} updated settings: {}", me.username, keys.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
     let saved: Vec<String> = clean.keys().cloned().collect();
-    cfg.set_many(&Value::Object(clean));
+    cfg.set_many(&Value::Object(clean)).await?;
     st.after_save(&saved);
     let mut out = st.dump();
     if !warnings.is_empty() {

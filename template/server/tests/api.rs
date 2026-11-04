@@ -12,14 +12,14 @@ use tower::ServiceExt;
 const PASSWORD: &str = "correct horse battery";
 
 /// A fresh server on a data folder of its own, with an owner `admin` and the web app's folder `static`.
-fn server(name: &str) -> (Router, server::AppState, PathBuf) {
+async fn server(name: &str) -> (Router, server::AppState, PathBuf) {
     let dir = std::env::temp_dir().join(format!("app-test-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let web = dir.join("static");
     std::fs::create_dir_all(&web).unwrap();
     std::fs::write(web.join("index.html"), "<!doctype html><title>app</title>").unwrap();
     std::fs::write(web.join(format!("{}-web-0123456789abcdef.js", server::NAME)), "").unwrap();
-    let st = server::AppState::open(&dir.join("data"), web, |name| (name == "APP_API_KEY").then(|| "test-key".to_string())).unwrap();
+    let st = server::AppState::open(&dir.join("data"), web, |name| (name == "APP_API_KEY").then(|| "test-key".to_string())).await.unwrap();
     server::auth::ensure_owner(&st, None, Some(PASSWORD.into())).unwrap();
     (server::app(st.clone()), st, dir)
 }
@@ -43,7 +43,7 @@ fn admin(method: &str, path: &str, body: Option<Value>) -> Request<Body> {
 
 #[tokio::test]
 async fn health_names_the_version_and_the_web_build() {
-    let (app, _, _) = server("health");
+    let (app, _, _) = server("health").await;
     let (s, v, _) = call(&app, Request::get("/api/health").body(Body::empty()).unwrap()).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(v, json!({ "ok": true, "version": server::VERSION, "server": "rust", "web": "0123456789abcdef" }));
@@ -57,7 +57,7 @@ async fn health_names_the_version_and_the_web_build() {
 
 #[tokio::test]
 async fn signing_in_gives_a_session_that_needs_the_csrf_header() {
-    let (app, _, _) = server("signin");
+    let (app, _, _) = server("signin").await;
     let (s, v, _) = call(&app, Request::get("/api/auth/me").body(Body::empty()).unwrap()).await;
     assert_eq!((s, v["detail"].as_str()), (StatusCode::UNAUTHORIZED, Some("Not authenticated")));
     let login = |pw: &str| {
@@ -95,7 +95,7 @@ async fn signing_in_gives_a_session_that_needs_the_csrf_header() {
 
 #[tokio::test]
 async fn whats_new_shows_the_built_in_notes_once() {
-    let (app, _, _) = server("changelog");
+    let (app, _, _) = server("changelog").await;
     let (s, v, _) = call(&app, admin("GET", "/api/changelog", None)).await;
     assert_eq!(s, StatusCode::OK);
     assert!(v["releases"].as_array().is_some_and(|r| r.iter().any(|r| r["version"] == "0.1.0")), "{v}");
@@ -109,7 +109,7 @@ async fn whats_new_shows_the_built_in_notes_once() {
 
 #[tokio::test]
 async fn the_data_folder_notice_is_fine_and_checks_again() {
-    let (app, _, _) = server("notices");
+    let (app, _, _) = server("notices").await;
     let (s, v, _) = call(&app, admin("POST", "/api/notices/data/check", None)).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(v["ok"], true, "{v}");
@@ -122,7 +122,7 @@ async fn the_data_folder_notice_is_fine_and_checks_again() {
 
 #[tokio::test]
 async fn a_bug_report_is_filed_listed_and_exported() {
-    let (app, _, _) = server("bugs");
+    let (app, _, _) = server("bugs").await;
     let boundary = "kitboundary";
     let mut body = String::new();
     for (k, v) in [("kind", "bug"), ("title", "The button does nothing"), ("body", "I pressed it twice."), ("page", "#/settings")] {
@@ -149,7 +149,7 @@ async fn a_bug_report_is_filed_listed_and_exported() {
 
 #[tokio::test]
 async fn a_crash_log_is_kept_once() {
-    let (app, _, _) = server("crash");
+    let (app, _, _) = server("crash").await;
     let crash = json!({ "kind": "crash", "device": "Pixel 8", "device_id": "d1", "app_version": "0.1.0", "os": "Android 16",
                         "time": 1_793_800_000, "summary": "NullPointerException", "text": "java.lang.NullPointerException\n\tat …", "key": "k1" });
     let (s, v, _) = call(&app, admin("POST", "/api/crash-reports", Some(crash.clone()))).await;
@@ -162,7 +162,7 @@ async fn a_crash_log_is_kept_once() {
 
 #[tokio::test]
 async fn diagnostics_check_the_data_folder_and_the_database() {
-    let (app, _, _) = server("diag");
+    let (app, _, _) = server("diag").await;
     let (s, v, _) = call(&app, admin("GET", "/api/diagnostics", None)).await;
     assert_eq!(s, StatusCode::OK);
     let names: Vec<&str> = v["checks"].as_array().unwrap().iter().filter_map(|c| c["name"].as_str()).collect();
@@ -174,7 +174,7 @@ async fn diagnostics_check_the_data_folder_and_the_database() {
 
 #[tokio::test]
 async fn settings_come_from_the_schema_and_save() {
-    let (app, st, _) = server("settings");
+    let (app, st, _) = server("settings").await;
     let (s, v, _) = call(&app, admin("GET", "/api/settings/schema", None)).await;
     assert_eq!(s, StatusCode::OK);
     assert!(v.to_string().contains("App name"), "{v}");
@@ -191,7 +191,7 @@ async fn settings_come_from_the_schema_and_save() {
 
 #[tokio::test]
 async fn the_web_app_is_served_for_every_other_path() {
-    let (app, _, _) = server("web");
+    let (app, _, _) = server("web").await;
     for path in ["/", "/settings/diagnostics"] {
         let r = app.clone().oneshot(Request::get(path).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(r.status(), StatusCode::OK, "{path}");
@@ -202,7 +202,7 @@ async fn the_web_app_is_served_for_every_other_path() {
 
 #[tokio::test]
 async fn the_health_check_command_asks_a_running_server() {
-    let (app, _, _) = server("healthcheck");
+    let (app, _, _) = server("healthcheck").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -215,7 +215,7 @@ async fn the_health_check_command_asks_a_running_server() {
 
 #[tokio::test]
 async fn a_phone_signs_in_with_an_app_token_and_keeps_its_prefs() {
-    let (app, _, _) = server("apptoken");
+    let (app, _, _) = server("apptoken").await;
     let body = json!({ "username": "admin", "password": PASSWORD, "app": { "device_id": "phone-1", "device_name": "Pixel 8" } });
     let req = Request::post("/api/auth/login").header(header::CONTENT_TYPE, "application/json").body(Body::from(body.to_string())).unwrap();
     let (s, v, h) = call(&app, req).await;
