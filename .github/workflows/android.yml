@@ -1,0 +1,60 @@
+name: android
+
+# kit-compose (android/): ktlint, unit tests and builds on every pull request and push to main. Required to pass
+# before a merge, like ci.yml. Builds use the Gradle the wrapper properties name (no wrapper jar is committed,
+# as in Encore), the same JDK and SDK packages as Encore's Android build.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KTLINT_VERSION: "1.8.0"
+  KTLINT_SHA256: "a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75"
+
+jobs:
+  kit-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: ktlint
+        run: |
+          curl -sSLo ktlint "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
+          echo "${KTLINT_SHA256}  ktlint" | sha256sum -c -
+          chmod +x ktlint
+          cd android && ../ktlint "**/*.kt" "**/*.kts" "!**/build/**"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - name: Gradle version
+        id: gradle
+        run: |
+          G=$(sed -n 's/^distributionUrl=.*gradle-\([0-9][0-9.]*\)-\(bin\|all\)\.zip.*/\1/p' android/gradle/wrapper/gradle-wrapper.properties)
+          [ -n "$G" ] || { echo "::error::no Gradle version in android/gradle/wrapper/gradle-wrapper.properties"; exit 1; }
+          echo "version=$G" >> "$GITHUB_OUTPUT"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: Unit tests
+        run: gradle -p android --no-daemon --stacktrace :kit-compose:testDebugUnitTest
+      - name: Build the library and the demo app
+        run: gradle -p android --no-daemon --stacktrace :kit-compose:assembleRelease :demo:assembleDebug
+      - name: Test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kit-compose-test-reports
+          path: android/kit-compose/build/reports/tests/
+          if-no-files-found: ignore

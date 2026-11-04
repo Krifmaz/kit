@@ -23,6 +23,12 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   grouping, when the popup shows), versions, update detection (health, service worker, back-off, reload gate),
   notices, offline (reasons, offline mode, per-account outbox) and uploads (accept checks, drop zone, limits),
   with Encore's words as constants and Encore's tests ported.
+- `android/kit-compose` (`dev.krifmaz.kit:kit-compose`): Encore's Android look and ease-of-use features as a
+  Compose library: `KitTheme` from the generated tokens, widgets, toasts, details with Copy, What's new popup and
+  changelog screen, in-app updater, bug reports and crash logs, offline banner/reasons/outbox, schema settings
+  form, diagnostics screen, Encore's Coil setup and JankStats/StrictMode in debug; a demo app, Baseline Profile and
+  Macrobenchmark modules; ktlint and unit tests in CI (`android.yml`), published to GitHub Packages for every
+  release (`android-publish.yml`).
 - `crates/kit-iced`: Encore's desktop components on Iced 0.14 and kit-rules, styled from the generated Iced
   tokens: `theme` (every palette, `theme::encore()`, every widget style), `widgets` (text styles, buttons, cards,
   fields, modal, badges, skeletons, tabs, icons, text area), `toast` (desktop toast rules), `details`,
