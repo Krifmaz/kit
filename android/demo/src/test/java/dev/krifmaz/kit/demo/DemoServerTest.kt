@@ -154,7 +154,7 @@ class DemoServerTest {
         api.save(
             buildJsonObject {
                 put("tunnel_mode", "on")
-                put("tunnel_endpoint", "vpn.example.com:51820")
+                put("tunnel_endpoint", "relay.example.com:8443")
             },
         )
         assertTrue(api.test("tunnel").bool("ok"))

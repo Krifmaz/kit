@@ -112,7 +112,7 @@ object SchemaRules {
 
     // ---- checks ----------------------------------------------------------------------------------------------
 
-    /** Release kinds and extras compare without case, spaces and punctuation: a saved "Spoken word" ticks "Spokenword". */
+    /** Choices compare without case, spaces and punctuation: a saved "Read only" ticks "ReadOnly". */
     fun typeKey(s: String): String = s.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
 
     /** The option values of [field] that [text] (comma-separated) ticks. */
