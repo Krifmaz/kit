@@ -1,0 +1,34 @@
+# cargo-generate settings for the kit's new-app template: `cargo generate krifmaz/kit template`.
+# The answers below become Liquid variables; hooks/init.rhai fills in the ones derived from the app's name.
+[template]
+cargo_generate_version = ">=0.23.0"
+# Files copied as they are: no Liquid in them (Rust, CSS and Kotlin use `{{`/`{%` of their own).
+exclude = ["web/static/**", "**/*.rs", "**/*.kt", "**/*.css"]
+# Files that describe the template itself, not the new app.
+ignore = ["TEMPLATE.md", "hooks", "target"]
+
+[hooks]
+pre = ["hooks/init.rhai"]
+
+[placeholders.app_title]
+type = "string"
+prompt = "The app's name as people see it (for example Filebrary)"
+default = ""
+
+[placeholders.github_owner]
+type = "string"
+prompt = "The GitHub owner of the new app's repository"
+default = "Krifmaz"
+
+[placeholders.kit_tag]
+type = "string"
+prompt = "The kit release to use"
+default = "v0.1.0"
+
+[placeholders.android]
+type = "bool"
+prompt = "Add the Android app (Compose, kit-compose, Baseline Profile and benchmark modules)?"
+default = false
+
+[conditional.'android == false']
+ignore = ["android", ".github/workflows/android.yml"]

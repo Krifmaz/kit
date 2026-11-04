@@ -1,0 +1,8 @@
+/target
+/web/dist
+/data
+{% if android %}/android/.gradle
+/android/build
+/android/*/build
+/android/local.properties
+{% endif %}
