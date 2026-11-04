@@ -54,7 +54,7 @@ dependencies {
     api(libs.coil.compose)
     api(libs.coil.network.okhttp)
     api(libs.coil.network.cache.control)
-    implementation(libs.androidx.metrics.performance)
+    api(libs.androidx.metrics.performance)
 
     testImplementation(libs.junit)
 }
