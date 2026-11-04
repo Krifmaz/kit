@@ -1,6 +1,6 @@
-/* The kit's stylesheet (everything after the colour tokens, which come from tokens.css): the look the kit's
-   components draw into, in every theme. The kit's CI keeps it equal to the kit's copy
-   (crates/kit-leptos/demo/encore-app.css). */
+/* The app's own rules: the shell, the pages and the look the kit's components draw into, in every theme. They
+   come after the colour tokens (tokens.css) and the kit's component stylesheet (kit.css, which the kit's CI keeps
+   equal to the kit's crates/kit-leptos/style/kit.css). */
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }   /* the hidden attribute wins over .stack / .row display rules */
 html, body { margin: 0; height: 100%; }

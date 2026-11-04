@@ -1,6 +1,6 @@
 [package]
 name = "kit-leptos-demo"
-description = "Every kit-leptos component on one page with fake data, plus an in-page check of the DOM against Encore's HTML."
+description = "Every kit-leptos component on one page with fake data for a neutral app, with a theme switcher and an in-page check of the DOM against the kit's own markup."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

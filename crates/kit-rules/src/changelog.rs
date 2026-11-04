@@ -1,50 +1,103 @@
 //! What's new: release notes into blocks, blocks into lists and tables, and when the popup shows.
 //!
-//! From Encore's `server/crates/api/src/routes/changelog.rs` (`parse`, `plain`, `lead`, `short`, `unseen`,
-//! `popup_on`, `POPUP_RELEASES`, `HIGHLIGHTS`; tests in `changelog_tests.rs`), `web-rs/src/whats_new.rs`
-//! (`notes_html` grouping, `save_popup` words, the popup and Settings → What's new words) and the desktop's
-//! `clients/desktop/src/whats_new.rs` / `pages/settings/whats_new.rs`.
-//!
 //! The parsing is here, not only in the server crate, so a server and every client read the same notes the same
-//! way; the contract is `contracts/changelog.md`.
+//! way; the contract is `contracts/changelog.md`. The words are [`ChangelogWords`]; the app's name and version
+//! are parameters, never part of the kit's words.
 
 use crate::version;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 /// The popup shows at most this many releases (someone who skipped many updates gets the newest few and the
-/// link to the full changelog). From `changelog.rs` `POPUP_RELEASES`.
+/// link to the full changelog).
 pub const POPUP_RELEASES: usize = 4;
-/// Highlights per release in the popup. From `changelog.rs` `HIGHLIGHTS`.
+/// Highlights per release in the popup.
 pub const HIGHLIGHTS: usize = 6;
-/// The summary is cut to about this many characters. From `changelog.rs` `parse` (`short(text, 320)`).
+/// The summary is cut to about this many characters.
 pub const SUMMARY_CHARS: usize = 320;
-/// A highlight is cut to about this many characters. From `changelog.rs` `parse` (`short(…, 110)`).
+/// A highlight is cut to about this many characters.
 pub const HIGHLIGHT_CHARS: usize = 110;
-/// Without bold leads, this many first bullets are the highlights. From `changelog.rs` `parse` (`take(4)`).
+/// Without bold leads, this many first bullets are the highlights.
 pub const PLAIN_HIGHLIGHTS: usize = 4;
 
-/// The popup's title and Settings' card title. From `web-rs/src/whats_new.rs` `popup` / `render`.
+/// The popup's title and Settings' card title.
 pub const WHATS_NEW: &str = "What's new";
-/// The popup's switch. From `web-rs/src/whats_new.rs` `popup`.
+/// The popup's switch.
 pub const SHOW_THIS_AFTER_UPDATES: &str = "Show this after updates";
-/// The popup's button to Settings → What's new. From `web-rs/src/whats_new.rs` `popup`.
+/// The popup's button to the full changelog (the app's changelog page).
 pub const FULL_CHANGELOG: &str = "Full changelog";
-/// The popup's Close button. From `web-rs/src/whats_new.rs` `popup`.
+/// The popup's Close button.
 pub const CLOSE: &str = "Close";
-/// Settings → What's new's switch. From `web-rs/src/whats_new.rs` `render`.
+/// The changelog page's switch.
 pub const SHOW_WHATS_NEW_AFTER_UPDATES: &str = "Show what's new after updates";
-/// Settings → What's new without notes. From `web-rs/src/whats_new.rs` `render`.
+/// The changelog page without notes.
 pub const NO_RELEASE_NOTES: &str = "No release notes in this build.";
-/// The toast when the switch was turned on. From `web-rs/src/whats_new.rs` `save_popup`.
+/// The toast when the switch was turned on.
 pub const POPUP_ON: &str = "What's new will show after updates";
-/// The toast when the switch was turned off. From `web-rs/src/whats_new.rs` `save_popup`.
+/// The toast when the switch was turned off.
 pub const POPUP_OFF: &str = "What's new won't show after updates – it stays in Settings";
-/// Where the popup's Full changelog goes in Encore's web app. From `web-rs/src/whats_new.rs` `SETTINGS`.
-pub const SETTINGS_PATH: &str = "/settings?s=whats-new";
+/// The changelog page's first line: `{app}` and `{version}` are filled in ([`settings_intro`]).
+pub const INTRO: &str = "This is {app} {version}. After an update, a short list of what changed shows once.";
 
-/// The toast after the popup switch was saved. From `web-rs/src/whats_new.rs` `save_popup` and the desktop's
-/// `pages/settings/whats_new.rs` `saved_words`.
+/// What's new's words. [`ChangelogWords::DEFAULT`] holds the kit's; an app passes its own to change any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChangelogWords {
+    /// The popup's title and the changelog page's card title ([`WHATS_NEW`]).
+    pub whats_new: &'static str,
+    /// The popup's switch ([`SHOW_THIS_AFTER_UPDATES`]).
+    pub show_this: &'static str,
+    /// The popup's button to the changelog page ([`FULL_CHANGELOG`]).
+    pub full_changelog: &'static str,
+    /// The popup's Close button ([`CLOSE`]).
+    pub close: &'static str,
+    /// The changelog page's switch ([`SHOW_WHATS_NEW_AFTER_UPDATES`]).
+    pub show_after_updates: &'static str,
+    /// The changelog page without notes ([`NO_RELEASE_NOTES`]).
+    pub no_notes: &'static str,
+    /// The toast when the switch was turned on ([`POPUP_ON`]).
+    pub popup_on: &'static str,
+    /// The toast when the switch was turned off ([`POPUP_OFF`]).
+    pub popup_off: &'static str,
+    /// The changelog page's first line, with `{app}` and `{version}` ([`INTRO`]).
+    pub intro: &'static str,
+}
+
+impl ChangelogWords {
+    /// The kit's words.
+    pub const DEFAULT: ChangelogWords = ChangelogWords {
+        whats_new: WHATS_NEW,
+        show_this: SHOW_THIS_AFTER_UPDATES,
+        full_changelog: FULL_CHANGELOG,
+        close: CLOSE,
+        show_after_updates: SHOW_WHATS_NEW_AFTER_UPDATES,
+        no_notes: NO_RELEASE_NOTES,
+        popup_on: POPUP_ON,
+        popup_off: POPUP_OFF,
+        intro: INTRO,
+    };
+
+    /// The toast after the popup switch was saved.
+    pub fn saved(&self, on: bool) -> &'static str {
+        if on {
+            self.popup_on
+        } else {
+            self.popup_off
+        }
+    }
+
+    /// The changelog page's first line for `app` at `version`.
+    pub fn intro(&self, app: &str, version: &str) -> String {
+        crate::app::fill(self.intro, &[("app", app), ("version", version)])
+    }
+}
+
+impl Default for ChangelogWords {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// The toast after the popup switch was saved.
 pub fn saved_words(on: bool) -> &'static str {
     if on {
         POPUP_ON
@@ -53,22 +106,17 @@ pub fn saved_words(on: bool) -> &'static str {
     }
 }
 
-/// Settings → What's new's first line for `app` at `version` ("This server runs Encore 0.36.4. After an
-/// update, …"). From `web-rs/src/whats_new.rs` `render`.
+/// The changelog page's first line for `app` at `version` ("This is Kit Demo 1.2.0. After an update, …").
 pub fn settings_intro(app: &str, version: &str) -> String {
-    format!(
-        "This server runs {app} {version}. After an update, a short list of what changed shows once on the website and in the desktop app."
-    )
+    ChangelogWords::DEFAULT.intro(app, version)
 }
 
 /// One part of a release's notes, inline markdown taken out (bold, italics, code, links keep their words);
 /// tagged by `k` as the server sends it.
-///
-/// From `changelog.rs` `Block`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "k", rename_all = "lowercase")]
 pub enum Block {
-    /// `### Library`.
+    /// `### Sharing`.
     H {
         /// The heading's text.
         text: String,
@@ -78,7 +126,7 @@ pub enum Block {
         /// The paragraph's text.
         text: String,
     },
-    /// A bullet; `lead` is its bold start ("Delete albums by type."), when it has one.
+    /// A bullet; `lead` is its bold start ("Share a folder."), when it has one.
     Li {
         /// The bold start, or "".
         #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -100,13 +148,11 @@ pub enum Block {
 }
 
 /// One release's notes.
-///
-/// From `changelog.rs` `Release`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Release {
     /// Its version ("0.36.0").
     pub version: String,
-    /// "Encore 0.36.0", or what follows the version in the heading ("Encore 2 (Rust) is here").
+    /// "<App> 1.2.0", or what follows the version in the heading ("Kit Demo 2 is here").
     pub title: String,
     /// The paragraph before the first section.
     #[serde(default)]
@@ -119,10 +165,8 @@ pub struct Release {
     pub blocks: Vec<Block>,
 }
 
-/// Bold, italics, code and links out of one line of markdown: `**Pause for everyone** is in [x](y)` → `Pause
-/// for everyone is in x`.
-///
-/// From `changelog.rs` `plain`.
+/// Bold, italics, code and links out of one line of markdown: `**Share a folder** is in [x](y)` → `Share a
+/// folder is in x`.
 pub fn plain(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let c: Vec<char> = s.chars().collect();
@@ -151,10 +195,7 @@ pub fn plain(s: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// A bullet's bold start and the rest: `**Delete albums by type.** Library → …` → ("Delete albums by type.",
-/// "Library → …").
-///
-/// From `changelog.rs` `lead`.
+/// A bullet's bold start and the rest: `**Share a folder.** Files → …` → ("Share a folder.", "Files → …").
 fn lead(text: &str) -> (String, String) {
     if let Some(rest) = text.strip_prefix("**") {
         if let Some(end) = rest.find("**") {
@@ -167,8 +208,6 @@ fn lead(text: &str) -> (String, String) {
 }
 
 /// `s` cut to about `max` characters, ending on a sentence or a word, with "…".
-///
-/// From `changelog.rs` `short`.
 pub fn short(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -185,9 +224,7 @@ pub fn short(s: &str, max: usize) -> String {
 }
 
 /// One release's markdown (`docs/releases/<version>.md`) into its parts; `app` names the title when the
-/// heading gives no name ("Encore 0.36.0").
-///
-/// From `changelog.rs` `parse` (where the app is always "Encore").
+/// heading gives no name ("Kit Demo 1.2.0").
 pub fn parse(app: &str, ver: &str, md: &str) -> Release {
     enum Open {
         None,
@@ -216,7 +253,7 @@ pub fn parse(app: &str, ver: &str, md: &str) -> Release {
         if let Some(h) = t.strip_prefix("## ") {
             flush(&mut open, &mut blocks);
             let h = plain(h);
-            // "Encore 2026.10.11.1 – Encore 2 (Rust) is here" → what follows the version
+            // "Kit Demo 2.0.0 – Kit Demo 2 is here" → what follows the version
             title = match h.split_once(" – ") {
                 Some((_, rest)) if !rest.is_empty() => rest.to_string(),
                 _ => h,
@@ -293,8 +330,6 @@ pub fn parse(app: &str, ver: &str, md: &str) -> Release {
 
 /// The releases a server at `current` includes (a hotfix includes its release, never notes written ahead for
 /// the next one), newest first as `all` is.
-///
-/// From `changelog.rs` `all` (the filter of `GET /api/changelog`).
 pub fn included<'a>(all: &'a [Release], current: &str) -> Vec<&'a Release> {
     let cur = version::base(current);
     all.iter().filter(|r| version::compare(&r.version, &cur) != Ordering::Greater).collect()
@@ -303,8 +338,6 @@ pub fn included<'a>(all: &'a [Release], current: &str) -> Vec<&'a Release> {
 /// The releases that are new for an account: those this server (`current`) includes, newest first; with
 /// `seen` (the version the account last saw), only those newer than its release, at most [`POPUP_RELEASES`].
 /// Without `seen` (an account that never saw the popup) only the newest one. Hotfixes count as their release.
-///
-/// From `changelog.rs` `unseen`.
 pub fn unseen<'a>(all: &'a [Release], current: &str, seen: Option<&str>) -> Vec<&'a Release> {
     let mut out = included(all, current);
     match seen.filter(|s| !version::parts(s).is_empty()) {
@@ -319,15 +352,11 @@ pub fn unseen<'a>(all: &'a [Release], current: &str, seen: Option<&str>) -> Vec<
 }
 
 /// The account's popup switch: on unless the person switched it off (`prefs.whats_new_popup`).
-///
-/// From `changelog.rs` `popup_on`.
 pub fn popup_on(pref: Option<bool>) -> bool {
     pref.unwrap_or(true)
 }
 
 /// Whether the popup shows: the switch is on and something is new (`show` of `GET /api/changelog/new`).
-///
-/// From `changelog.rs` `new`.
 pub fn show_popup(popup: bool, unseen: usize) -> bool {
     popup && unseen > 0
 }
@@ -365,8 +394,6 @@ pub enum Group {
 
 /// A release's notes grouped for drawing: bullets that follow each other are one list, rows one table; an
 /// unknown block ends a list or a table and draws nothing.
-///
-/// From `web-rs/src/whats_new.rs` `notes_html`.
 pub fn group(blocks: &[Block]) -> Vec<Group> {
     let mut out: Vec<Group> = Vec::new();
     // whether the last group is still open for more bullets or rows (an unknown block closes it)
@@ -407,86 +434,79 @@ pub fn group(blocks: &[Block]) -> Vec<Group> {
 mod tests {
     use super::*;
 
-    const MD: &str = "## Encore 0.36.0
+    const MD: &str = "## Kit Demo 1.4.0
 
-**Clean up your library by type, see who requested what.** If you skipped
-0.35.2, its fixes are in [0.35.2](https://example.org/0.35.2.md).
+**Share folders, see who changed what.** If you skipped
+1.3.2, its fixes are in [1.3.2](https://example.org/1.3.2.md).
 
-### Library
-- **Delete albums by type.** Library → Albums has a **Type** filter: Studio albums,
-  Live, Compilations.
-- How the type is known: `RELEASETYPE`, then the title.
+### Sharing
+- **Share a folder.** Files → Share has a **Who** list: Everyone,
+  Admins, Nobody.
+- How a share is named: `NAME`, then the folder.
 
 ### What runs at once
-| Source | At once |
+| Job | At once |
 |---|---|
-| streamrip | 1 on Deezer |
+| thumbnails | 2 per core |
 
 ### Before you update
-- The database goes from schema 30 to 31.
+- The database goes from schema 7 to 8.
 ";
 
-    /// Ported from `changelog_tests.rs` `notes_become_blocks`.
     #[test]
     fn notes_become_blocks() {
-        let r = parse("Encore", "0.36.0", MD);
-        assert_eq!(r.title, "Encore 0.36.0");
-        assert_eq!(r.summary, "Clean up your library by type, see who requested what. If you skipped 0.35.2, its fixes are in 0.35.2.");
-        assert_eq!(r.highlights, vec!["Delete albums by type".to_string()]);
-        assert_eq!(r.blocks[1], Block::H { text: "Library".into() });
+        let r = parse("Kit Demo", "1.4.0", MD);
+        assert_eq!(r.title, "Kit Demo 1.4.0");
+        assert_eq!(r.summary, "Share folders, see who changed what. If you skipped 1.3.2, its fixes are in 1.3.2.");
+        assert_eq!(r.highlights, vec!["Share a folder".to_string()]);
+        assert_eq!(r.blocks[1], Block::H { text: "Sharing".into() });
         assert_eq!(
             r.blocks[2],
-            Block::Li {
-                lead: "Delete albums by type.".into(),
-                text: "Library → Albums has a Type filter: Studio albums, Live, Compilations.".into()
-            }
+            Block::Li { lead: "Share a folder.".into(), text: "Files → Share has a Who list: Everyone, Admins, Nobody.".into() }
         );
-        assert_eq!(r.blocks[3], Block::Li { lead: String::new(), text: "How the type is known: RELEASETYPE, then the title.".into() });
-        assert_eq!(r.blocks[5], Block::Row { cells: vec!["Source".into(), "At once".into()], head: true });
-        assert_eq!(r.blocks[6], Block::Row { cells: vec!["streamrip".into(), "1 on Deezer".into()], head: false });
+        assert_eq!(r.blocks[3], Block::Li { lead: String::new(), text: "How a share is named: NAME, then the folder.".into() });
+        assert_eq!(r.blocks[5], Block::Row { cells: vec!["Job".into(), "At once".into()], head: true });
+        assert_eq!(r.blocks[6], Block::Row { cells: vec!["thumbnails".into(), "2 per core".into()], head: false });
         assert_eq!(r.blocks.len(), 9);
     }
 
-    /// Ported from `changelog_tests.rs` `a_heading_with_a_name_keeps_the_name`.
     #[test]
     fn a_heading_with_a_name_keeps_the_name() {
-        assert_eq!(parse("Encore", "1.0.0", "## Encore 1.0.0 – Encore 2 (Rust) is here\n\nText.").title, "Encore 2 (Rust) is here");
+        assert_eq!(parse("Kit Demo", "2.0.0", "## Kit Demo 2.0.0 – Kit Demo 2 is here\n\nText.").title, "Kit Demo 2 is here");
+        assert_eq!(parse("Photovault", "1.0.0", "Text.").title, "Photovault 1.0.0", "the app's name when the notes name none");
     }
 
-    /// Ported from `changelog_tests.rs` `without_bold_leads_the_first_bullets_are_the_highlights`.
     #[test]
     fn without_bold_leads_the_first_bullets_are_the_highlights() {
-        let r = parse("Encore", "0.1.0", "## Encore 0.1.0\n\n### Fixed\n- One thing.\n- Another thing.\n");
+        let r = parse("Kit Demo", "0.1.0", "## Kit Demo 0.1.0\n\n### Fixed\n- One thing.\n- Another thing.\n");
         assert_eq!(r.highlights, vec!["One thing.".to_string(), "Another thing.".to_string()]);
     }
 
-    /// Ported from `changelog_tests.rs` `plain_keeps_the_words`.
     #[test]
     fn plain_keeps_the_words() {
         assert_eq!(
-            plain("**Pause for everyone** is in the *player* `menu` – see [docs](http://x/y)"),
-            "Pause for everyone is in the player menu – see docs"
+            plain("**Share a folder** is in the *Files* `menu` – see [docs](http://x/y)"),
+            "Share a folder is in the Files menu – see docs"
         );
         assert_eq!(plain("snake_case stays, _italic_ goes"), "snake_case stays, italic goes");
     }
 
     fn rel(v: &str) -> Release {
-        parse("Encore", v, &format!("## Encore {v}\n"))
+        parse("Kit Demo", v, &format!("## Kit Demo {v}\n"))
     }
 
-    /// Ported from `changelog_tests.rs` `only_releases_after_the_seen_one_and_not_past_this_server`.
     #[test]
     fn only_releases_after_the_seen_one_and_not_past_this_server() {
-        let all = vec![rel("0.37.0"), rel("0.36.1"), rel("0.36.0"), rel("0.35.2")];
+        let all = vec![rel("1.5.0"), rel("1.4.1"), rel("1.4.0"), rel("1.3.2")];
         let v = |l: Vec<&Release>| l.iter().map(|r| r.version.clone()).collect::<Vec<_>>();
-        // a hotfix build of 0.36.1 includes 0.36.1, never the notes written ahead for 0.37.0
-        assert_eq!(v(unseen(&all, "0.36.1.17", Some("0.35.2"))), vec!["0.36.1", "0.36.0"]);
+        // a hotfix build of 1.4.1 includes 1.4.1, never the notes written ahead for 1.5.0
+        assert_eq!(v(unseen(&all, "1.4.1.17", Some("1.3.2"))), vec!["1.4.1", "1.4.0"]);
         // another hotfix of a release already seen: nothing new
-        assert_eq!(v(unseen(&all, "0.36.1.18", Some("0.36.1.17"))), Vec::<String>::new());
+        assert_eq!(v(unseen(&all, "1.4.1.18", Some("1.4.1.17"))), Vec::<String>::new());
         // never seen: the newest only
-        assert_eq!(v(unseen(&all, "0.36.1", None)), vec!["0.36.1"]);
-        assert_eq!(v(unseen(&all, "0.36.1", Some(""))), vec!["0.36.1"]);
-        assert_eq!(v(included(&all, "0.36.1.17")), vec!["0.36.1", "0.36.0", "0.35.2"]);
+        assert_eq!(v(unseen(&all, "1.4.1", None)), vec!["1.4.1"]);
+        assert_eq!(v(unseen(&all, "1.4.1", Some(""))), vec!["1.4.1"]);
+        assert_eq!(v(included(&all, "1.4.1.17")), vec!["1.4.1", "1.4.0", "1.3.2"]);
     }
 
     #[test]
@@ -507,14 +527,13 @@ mod tests {
         assert_eq!(short("abcdefghijkl", 5), "abcde…");
     }
 
-    /// The grouping of `web-rs/src/whats_new.rs` `notes_html`.
     #[test]
     fn bullets_and_rows_are_grouped_into_lists_and_tables() {
-        let r = parse("Encore", "0.36.0", MD);
+        let r = parse("Kit Demo", "1.4.0", MD);
         let g = group(&r.blocks);
         assert_eq!(g[0], Group::Paragraph(r.summary.clone()));
-        assert_eq!(g[1], Group::Heading("Library".into()));
-        assert!(matches!(&g[2], Group::List(l) if l.len() == 2 && l[0].lead == "Delete albums by type."));
+        assert_eq!(g[1], Group::Heading("Sharing".into()));
+        assert!(matches!(&g[2], Group::List(l) if l.len() == 2 && l[0].lead == "Share a folder."));
         assert_eq!(g[3], Group::Heading("What runs at once".into()));
         assert!(matches!(&g[4], Group::Table(t) if t.len() == 2 && t[0].head && !t[1].head));
         assert_eq!(g.len(), 7);
@@ -530,7 +549,7 @@ mod tests {
     #[test]
     fn blocks_read_and_write_the_contract() {
         let blocks: Vec<Block> = serde_json::from_str(
-            r#"[{"k":"h","text":"Library"},{"k":"li","text":"x"},{"k":"li","lead":"L.","text":"y"},{"k":"row","cells":["a"],"head":true},{"k":"chart","data":1}]"#,
+            r#"[{"k":"h","text":"Sharing"},{"k":"li","text":"x"},{"k":"li","lead":"L.","text":"y"},{"k":"row","cells":["a"],"head":true},{"k":"chart","data":1}]"#,
         )
         .unwrap();
         assert_eq!(blocks[1], Block::Li { lead: String::new(), text: "x".into() });
@@ -538,17 +557,21 @@ mod tests {
         assert_eq!(serde_json::to_string(&blocks[1]).unwrap(), r#"{"k":"li","text":"x"}"#, "an empty lead is left out");
         assert_eq!(serde_json::to_string(&blocks[3]).unwrap(), r#"{"k":"row","cells":["a"],"head":true}"#);
         let popup: Release =
-            serde_json::from_str(r#"{"version":"0.36.4","title":"Encore 0.36.4","summary":"s","highlights":["h"]}"#).unwrap();
+            serde_json::from_str(r#"{"version":"1.4.4","title":"Kit Demo 1.4.4","summary":"s","highlights":["h"]}"#).unwrap();
         assert!(popup.blocks.is_empty());
     }
 
     #[test]
-    fn the_words_are_encores() {
+    fn the_words_name_the_app() {
         assert_eq!(saved_words(true), "What's new will show after updates");
         assert_eq!(saved_words(false), "What's new won't show after updates – it stays in Settings");
         assert_eq!(
-            settings_intro("Encore", "0.36.4"),
-            "This server runs Encore 0.36.4. After an update, a short list of what changed shows once on the website and in the desktop app."
+            settings_intro("Kit Demo", "1.4.4"),
+            "This is Kit Demo 1.4.4. After an update, a short list of what changed shows once."
         );
+        let mine = ChangelogWords { intro: "{app} läuft in Version {version}.", popup_on: "An", ..ChangelogWords::DEFAULT };
+        assert_eq!(mine.intro("Filebrary", "2.0.0"), "Filebrary läuft in Version 2.0.0.");
+        assert_eq!(mine.saved(true), "An");
+        assert_eq!(ChangelogWords::default(), ChangelogWords::DEFAULT);
     }
 }

@@ -1,76 +1,88 @@
-//! The outbox: plays and likes made while the server could not be reached, kept per account until they can be
-//! sent.
+//! The outbox: actions made while the server could not be reached, kept per account until they can be sent.
 //!
-//! From Encore's `web-rs/src/offline/outbox.rs` (`Outbox`, `Play`, `Like`, `plays_body`, `PLAYS_PER_CALL`,
-//! `MAX_PLAYS`, `NO_ROOM_FOR_OUTBOX`) and Android's `features/offline/OfflineOutbox.kt` (`Outbox`, `OutPlay`,
-//! `OutLike`; tests in `OutboxTest.kt`).
+//! What an action is belongs to the app (a note saved, a file starred, a page visited); it implements
+//! [`Action`] to say how two of them relate. The outbox keeps the rules every app needs:
 //!
-//! The rules are the same on both: a play is kept once (the same song at the same second is the same play), at
-//! most [`MAX_PLAYS`] wait (the oldest go first); a song's likes and unlikes collapse into the last tap; what was
-//! sent is forgotten, but a like that changed meanwhile stays; the outbox belongs to the account that made the
-//! changes, a change by another account drops it first, and it only goes out under that account's session.
+//! - **once**: the same action twice (the same [`Action::key`]) is kept once;
+//! - **the last state wins**: an action about a subject ([`Action::subject`]) replaces the one still waiting
+//!   about the same subject (star, unstar, star → one star), in the place of the first; the same again changes
+//!   nothing;
+//! - **order**: actions go out in the order they were made;
+//! - **a cap**: at most [`Limits::max`] wait, the oldest go first;
+//! - **chunks**: they go out in calls of at most [`Limits::per_call`] ([`Outbox::calls`]);
+//! - **forgetting what went**: what was sent is forgotten, but an action about the same subject that changed
+//!   meanwhile stays ([`Outbox::forget`]);
+//! - **per account**: the outbox belongs to the account that made the changes; a change by another account drops
+//!   it first ([`Outbox::own`]), and it only goes out under that account's session ([`Outbox::belongs_to`]).
 //!
-//! What differs is how the account is named: the web keeps the user's id (`user_id`, a number), Android
-//! `<server>|<username>` (`owner`, a string). That is the [`Owner`] trait, implemented for `i64` (the web's
-//! document) and `String` (Android's, see [`account`]).
+//! How the account is named is the [`Owner`] trait: a user id (`i64`, the web's `user_id`) or a
+//! `<server>|<username>` string (`String`, see [`account`], for a device that knows several servers).
 
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 
-/// The server takes at most this many plays per call. From `outbox.rs` `PLAYS_PER_CALL`.
-pub const PLAYS_PER_CALL: usize = 500;
-/// The outbox keeps at most this many plays (the oldest go first). From `outbox.rs` `MAX_PLAYS`.
-pub const MAX_PLAYS: usize = 5000;
-/// Said once when the device has no room for the outbox. From `outbox.rs` `NO_ROOM_FOR_OUTBOX`.
-pub const NO_ROOM_FOR_OUTBOX: &str = "There is no room left on this device – plays and likes are kept only until the page closes";
+/// The server takes at most this many actions per call by default.
+pub const PER_CALL: usize = 500;
+/// The outbox keeps at most this many actions by default (the oldest go first).
+pub const MAX_ACTIONS: usize = 5000;
+/// Said once when the device has no room for the outbox.
+pub const NO_ROOM_FOR_OUTBOX: &str = "There is no room left on this device – changes are kept only until the page closes";
 
-/// A play the server did not get yet.
-///
-/// From `outbox.rs` `Play` and `OutPlay`.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct Play {
-    /// The song.
-    pub track_id: i64,
-    /// How long it played, in seconds.
-    pub seconds: f64,
-    /// When (unix seconds).
-    pub played_at: i64,
+/// One action of the app's, kept until it can be sent.
+pub trait Action: Clone + PartialEq + Serialize + DeserializeOwned {
+    /// The action's identity: two actions with the same key are the same action (kept once, forgotten together
+    /// once sent). A visit: `"visit:<page>@<time>"`; a star: `"star:<item>:<on>"`.
+    fn key(&self) -> String;
+
+    /// What the action is about when only its last state counts (a star and an unstar of item 7 are both about
+    /// `"star:7"`): a new one replaces the one waiting about the same subject. None (the default): every action
+    /// counts on its own.
+    fn subject(&self) -> Option<String> {
+        None
+    }
+
+    /// Whether the action may be kept at all (one about nothing, an id of 0, is dropped). The default: every
+    /// action.
+    fn valid(&self) -> bool {
+        true
+    }
+
+    /// The kind of action, for the counts ("change", "upload"; see [`Outbox::counts`]).
+    fn kind(&self) -> &str;
 }
 
-/// A like (`liked`) or an unlike the server did not get yet.
-///
-/// From `outbox.rs` `Like` and `OutLike`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct Like {
-    /// The song.
-    pub track_id: i64,
-    /// A like, or an unlike.
-    pub liked: bool,
-    /// When it was pressed (unix seconds).
-    pub at: i64,
+/// How many actions wait and go per call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    /// At most this many wait; the oldest go first.
+    pub max: usize,
+    /// At most this many go in one call.
+    pub per_call: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits { max: MAX_ACTIONS, per_call: PER_CALL }
+    }
 }
 
 /// How an outbox names the account it belongs to.
 pub trait Owner: Clone + PartialEq + Default {
-    /// The document's field for it (`user_id` on the web, `owner` on Android).
+    /// The document's field for it (`user_id`, `owner`).
     const FIELD: &'static str;
     /// Whether the account is known: an outbox without a known owner never goes out.
     fn known(&self) -> bool;
-    /// Whether reading a document leaves out entries without a song (Android's `parse` does, the web's not).
-    const DROP_UNKNOWN_TRACKS: bool;
     /// The owner from the document's field (missing or unreadable: the default, nobody).
     fn read(v: Option<&Value>) -> Self;
     /// The owner as the document's field.
     fn write(&self) -> Value;
 }
 
-/// The web's owner: the user's id (0: nobody known). From `outbox.rs` `Outbox::user_id`.
+/// An owner named by the user's id (0: nobody known).
 impl Owner for i64 {
     const FIELD: &'static str = "user_id";
-    const DROP_UNKNOWN_TRACKS: bool = false;
     fn known(&self) -> bool {
         *self > 0
     }
@@ -82,11 +94,9 @@ impl Owner for i64 {
     }
 }
 
-/// Android's owner: `<server>|<username>` ([`account`]; "": nobody known). From `OfflineOutbox.kt`
-/// `Outbox.owner`.
+/// An owner named `<server>|<username>` ([`account`]; "": nobody known).
 impl Owner for String {
     const FIELD: &'static str = "owner";
-    const DROP_UNKNOWN_TRACKS: bool = true;
     fn known(&self) -> bool {
         !self.is_empty()
     }
@@ -98,402 +108,345 @@ impl Owner for String {
     }
 }
 
-/// Android's name for an account: `<server>|<username>`. From `OfflineOutbox.kt` (`owner`).
+/// The name of an account on a device that knows several servers: `<server>|<username>`.
 pub fn account(server: &str, username: &str) -> String {
     format!("{server}|{username}")
 }
 
-/// The outbox document of one account, `O` naming the account ([`Owner`]).
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Outbox<O: Owner = i64> {
-    /// The account whose plays and likes these are.
+/// The outbox of one account: the app's actions `A`, the account named by `O` ([`Owner`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Outbox<A, O = i64> {
+    /// The account whose actions these are.
     pub owner: O,
-    /// The plays, oldest first.
-    pub plays: Vec<Play>,
-    /// The likes and unlikes, one per song, in the order first pressed.
-    pub likes: Vec<Like>,
+    /// The actions, oldest first.
+    pub actions: Vec<A>,
+    /// How many wait and go per call.
+    pub limits: Limits,
 }
 
-impl<O: Owner> Outbox<O> {
+impl<A, O: Default> Default for Outbox<A, O> {
+    fn default() -> Self {
+        Outbox { owner: O::default(), actions: Vec::new(), limits: Limits::default() }
+    }
+}
+
+impl<A: Action, O: Owner> Outbox<A, O> {
     /// An empty outbox of `owner`.
     pub fn of(owner: O) -> Self {
-        Outbox { owner, plays: vec![], likes: vec![] }
+        Outbox { owner, actions: Vec::new(), limits: Limits::default() }
     }
 
-    /// Plays and likes waiting.
+    /// The same outbox under other limits (a smaller cap is applied at once, the oldest go).
+    pub fn with_limits(mut self, limits: Limits) -> Self {
+        self.limits = limits;
+        self.trim();
+        self
+    }
+
+    /// Actions waiting.
     pub fn len(&self) -> usize {
-        self.plays.len() + self.likes.len()
+        self.actions.len()
     }
 
     /// Nothing waits.
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.actions.is_empty()
     }
 
-    /// (plays, likes) waiting: "3 plays and 1 like will be sent when the server is back".
-    pub fn counts(&self) -> (usize, usize) {
-        (self.plays.len(), self.likes.len())
+    /// How many of each kind wait, in the order each kind first appears: `[("change", 3), ("upload", 1)]`, for
+    /// "3 changes and 1 upload will be sent when the server is back" ([`super::mode::counts_text`]).
+    pub fn counts(&self) -> Vec<(String, usize)> {
+        let mut out: Vec<(String, usize)> = Vec::new();
+        for a in &self.actions {
+            match out.iter_mut().find(|(k, _)| k == a.kind()) {
+                Some((_, n)) => *n += 1,
+                None => out.push((a.kind().to_string(), 1)),
+            }
+        }
+        out
     }
 
     /// A change by `owner` is coming: the outbox of another account is dropped first.
-    ///
-    /// From `outbox.rs` `Outbox::own` and `Outbox.own`.
     pub fn own(&mut self, owner: O) {
         if self.owner != owner {
-            *self = Outbox::of(owner);
+            self.owner = owner;
+            self.actions.clear();
         }
     }
 
     /// These may go out under the session of `owner` (an outbox without a known owner never goes out).
-    ///
-    /// From `outbox.rs` `Outbox::belongs_to` and `Outbox.belongsTo`.
     pub fn belongs_to(&self, owner: &O) -> bool {
         self.owner.known() && self.owner == *owner
     }
 
-    /// A play, once (the same song at the same second is the same play); at most [`MAX_PLAYS`], the oldest go.
-    ///
-    /// From `outbox.rs` `Outbox::add_play` and `Outbox.addPlay`.
-    pub fn add_play(&mut self, p: Play) {
-        if p.track_id <= 0 || self.plays.iter().any(|x| x.track_id == p.track_id && x.played_at == p.played_at) {
-            return;
+    /// Keeps an action: once (an action with the same key waits already: nothing changes); about a subject that
+    /// waits already, it takes that one's place; else at the end. At most [`Limits::max`] wait, the oldest go.
+    /// Returns whether the outbox changed.
+    pub fn add(&mut self, a: A) -> bool {
+        if !a.valid() {
+            return false;
         }
-        self.plays.push(p);
-        if self.plays.len() > MAX_PLAYS {
-            let extra = self.plays.len() - MAX_PLAYS;
-            self.plays.drain(..extra);
+        let key = a.key();
+        if let Some(subject) = a.subject() {
+            if let Some(i) = self.actions.iter().position(|x| x.subject().as_deref() == Some(subject.as_str())) {
+                if self.actions[i].key() == key {
+                    return false;
+                }
+                self.actions[i] = a;
+                return true;
+            }
+        } else if self.actions.iter().any(|x| x.key() == key) {
+            return false;
+        }
+        self.actions.push(a);
+        self.trim();
+        true
+    }
+
+    fn trim(&mut self) {
+        if self.actions.len() > self.limits.max {
+            let extra = self.actions.len() - self.limits.max;
+            self.actions.drain(..extra);
         }
     }
 
-    /// A like or an unlike: it replaces the one still waiting for the same song (the last tap wins); the same
-    /// again changes nothing.
-    ///
-    /// From `outbox.rs` `Outbox::add_like` and `Outbox.addLike`.
-    pub fn add_like(&mut self, l: Like) {
-        if l.track_id <= 0 {
-            return;
-        }
-        match self.likes.iter().position(|x| x.track_id == l.track_id) {
-            None => self.likes.push(l),
-            Some(i) if self.likes[i].liked == l.liked => {}
-            Some(i) => self.likes[i] = l,
-        }
+    /// What went: every action with the key of one sent is forgotten (one about the same subject that changed
+    /// meanwhile has another key, and stays).
+    pub fn forget(&mut self, sent: &[A]) {
+        let keys: HashSet<String> = sent.iter().map(Action::key).collect();
+        self.actions.retain(|a| !keys.contains(&a.key()));
     }
 
-    /// What went: the plays sent, and the likes sent (an entry that changed meanwhile stays).
-    ///
-    /// From `outbox.rs` `Outbox::forget` and `Outbox.forget`.
-    pub fn forget(&mut self, plays: &[Play], likes: &[Like]) {
-        let sent: HashSet<(i64, i64)> = plays.iter().map(|p| (p.track_id, p.played_at)).collect();
-        self.plays.retain(|p| !sent.contains(&(p.track_id, p.played_at)));
-        self.likes.retain(|l| !likes.iter().any(|s| s.track_id == l.track_id && s.liked == l.liked));
+    /// Whether an action about `subject` waits: a new one must go after it, through the outbox, so the server
+    /// sees them in order.
+    pub fn has(&self, subject: &str) -> bool {
+        self.actions.iter().any(|a| a.subject().as_deref() == Some(subject))
     }
 
-    /// Whether a like or an unlike of this song waits: a new tap must go after it, through the outbox, so the
-    /// server sees them in order.
-    ///
-    /// From `outbox.rs` `has_like`.
-    pub fn has_like(&self, track_id: i64) -> bool {
-        self.likes.iter().any(|l| l.track_id == track_id)
+    /// The actions in calls of at most [`Limits::per_call`], in order.
+    pub fn calls(&self) -> Vec<&[A]> {
+        self.actions.chunks(self.limits.per_call.max(1)).collect()
     }
 
-    /// The plays in calls of at most [`PLAYS_PER_CALL`], each the body of `POST /library/plays`.
-    ///
-    /// From `outbox.rs` `send`.
-    pub fn play_calls(&self) -> Vec<&[Play]> {
-        self.plays.chunks(PLAYS_PER_CALL).collect()
+    /// The actions of one kind, in order (an app that sends each kind to its own endpoint).
+    pub fn of_kind(&self, kind: &str) -> Vec<&A> {
+        self.actions.iter().filter(|a| a.kind() == kind).collect()
     }
 
-    /// The saved document; an unreadable one is empty.
-    ///
-    /// From `outbox.rs` `Outbox::parse` and `Outbox.parse`.
+    /// The saved document; an unreadable one is empty, and unreadable or invalid actions are left out.
     pub fn parse(text: &str) -> Self {
-        let Ok(Value::Object(o)) = serde_json::from_str::<Value>(text) else { return Outbox::default() };
-        let list = |k: &str| o.get(k).and_then(Value::as_array).cloned().unwrap_or_default();
-        let mut plays: Vec<Play> = list("plays").into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect();
-        let mut likes: Vec<Like> = list("likes").into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect();
-        if O::DROP_UNKNOWN_TRACKS {
-            plays.retain(|p| p.track_id > 0);
-            likes.retain(|l| l.track_id > 0);
+        let Ok(Value::Object(o)) = serde_json::from_str::<Value>(text) else { return Outbox::of(O::default()) };
+        let list = o.get("actions").and_then(Value::as_array).cloned().unwrap_or_default();
+        let mut out = Outbox::of(O::read(o.get(O::FIELD)));
+        for v in list {
+            if let Ok(a) = serde_json::from_value::<A>(v) {
+                out.add(a);
+            }
         }
-        Outbox { owner: O::read(o.get(O::FIELD)), plays, likes }
+        out
     }
 
-    /// The document to save (`{<owner field>, plays, likes}`).
-    ///
-    /// From the web's `serde_json::to_string(&Outbox)` and `Outbox.toJson`.
+    /// The document to save: `{<owner field>, actions}`.
     pub fn to_json(&self) -> Value {
         let mut m = Map::new();
         m.insert(O::FIELD.into(), self.owner.write());
-        m.insert("plays".into(), json!(self.plays));
-        m.insert("likes".into(), json!(self.likes));
+        m.insert("actions".into(), json!(self.actions));
         Value::Object(m)
     }
 }
 
-/// The body of `POST /library/plays` (the list form): `{"plays": [{track_id, seconds, played_at}, …]}`, the
-/// fields in that order.
-#[derive(Clone, Debug, PartialEq, Serialize)]
-pub struct PlaysBody {
-    /// The plays, seconds rounded to tenths.
-    pub plays: Vec<Play>,
-}
-
-/// The body of `POST /library/plays` for these plays (the list form), seconds rounded to tenths and never below
-/// zero. Serialize it (`serde_json::to_string`) to send it.
-///
-/// From `outbox.rs` `plays_body` and `Outbox.playsBody`.
-pub fn plays_body(plays: &[Play]) -> PlaysBody {
-    PlaysBody {
-        plays: plays
-            .iter()
-            .map(|p| Play { track_id: p.track_id, seconds: (p.seconds.max(0.0) * 10.0).round() / 10.0, played_at: p.played_at })
-            .collect(),
-    }
-}
-
-/// The seconds a play is queued with: a number that is not finite counts as 0, never below 0.
-///
-/// From `outbox.rs` `queue_play`.
-pub fn play_seconds(seconds: f64) -> f64 {
-    if seconds.is_finite() {
-        seconds.max(0.0)
-    } else {
-        0.0
-    }
-}
-
-/// Whether a like failing with `status` still counts as sent: 404, the song is gone from the library – nothing
-/// left to like.
-///
-/// From `outbox.rs` `send`.
-pub fn like_gone(status: u16) -> bool {
+/// Whether an action failing with `status` still counts as sent: 404, what it was about is gone – nothing left
+/// to change.
+pub fn gone(status: u16) -> bool {
     status == 404
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
-    fn like(id: i64, liked: bool) -> Like {
-        Like { track_id: id, liked, at: 100 }
-    }
-    fn play(id: i64, at: i64) -> Play {
-        Play { track_id: id, seconds: 120.0, played_at: at }
+    /// An app's actions: a page visited (each counts), an item starred or not (the last tap counts).
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(tag = "type", rename_all = "lowercase")]
+    enum Act {
+        Visit { page: i64, at: i64 },
+        Star { item: i64, on: bool, at: i64 },
     }
 
-    // ---- the web (web-rs/src/offline/outbox.rs tests) --------------------------------------------------------
+    impl Action for Act {
+        fn key(&self) -> String {
+            match self {
+                Act::Visit { page, at } => format!("visit:{page}@{at}"),
+                Act::Star { item, on, .. } => format!("star:{item}:{on}"),
+            }
+        }
+        fn subject(&self) -> Option<String> {
+            match self {
+                Act::Visit { .. } => None,
+                Act::Star { item, .. } => Some(format!("star:{item}")),
+            }
+        }
+        fn valid(&self) -> bool {
+            match self {
+                Act::Visit { page, .. } => *page > 0,
+                Act::Star { item, .. } => *item > 0,
+            }
+        }
+        fn kind(&self) -> &str {
+            match self {
+                Act::Visit { .. } => "visit",
+                Act::Star { .. } => "star",
+            }
+        }
+    }
+
+    fn star(item: i64, on: bool) -> Act {
+        Act::Star { item, on, at: 100 }
+    }
+    fn visit(page: i64, at: i64) -> Act {
+        Act::Visit { page, at }
+    }
 
     #[test]
-    fn a_like_then_an_unlike_collapses_into_the_unlike() {
-        let mut o: Outbox = Outbox::default();
-        o.add_like(like(1, true));
-        o.add_like(like(1, false));
-        assert_eq!(o.likes, vec![like(1, false)], "the last tap is what the server gets");
-        o.add_like(like(2, false));
-        o.add_like(like(2, true));
-        assert_eq!(o.likes, vec![like(1, false), like(2, true)]);
-        o.add_like(like(2, false));
-        o.add_like(like(2, true));
-        assert_eq!(o.likes, vec![like(1, false), like(2, true)], "four presses: one like");
-        o.add_like(like(2, true));
-        assert_eq!(o.likes.len(), 2, "the same again changes nothing");
-        o.add_like(like(0, true));
-        assert_eq!(o.likes.len(), 2, "no song, no like");
-        assert!(o.has_like(2) && !o.has_like(3));
+    fn a_star_then_an_unstar_collapses_into_the_unstar() {
+        let mut o: Outbox<Act> = Outbox::default();
+        o.add(star(1, true));
+        o.add(star(1, false));
+        assert_eq!(o.actions, vec![star(1, false)], "the last tap is what the server gets");
+        o.add(star(2, false));
+        o.add(star(2, true));
+        assert_eq!(o.actions, vec![star(1, false), star(2, true)]);
+        o.add(star(2, false));
+        o.add(star(2, true));
+        assert_eq!(o.actions, vec![star(1, false), star(2, true)], "four presses: one star");
+        assert!(!o.add(Act::Star { item: 2, on: true, at: 999 }), "the same again changes nothing");
+        assert_eq!(o.actions[1], star(2, true), "and keeps the first time");
+        assert!(!o.add(star(0, true)), "about nothing: not kept");
+        assert!(o.has("star:2") && !o.has("star:3"));
     }
 
     #[test]
-    fn a_like_on_its_way_is_replaced_not_cancelled() {
-        let mut o: Outbox = Outbox::default();
-        o.add_like(like(1, true));
-        o.add_like(like(1, false));
-        assert_eq!(o.likes, vec![like(1, false)]);
-        o.forget(&[], &[like(1, true)]);
-        assert_eq!(o.likes, vec![like(1, false)]);
-        o.forget(&[], &[like(1, false)]);
+    fn a_star_on_its_way_is_replaced_not_cancelled() {
+        let mut o: Outbox<Act> = Outbox::default();
+        o.add(star(1, true));
+        o.add(star(1, false));
+        o.forget(&[star(1, true)]);
+        assert_eq!(o.actions, vec![star(1, false)], "it changed meanwhile: it stays");
+        o.forget(&[star(1, false)]);
         assert!(o.is_empty());
     }
 
     #[test]
-    fn plays_are_kept_once_and_forgotten_once_sent() {
-        let mut o: Outbox = Outbox::default();
-        o.add_play(play(1, 1000));
-        o.add_play(play(1, 1000));
-        o.add_play(play(1, 2000));
-        o.add_play(play(2, 1000));
-        o.add_play(play(-3, 1000));
-        assert_eq!(o.plays.len(), 3);
-        let sent = o.plays[..2].to_vec();
-        o.add_play(play(4, 3000));
-        o.forget(&sent, &[]);
-        assert_eq!(o.plays, vec![play(2, 1000), play(4, 3000)], "a play queued while sending stays");
-        let mut big: Outbox = Outbox::default();
-        for i in 0..(MAX_PLAYS as i64 + 3) {
-            big.add_play(play(7, i));
-        }
-        assert_eq!(big.plays.len(), MAX_PLAYS);
-        assert_eq!(big.plays[0].played_at, 3, "the oldest went");
-        assert_eq!(big.play_calls().len(), 10);
-        assert!(big.play_calls().iter().all(|c| c.len() == PLAYS_PER_CALL));
+    fn actions_are_kept_once_and_forgotten_once_sent() {
+        let mut o: Outbox<Act> = Outbox::default();
+        o.add(visit(1, 1000));
+        o.add(visit(1, 1000));
+        o.add(visit(1, 2000));
+        o.add(visit(2, 1000));
+        o.add(visit(-3, 1000));
+        assert_eq!(o.len(), 3);
+        let sent = o.actions[..2].to_vec();
+        o.add(visit(4, 3000));
+        o.forget(&sent);
+        assert_eq!(o.actions, vec![visit(2, 1000), visit(4, 3000)], "an action kept while sending stays");
     }
 
     #[test]
-    fn the_plays_go_in_the_list_form() {
-        let body = serde_json::to_value(plays_body(&[
-            Play { track_id: 5, seconds: 61.26, played_at: 1_760_000_000 },
-            Play { track_id: 6, seconds: -2.0, played_at: 1_760_000_100 },
-        ]))
-        .unwrap();
-        assert_eq!(
-            body,
-            json!({ "plays": [
-                { "track_id": 5, "seconds": 61.3, "played_at": 1_760_000_000 },
-                { "track_id": 6, "seconds": 0.0, "played_at": 1_760_000_100 },
-            ] })
-        );
-        assert_eq!(serde_json::to_value(plays_body(&[])).unwrap(), json!({ "plays": [] }));
-        assert_eq!(play_seconds(f64::NAN), 0.0);
-        assert_eq!(play_seconds(-1.0), 0.0);
-        assert_eq!(play_seconds(12.5), 12.5);
-        assert!(like_gone(404) && !like_gone(500));
+    fn at_most_the_cap_waits_the_oldest_go_first_and_they_go_in_chunks() {
+        let mut big: Outbox<Act> = Outbox::default();
+        for i in 0..(MAX_ACTIONS as i64 + 3) {
+            big.add(visit(7, i));
+        }
+        assert_eq!(big.len(), MAX_ACTIONS);
+        assert_eq!(big.actions[0], visit(7, 3), "the oldest went");
+        assert_eq!(big.calls().len(), 10);
+        assert!(big.calls().iter().all(|c| c.len() == PER_CALL));
+        let small = big.clone().with_limits(Limits { max: 5, per_call: 2 });
+        assert_eq!(small.len(), 5);
+        assert_eq!(small.actions[0], visit(7, MAX_ACTIONS as i64 - 2));
+        assert_eq!(small.calls().iter().map(|c| c.len()).collect::<Vec<_>>(), [2, 2, 1]);
+    }
+
+    #[test]
+    fn they_go_in_the_order_they_were_made_and_count_by_kind() {
+        let mut o: Outbox<Act> = Outbox::default();
+        o.add(star(5, true));
+        o.add(visit(1, 10));
+        o.add(visit(2, 11));
+        o.add(star(6, true));
+        o.add(star(5, false));
+        assert_eq!(o.actions, vec![star(5, false), visit(1, 10), visit(2, 11), star(6, true)], "a replaced star keeps its place");
+        assert_eq!(o.counts(), vec![("star".to_string(), 2), ("visit".to_string(), 2)]);
+        assert_eq!(o.of_kind("visit"), vec![&visit(1, 10), &visit(2, 11)]);
+        assert!(gone(404) && !gone(500));
     }
 
     #[test]
     fn one_users_outbox_never_goes_out_for_another() {
-        let mut o: Outbox = Outbox::default();
+        let mut o: Outbox<Act> = Outbox::default();
         o.own(1);
-        o.add_play(play(5, 1000));
-        o.add_like(like(6, false));
+        o.add(visit(5, 1000));
+        o.add(star(6, false));
         assert!(o.belongs_to(&1));
         assert!(!o.belongs_to(&2));
         assert!(!o.belongs_to(&0));
         let text = o.to_json().to_string();
-        assert_eq!(Outbox::<i64>::parse(&text).owner, 1, "the owner is saved with the document");
-        let old = Outbox::<i64>::parse(r#"{"plays":[{"track_id":3,"seconds":30,"played_at":10}],"likes":[]}"#);
+        assert_eq!(Outbox::<Act, i64>::parse(&text).owner, 1, "the owner is saved with the document");
+        let old = Outbox::<Act, i64>::parse(r#"{"actions":[{"type":"visit","page":3,"at":10}]}"#);
         assert_eq!(old.owner, 0);
+        assert_eq!(old.len(), 1);
         assert!(!old.belongs_to(&0) && !old.belongs_to(&3));
     }
 
     #[test]
     fn a_change_by_another_user_empties_the_outbox_first() {
-        let mut o: Outbox = Outbox::default();
+        let mut o: Outbox<Act> = Outbox::default();
         o.own(1);
-        o.add_play(play(5, 1000));
+        o.add(visit(5, 1000));
         o.own(1);
-        o.add_like(like(6, true));
+        o.add(star(6, true));
         assert_eq!((o.owner, o.len()), (1, 2));
         o.own(2);
-        o.add_like(like(8, false));
-        assert_eq!(o, Outbox { owner: 2, plays: vec![], likes: vec![like(8, false)] }, "user 1's entries are gone");
+        o.add(star(8, false));
+        assert_eq!(o, Outbox { owner: 2, actions: vec![star(8, false)], limits: Limits::default() }, "user 1's actions are gone");
     }
 
     #[test]
     fn the_document_round_trips() {
-        let mut o: Outbox = Outbox::default();
-        o.add_play(play(1, 10));
-        o.add_like(like(2, true));
+        let mut o: Outbox<Act> = Outbox::default();
+        o.add(visit(1, 10));
+        o.add(star(2, true));
         let text = o.to_json().to_string();
         assert_eq!(Outbox::parse(&text), o);
-        assert_eq!(Outbox::<i64>::parse("garbage"), Outbox::default());
-        assert_eq!(Outbox::<i64>::parse(r#"{"plays":[{"track_id":3}]}"#).plays, vec![Play { track_id: 3, seconds: 0.0, played_at: 0 }]);
-        assert_eq!(o.len(), 2);
+        assert_eq!(Outbox::<Act>::parse("garbage"), Outbox::default());
+        // unreadable and invalid actions are left out
+        let mixed = Outbox::<Act>::parse(
+            r#"{"actions":[{"type":"visit","page":3,"at":1},{"type":"what"},{"type":"star","item":0,"on":true,"at":1}]}"#,
+        );
+        assert_eq!(mixed.actions, vec![visit(3, 1)]);
         assert_eq!(o.to_json()["user_id"], json!(0));
+        assert_eq!(o.to_json()["actions"][1], json!({ "type": "star", "item": 2, "on": true, "at": 100 }));
     }
-
-    // ---- Android (OutboxTest.kt) ------------------------------------------------------------------------------
 
     fn ana() -> String {
-        account("https://music.example.com", "ana")
+        account("https://files.example.com", "ana")
     }
 
     #[test]
-    fn android_a_like_then_an_unlike_collapses_into_the_unlike() {
-        let mut o = Outbox::of(ana());
-        o.add_like(Like { track_id: 1, liked: true, at: 100 });
-        o.add_like(Like { track_id: 1, liked: false, at: 101 });
-        assert_eq!(o.likes, vec![Like { track_id: 1, liked: false, at: 101 }]);
-        let before = o.clone();
-        o.add_like(Like { track_id: 1, liked: false, at: 200 });
-        o.add_like(Like { track_id: 0, liked: true, at: 1 });
-        assert_eq!(o, before);
-    }
-
-    #[test]
-    fn android_a_play_is_kept_once() {
-        let mut o = Outbox::of(ana());
-        o.add_play(Play { track_id: 1, seconds: 120.0, played_at: 100 });
-        o.add_play(Play { track_id: 1, seconds: 30.0, played_at: 100 });
-        o.add_play(Play { track_id: 1, seconds: 30.0, played_at: 400 });
-        assert_eq!(o.plays.len(), 2);
-        o.add_play(Play { track_id: -1, seconds: 1.0, played_at: 1 });
-        assert_eq!(o.plays.len(), 2);
-    }
-
-    #[test]
-    fn android_at_most_five_thousand_plays_wait_the_oldest_go_first() {
-        let mut o = Outbox::of(ana());
-        for i in 1..=5003 {
-            o.add_play(Play { track_id: 7, seconds: 10.0, played_at: i });
-        }
-        assert_eq!(o.plays.len(), MAX_PLAYS);
-        assert_eq!(o.plays[0].played_at, 4);
-    }
-
-    #[test]
-    fn android_another_accounts_outbox_is_dropped() {
-        let mut o = Outbox::of(ana());
-        o.add_play(Play { track_id: 1, seconds: 60.0, played_at: 5 });
+    fn an_account_on_a_device_with_several_servers() {
+        let mut o: Outbox<Act, String> = Outbox::of(ana());
+        o.add(visit(1, 5));
         assert!(o.belongs_to(&ana()));
-        let bob = account("https://music.example.com", "bob");
+        let bob = account("https://files.example.com", "bob");
         assert!(!o.belongs_to(&bob));
-        assert!(!Outbox::of(String::new()).belongs_to(&String::new()));
+        assert!(!Outbox::<Act, String>::of(String::new()).belongs_to(&String::new()));
         let mut same = o.clone();
         same.own(ana());
         assert_eq!(same, o);
+        assert_eq!(Outbox::<Act, String>::parse(&o.to_json().to_string()), o);
+        assert_eq!(o.to_json()["owner"], json!(ana()));
         o.own(bob);
         assert!(o.is_empty());
-    }
-
-    #[test]
-    fn android_what_went_is_forgotten() {
-        let mut o = Outbox::of(ana());
-        o.add_play(Play { track_id: 1, seconds: 60.0, played_at: 5 });
-        o.add_play(Play { track_id: 2, seconds: 60.0, played_at: 6 });
-        o.add_like(Like { track_id: 3, liked: true, at: 7 });
-        o.add_like(Like { track_id: 4, liked: false, at: 8 });
-        // the like of 3 changed meanwhile: it stays
-        o.add_like(Like { track_id: 3, liked: false, at: 9 });
-        o.forget(
-            &[Play { track_id: 1, seconds: 60.0, played_at: 5 }],
-            &[Like { track_id: 3, liked: true, at: 7 }, Like { track_id: 4, liked: false, at: 8 }],
-        );
-        assert_eq!(o.plays, vec![Play { track_id: 2, seconds: 60.0, played_at: 6 }]);
-        assert_eq!(o.likes, vec![Like { track_id: 3, liked: false, at: 9 }]);
-    }
-
-    #[test]
-    fn android_the_document_reads_back() {
-        let mut o = Outbox::of(ana());
-        o.add_play(Play { track_id: 1, seconds: 241.5, played_at: 1_792_310_400 });
-        o.add_like(Like { track_id: 9, liked: true, at: 1_792_310_460 });
-        assert_eq!(Outbox::<String>::parse(&o.to_json().to_string()), o);
-        assert_eq!(o.to_json()["owner"], json!(ana()));
-        assert_eq!(Outbox::<String>::parse("not json"), Outbox::default());
-        // Android leaves out entries without a song when it reads
-        assert!(Outbox::<String>::parse(r#"{"owner":"x","plays":[{"track_id":0}]}"#).plays.is_empty());
-    }
-
-    #[test]
-    fn android_the_plays_go_in_the_list_form() {
-        let body = serde_json::to_string(&plays_body(&[
-            Play { track_id: 1234, seconds: 241.56, played_at: 1_792_310_400 },
-            Play { track_id: 1235, seconds: -3.0, played_at: 1_792_310_500 },
-        ]))
-        .unwrap();
-        assert_eq!(
-            body,
-            r#"{"plays":[{"track_id":1234,"seconds":241.6,"played_at":1792310400},{"track_id":1235,"seconds":0.0,"played_at":1792310500}]}"#
-        );
     }
 }

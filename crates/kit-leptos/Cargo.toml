@@ -1,6 +1,6 @@
 [package]
 name = "kit-leptos"
-description = "Encore's web components (toasts, dialogs, What's new, self-update, notices, drop zones, settings form, bug reports, diagnostics, offline banner) as Leptos components on kit-rules."
+description = "The kit's web components (toasts, dialogs, confirm, What's new, self-update, notices, drop zones, settings form, bug reports, diagnostics, offline banner) as Leptos components on kit-rules, configured per app, with a neutral stylesheet on the design tokens."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ rust-version = "1.88"
 default = ["csr"]
 # client-side rendering in the browser (WebAssembly), the way every kit app runs
 csr = ["leptos/csr"]
-# server-side rendering to strings: what the markup tests use to compare with Encore's HTML
+# server-side rendering to strings: what the markup tests use
 ssr = ["leptos/ssr"]
 
 [dependencies]

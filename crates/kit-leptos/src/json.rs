@@ -1,7 +1,4 @@
-//! Reading JSON answers the way Encore's JavaScript-born code reads them.
-//!
-//! From Encore's `web-rs/src/json.rs` (`js_string`, `truthy`, the `J` trait): `String(v ?? '')`, JavaScript
-//! truthiness, `obj[key] || []` and friends, so the components read every answer exactly as Encore's pages do.
+//! Reading JSON answers the forgiving way JavaScript reads them (a missing field is empty, not an error).
 
 use serde_json::Value;
 
@@ -39,7 +36,7 @@ pub fn truthy(v: &Value) -> bool {
     }
 }
 
-/// Encore's `J`: the JavaScript ways of reading an object's fields.
+/// The JavaScript ways of reading an object's fields.
 pub trait J {
     /// `obj[key]` (`null` when missing).
     fn g(&self, key: &str) -> &Value;

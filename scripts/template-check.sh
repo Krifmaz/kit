@@ -40,8 +40,7 @@ python3 "$KIT/scripts/template-local-kit.py" "$APP" "$APP/kit-src"
 
 step "The app's stylesheets are the kit's"
 cmp "$KIT/design/out/tokens.css" "$APP/web/static/css/tokens.css"
-# the first three lines are each copy's own SOURCE note
-cmp <(tail -n +4 "$KIT/crates/kit-leptos/demo/encore-app.css") <(tail -n +4 "$APP/web/static/css/app.css")
+cmp "$KIT/crates/kit-leptos/style/kit.css" "$APP/web/static/css/kit.css"
 
 step "server/: fmt, clippy, tests"
 (cd "$APP/server" && cargo generate-lockfile && cargo fmt --all --check \

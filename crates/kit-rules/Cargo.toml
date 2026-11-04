@@ -1,6 +1,6 @@
 [package]
 name = "kit-rules"
-description = "The client-side decision logic Encore writes once per client (toasts, details, changelog, update detection, notices, offline, uploads), as plain Rust with no UI."
+description = "The client-side rules every kit app shares (toasts, dialogs, details, changelog, update detection, notices, offline, uploads, bug reports, diagnostics), as plain Rust with no UI."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

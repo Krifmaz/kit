@@ -1,37 +1,93 @@
-//! Diagnostics: the page that runs every connection, folder and tool check and says what is wrong; its words,
-//! how its checks are grouped and the plain-text report Copy report puts on the clipboard.
+//! Diagnostics: the page that runs every check an app's server knows and says what is wrong; its words, how its
+//! checks are grouped and the plain-text report Copy report puts on the clipboard.
 //!
-//! From Encore's `web-rs/src/settings/diagnostics.rs` (`KIND`, `render`, `run`, `check_item`, `copy_report`)
-//! and `contracts/diagnostics.md`. The answer is read as JSON (`serde_json::Value`) because servers add fields
-//! per check (Encore's Soulseek check carries `soulseek`) and a client must keep what it does not know.
+//! The checks are the app's (`contracts/diagnostics.md`): each says its `kind`, and the page draws one group
+//! per kind, the kit's three ([`KINDS`]: connections, folders, tools) first and any other kind after them, in
+//! the order the server sent them ([`groups`]). The answer is read as JSON (`serde_json::Value`) because servers
+//! add fields per check and a client must keep what it does not know. The words are [`DiagWords`].
 
 use serde_json::Value;
 
-/// The check groups in page order: `kind` and its heading. From `diagnostics.rs` `KIND`.
+/// The kit's check groups in page order: `kind` and its heading. Other kinds follow them ([`groups`]).
 pub const KINDS: [(&str, &str); 3] = [("service", "Connections"), ("path", "Folders & permissions"), ("tool", "Tools in the container")];
-/// The page's heading. From `diagnostics.rs` `render`.
+/// The page's heading.
 pub const TITLE: &str = "Diagnostics";
-/// The button that copies the report. From `diagnostics.rs` `render`.
+/// The button that copies the report.
 pub const COPY_REPORT: &str = "Copy report";
-/// The button that runs the checks. From `diagnostics.rs` `render`.
+/// The button that runs the checks.
 pub const RUN_CHECKS: &str = "Run checks";
-/// The line while the checks run. From `diagnostics.rs` `run`.
+/// The line while the checks run.
 pub const CHECKING: &str = "Checking…";
-/// The summary badge when every check passed. From `diagnostics.rs` `run`.
+/// The summary badge when every check passed.
 pub const ALL_GOOD: &str = "All good";
-/// The fold with a check's raw answer. From `diagnostics.rs` `check_item`.
+/// The fold with a check's raw answer.
 pub const RAW_RESPONSE: &str = "Raw response";
-/// The settings table's fold. From `diagnostics.rs` `run`.
+/// The settings table's fold.
 pub const SOURCES_TITLE: &str = "Where settings come from";
-/// The settings table's column headings. From `diagnostics.rs` `run`.
+/// The settings table's column headings.
 pub const SOURCES_COLUMNS: [&str; 3] = ["Setting", "Source", "Value"];
 
-/// The line under the heading for `app`. From `diagnostics.rs` `render`.
-pub fn intro(app: &str) -> String {
-    format!("Runs every connection, folder and tool check from inside the {app} container and shows the raw answers. Keys are hidden.")
+/// The line under the heading, `{app}` filled in ([`intro`]).
+pub const INTRO: &str = "Runs every check from inside the {app} server and shows the raw answers. Keys are hidden.";
+
+/// The Diagnostics page's words. [`DiagWords::DEFAULT`] holds the kit's; an app passes its own to change any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DiagWords {
+    /// The page's heading ([`TITLE`]).
+    pub title: &'static str,
+    /// The line under it, with `{app}` ([`INTRO`]).
+    pub intro: &'static str,
+    /// The button that copies the report ([`COPY_REPORT`]).
+    pub copy_report: &'static str,
+    /// The button that runs the checks ([`RUN_CHECKS`]).
+    pub run_checks: &'static str,
+    /// The line while the checks run ([`CHECKING`]).
+    pub checking: &'static str,
+    /// The summary badge when every check passed ([`ALL_GOOD`]).
+    pub all_good: &'static str,
+    /// The fold with a check's raw answer ([`RAW_RESPONSE`]).
+    pub raw_response: &'static str,
+    /// The settings table's fold ([`SOURCES_TITLE`]).
+    pub sources_title: &'static str,
+    /// The settings table's column headings ([`SOURCES_COLUMNS`]).
+    pub sources_columns: [&'static str; 3],
+    /// The check groups' headings by kind ([`KINDS`]).
+    pub kinds: [(&'static str, &'static str); 3],
 }
 
-/// The summary badge's words: [`ALL_GOOD`], "1 problem", "3 problems". From `diagnostics.rs` `run`.
+impl DiagWords {
+    /// The kit's words.
+    pub const DEFAULT: DiagWords = DiagWords {
+        title: TITLE,
+        intro: INTRO,
+        copy_report: COPY_REPORT,
+        run_checks: RUN_CHECKS,
+        checking: CHECKING,
+        all_good: ALL_GOOD,
+        raw_response: RAW_RESPONSE,
+        sources_title: SOURCES_TITLE,
+        sources_columns: SOURCES_COLUMNS,
+        kinds: KINDS,
+    };
+
+    /// The line under the heading for `app`.
+    pub fn intro(&self, app: &str) -> String {
+        crate::app::fill(self.intro, &[("app", app)])
+    }
+}
+
+impl Default for DiagWords {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// The line under the heading for `app`.
+pub fn intro(app: &str) -> String {
+    DiagWords::DEFAULT.intro(app)
+}
+
+/// The summary badge's words: [`ALL_GOOD`], "1 problem", "3 problems".
 pub fn problems(bad: usize) -> String {
     match bad {
         0 => ALL_GOOD.to_string(),
@@ -40,24 +96,23 @@ pub fn problems(bad: usize) -> String {
     }
 }
 
-/// The summary line ("Encore 0.36.4 · running as uid 1000 · 11/4/2026, 10:00:00 AM"); `time` is formatted by the
-/// client. From `diagnostics.rs` `run`.
+/// The summary line ("Kit Demo 1.4.0 · running as uid 1000 · 11/4/2026, 10:00:00 AM"); `time` is formatted by the
+/// client.
 pub fn summary_line(app: &str, version: &str, uid: &str, time: &str) -> String {
     format!("{app} {version} · running as uid {uid} · {time}")
 }
 
-/// The settings fold's second line. From `diagnostics.rs` `run`.
+/// The settings fold's second line.
 pub fn sources_line(app: &str, count: usize) -> String {
     format!("Environment variables always win over values saved in {app} · {count} settings")
 }
 
-/// The badge of a setting saved in the app (not set by an environment variable). From `diagnostics.rs` `run`.
+/// The badge of a setting saved in the app (not set by an environment variable).
 pub fn saved_in(app: &str) -> String {
     format!("saved in {app}")
 }
 
 /// `${obj[key]}` as JavaScript prints it: a missing key is `undefined`, `null` is `null`, a string as is.
-/// From `diagnostics.rs` `js_str`.
 pub fn js_str(v: &Value, key: &str) -> String {
     match v.get(key) {
         None => "undefined".into(),
@@ -93,7 +148,7 @@ pub fn truthy(v: &Value, key: &str) -> bool {
     }
 }
 
-/// `String(obj[key] || '')`. From `diagnostics.rs` `or_empty`.
+/// `String(obj[key] || '')`.
 pub fn or_empty(v: &Value, key: &str) -> String {
     if truthy(v, key) {
         js_string(&v[key])
@@ -102,22 +157,52 @@ pub fn or_empty(v: &Value, key: &str) -> String {
     }
 }
 
-/// How many checks failed (`ok` not truthy). From `diagnostics.rs` `run`.
+/// How many checks failed (`ok` not truthy).
 pub fn bad_count(checks: &[Value]) -> usize {
     checks.iter().filter(|c| !truthy(c, "ok")).count()
 }
 
-/// The checks of each group that has any, in [`KINDS`] order: (heading, checks). From `diagnostics.rs` `run`.
-pub fn groups(checks: &[Value]) -> Vec<(&'static str, Vec<&Value>)> {
-    KINDS
-        .iter()
-        .map(|(k, title)| (*title, checks.iter().filter(|c| c.get("kind").and_then(Value::as_str) == Some(k)).collect::<Vec<_>>()))
-        .filter(|(_, g)| !g.is_empty())
-        .collect()
+/// The checks of each group that has any: the kit's kinds ([`KINDS`]) first, in that order, then every other
+/// kind in the order it first appears, headed by the kind itself with a capital (`queue` → "Queue"); a check
+/// without a kind goes under "Other". Returns (heading, checks).
+pub fn groups(checks: &[Value]) -> Vec<(String, Vec<&Value>)> {
+    groups_with(checks, &KINDS)
 }
 
-/// A check's `status` as an HTTP code ("HTTP 502" on the page), when it is one: Encore sends the code of the
-/// answer as a number. The kit's `ok` / `warn` / `fail` (`contracts/diagnostics.md`) is not a code.
+/// [`groups`] with the app's own headings for the kinds it knows (`kinds`, in page order).
+pub fn groups_with<'a>(checks: &'a [Value], kinds: &[(&str, &str)]) -> Vec<(String, Vec<&'a Value>)> {
+    let kind_of = |c: &Value| c.get("kind").and_then(Value::as_str).filter(|k| !k.is_empty()).unwrap_or("other").to_string();
+    let mut out: Vec<(String, Vec<&Value>)> =
+        kinds.iter().map(|(k, title)| (title.to_string(), checks.iter().filter(|c| kind_of(c) == *k).collect::<Vec<_>>())).collect();
+    let mut others: Vec<(String, Vec<&Value>)> = Vec::new();
+    for c in checks {
+        let k = kind_of(c);
+        if kinds.iter().any(|(known, _)| *known == k) {
+            continue;
+        }
+        match others.iter_mut().find(|(kk, _)| *kk == k) {
+            Some((_, g)) => g.push(c),
+            None => others.push((k, vec![c])),
+        }
+    }
+    out.extend(others.into_iter().map(|(k, g)| (heading_of(&k), g)));
+    out.retain(|(_, g)| !g.is_empty());
+    out
+}
+
+/// A kind as a heading: its first letter a capital, `_` and `-` as spaces (`disk_space` → "Disk space").
+pub fn heading_of(kind: &str) -> String {
+    let words = kind.replace(['_', '-'], " ");
+    let mut c = words.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().chain(c).collect(),
+        None => String::new(),
+    }
+}
+
+/// A check's `status` as an HTTP code ("HTTP 502" on the page), when it is one: a check of a service may send
+/// the code of the answer as a number. The kit's `ok` / `warn` / `fail` (`contracts/diagnostics.md`) is not a
+/// code.
 pub fn http_status(c: &Value) -> Option<String> {
     match c.get("status") {
         Some(Value::Number(n)) if n.as_f64().is_some_and(|f| f != 0.0) => Some(n.to_string()),
@@ -126,8 +211,8 @@ pub fn http_status(c: &Value) -> Option<String> {
     }
 }
 
-/// A check's level for its dot: `ok`, `warn` or `err`. Encore's checks say only `ok`; a kit server may send
-/// `status: "warn"` for a check that passed with a warning (`contracts/diagnostics.md`).
+/// A check's level for its dot: `ok`, `warn` or `err`, from `status` (`warn`, `fail`) when it says so, else
+/// from `ok` (`contracts/diagnostics.md`).
 pub fn level(c: &Value) -> &'static str {
     match c.get("status").and_then(Value::as_str) {
         Some("warn") => "warn",
@@ -138,7 +223,7 @@ pub fn level(c: &Value) -> &'static str {
 }
 
 /// The whole text a check's request line opens (its name, request, detail and raw answer, the empty ones left
-/// out). From `diagnostics.rs` `check_item`.
+/// out).
 pub fn whole_text(c: &Value, detail: &str) -> String {
     [js_string(c.get("name").unwrap_or(&Value::Null)), or_empty(c, "request"), detail.to_string(), or_empty(c, "body")]
         .into_iter()
@@ -154,9 +239,7 @@ pub fn js_slice(s: &str, n: usize) -> String {
 }
 
 /// The plain-text report Copy report puts on the clipboard, for `app`'s answer `last`. `extra` are the app's own
-/// sections (Encore's download folders and Server block), each a list of lines, put before the settings.
-///
-/// From `diagnostics.rs` `copy_report`.
+/// sections (a server block, the app's folders), each a list of lines, put before the settings.
 pub fn report_text(app: &str, last: &Value, extra: &[Vec<String>]) -> String {
     let mut lines = vec![format!("{app} {} diagnostics (uid {})", js_str(last, "version"), js_str(last, "uid"))];
     let empty = vec![];
@@ -194,30 +277,43 @@ mod tests {
 
     #[test]
     fn the_words_take_the_apps_name() {
-        assert_eq!(
-            intro("Encore"),
-            "Runs every connection, folder and tool check from inside the Encore container and shows the raw answers. Keys are hidden."
-        );
+        assert_eq!(intro("Kit Demo"), "Runs every check from inside the Kit Demo server and shows the raw answers. Keys are hidden.");
         assert_eq!((problems(0), problems(1), problems(3)), ("All good".into(), "1 problem".into(), "3 problems".into()));
-        assert_eq!(summary_line("Encore", "0.36.4", "1000", "today"), "Encore 0.36.4 · running as uid 1000 · today");
-        assert_eq!(sources_line("Encore", 12), "Environment variables always win over values saved in Encore · 12 settings");
-        assert_eq!(saved_in("Encore"), "saved in Encore");
+        assert_eq!(summary_line("Kit Demo", "1.4.0", "1000", "today"), "Kit Demo 1.4.0 · running as uid 1000 · today");
+        assert_eq!(sources_line("Kit Demo", 12), "Environment variables always win over values saved in Kit Demo · 12 settings");
+        assert_eq!(saved_in("Kit Demo"), "saved in Kit Demo");
+        let mine = DiagWords { intro: "Prüft {app}", ..DiagWords::DEFAULT };
+        assert_eq!(mine.intro("Filebrary"), "Prüft Filebrary");
+        assert_eq!(DiagWords::default(), DiagWords::DEFAULT);
     }
 
     #[test]
-    fn checks_group_by_kind_in_page_order() {
+    fn checks_group_by_kind_the_kits_first_then_the_apps() {
         let checks = vec![
             json!({ "name": "ffmpeg", "kind": "tool", "ok": true }),
-            json!({ "name": "MusicBrainz", "kind": "service", "ok": false }),
-            json!({ "name": "Music", "kind": "path", "ok": true }),
-            json!({ "name": "odd", "kind": "other", "ok": true }),
+            json!({ "name": "Mail server", "kind": "service", "ok": false }),
+            json!({ "name": "Mail queue", "kind": "queue", "ok": true }),
+            json!({ "name": "Data folder", "kind": "path", "ok": true }),
+            json!({ "name": "Free space", "kind": "disk_space", "ok": true }),
+            json!({ "name": "Job queue", "kind": "queue", "ok": true }),
+            json!({ "name": "odd" }),
         ];
         let g = groups(&checks);
         assert_eq!(
-            g.iter().map(|(t, c)| (*t, c.len())).collect::<Vec<_>>(),
-            [("Connections", 1), ("Folders & permissions", 1), ("Tools in the container", 1)]
+            g.iter().map(|(t, c)| (t.as_str(), c.len())).collect::<Vec<_>>(),
+            [
+                ("Connections", 1),
+                ("Folders & permissions", 1),
+                ("Tools in the container", 1),
+                ("Queue", 2),
+                ("Disk space", 1),
+                ("Other", 1)
+            ]
         );
-        assert_eq!(bad_count(&checks), 1);
+        assert_eq!(bad_count(&checks), 2);
+        let own = groups_with(&checks, &[("queue", "Queues")]);
+        assert_eq!(own[0].0, "Queues");
+        assert_eq!(own.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(), ["Queues", "Tool", "Service", "Path", "Disk space", "Other"]);
     }
 
     #[test]
@@ -231,18 +327,18 @@ mod tests {
     }
 
     #[test]
-    fn the_report_reads_like_encores() {
+    fn the_report_lists_every_check_and_setting() {
         let last = json!({
-            "version": "0.36.4", "uid": 1000,
+            "version": "1.4.0", "uid": 1000,
             "checks": [
-                { "name": "MusicBrainz", "kind": "service", "request": "GET https://musicbrainz.org/ws/2", "ok": true, "detail": "200 OK", "status": 200, "ms": 180 },
-                { "name": "Prowlarr", "kind": "service", "ok": false, "detail": "refused", "body": "é".repeat(400) }
+                { "name": "Mail server", "kind": "service", "request": "GET https://mail.example.com/health", "ok": true, "detail": "200 OK", "status": 200, "ms": 180 },
+                { "name": "Search index", "kind": "service", "ok": false, "detail": "refused", "body": "é".repeat(400) }
             ],
-            "settings": [{ "key": "library_path", "value": "/music", "source": "env", "env": "ENCORE_LIBRARY" }, { "key": "app_name", "value": null, "source": "ui" }]
+            "settings": [{ "key": "data_path", "value": "/data", "source": "env", "env": "APP_DATA_PATH" }, { "key": "app_name", "value": null, "source": "ui" }]
         });
-        let r = report_text("Encore", &last, &[vec!["Server:".into(), "  CPUs: 4".into()]]);
+        let r = report_text("Kit Demo", &last, &[vec!["Server:".into(), "  CPUs: 4".into()]]);
         let want = format!(
-            "Encore 0.36.4 diagnostics (uid 1000)\nOK   MusicBrainz – GET https://musicbrainz.org/ws/2 → HTTP 200 (180 ms)\n     200 OK\nFAIL Prowlarr – \n     refused\n     body: {}\n\nServer:\n  CPUs: 4\n\nSettings:\n  library_path = /music  [env ENCORE_LIBRARY]\n  app_name = null  [saved]",
+            "Kit Demo 1.4.0 diagnostics (uid 1000)\nOK   Mail server – GET https://mail.example.com/health → HTTP 200 (180 ms)\n     200 OK\nFAIL Search index – \n     refused\n     body: {}\n\nServer:\n  CPUs: 4\n\nSettings:\n  data_path = /data  [env APP_DATA_PATH]\n  app_name = null  [saved]",
             "é".repeat(300)
         );
         assert_eq!(r, want);
@@ -252,5 +348,6 @@ mod tests {
             (js_string(&json!(2.0)), js_string(&json!(0.5)), js_string(&json!(384000))),
             ("2".into(), "0.5".into(), "384000".into())
         );
+        assert_eq!(heading_of(""), "");
     }
 }
