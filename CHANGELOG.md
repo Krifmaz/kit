@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Changed
+- rusqlite 0.37 → 0.39 (libsqlite3-sys 0.37), so an app on sqlx 0.9's SQLite driver links one sqlite3 with the
+  kit's `SqliteDb`.
+
 ## v0.1.0 — 2026-11-04
 
 The first release: the neutral shared base for every app, configured per app. Notes:
