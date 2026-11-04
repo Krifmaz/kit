@@ -139,6 +139,7 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · kit-iced keeps Play and Pause as generic media icons and drops the music-only ones; the logo is the app's `Logo` (view box, paths, gradient), with `Logo::KIT` as a neutral default.
 - 2026-11-04 · kit-iced offline: the default sentence is "Offline – showing what this computer saved."; anything more an app keeps offline goes in its own text.
 - 2026-11-04 · kit-iced demo answers the components' requests locally on a half-second tick (a thread through `Subscription::run`, since kit-iced doesn't turn on iced's `tokio`/`smol` timers), so busy states show.
+- 2026-11-04 · App artifacts use a fixed `kit-app-` prefix (not the app name) so kit-release finds them whatever the app is called; file names inside still carry the app name.
 - 2026-11-04 · Template releases: every app artifact is named after the file prefix (`<AppFile>-desktop-<OS>`, `<AppFile>-android`); when the title differs (it has spaces), an `apps` job in the template's release.yml re-uploads them as `<Title>-apps`, because kit-release attaches only artifacts named after its `app-name` (the release title).
 - 2026-11-04 · Template releases: kit-desktop's `package` command calls `scripts/desktop-package.sh --release "$RELEASE"` (a release builds the app as its version); `--stamp` stays for the kit's own check.
 - 2026-11-04 · Template web: `index.html` sets no `data-theme`, since the default look is the tokens' `:root`; `dark`, `oled` and `light` are the only `data-theme` values.

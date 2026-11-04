@@ -14,7 +14,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   `OutMerge.Each`/`Latest`, the app's nouns in its words). Settings: `FieldBlock` replaces the VPN block, and
   `neverShown` replaces the built-in WireGuard key. `KitLook.accent` `""` means the theme's own accent. `KitApi`
   gains `put` (with a refusing default).
-
+- The template's release no longer re-uploads the apps under its title. `kit-android.yml` and `kit-desktop.yml` upload as `kit-app-android` / `kit-app-desktop-<OS>`, and `kit-release.yml`
+  collects `kit-app-*`, so an app whose name has a space ("Kit Demo") still gets its APK and installers attached;
+  the kit's CI checks the three agree.
 - `crates/kit-rules` and `crates/kit-leptos` are neutral and configured per app: no Encore names, music concepts,
   routes or words. kit-rules gains `app::App { id, name, version }` (the id prefixes storage keys, events and
   service worker names) and a `Words` struct with the kit's `DEFAULT` per module (`ToastWords`, `DialogWords`,
