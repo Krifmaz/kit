@@ -5,6 +5,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
+  carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
+  `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
+  overrides are gone. `docs/DESIGN.md` and `CLAUDE.md` describe the kit as a neutral base.
 - kit-iced is app-neutral: no Encore names, words, icons or logo. `theme::encore()` became
   `theme::default_look()`; `player_bar` became `bottom_bar`; the music icons (library, next, prev, music, disc,
   volume, shuffle) are gone; `widgets::logo` draws the app's `Logo` (`Logo::KIT` as a neutral mark); the details

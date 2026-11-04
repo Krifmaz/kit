@@ -1,4 +1,4 @@
-//! The generated themes equal Encore's current ones (design/fixtures/encore), and design/out is up to date.
+//! Every output carries the tokens' values, and design/out is up to date.
 
 use super::*;
 use std::path::PathBuf;
@@ -11,10 +11,6 @@ fn tokens() -> Tokens {
     Tokens::load(&root().join("design/tokens.json")).expect("tokens.json loads")
 }
 
-fn fixture(name: &str) -> String {
-    std::fs::read_to_string(root().join("design/fixtures/encore").join(name)).expect("fixture")
-}
-
 /// CSS without comments, as (selector, [(property, value)]) blocks in order.
 fn css_blocks(src: &str) -> Vec<(String, Vec<(String, String)>)> {
     let mut s = String::new();
@@ -24,91 +20,80 @@ fn css_blocks(src: &str) -> Vec<(String, Vec<(String, String)>)> {
         rest = rest[i..].find("*/").map(|j| &rest[i + j + 2..]).unwrap_or("");
     }
     s.push_str(rest);
-    let mut out = Vec::new();
-    for block in s.split('}') {
-        let Some((sel, body)) = block.split_once('{') else { continue };
-        let decls = body.split(';').filter_map(|d| d.split_once(':')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).collect();
-        out.push((sel.trim().to_string(), decls));
-    }
-    out
-}
-
-#[test]
-fn css_equals_encores_stylesheet() {
-    let want = css_blocks(&fixture("app.css"));
-    let got = css_blocks(&css(&tokens()));
-    assert_eq!(got.len(), want.len(), "same blocks");
-    for (g, w) in got.iter().zip(&want) {
-        assert_eq!(g, w, "block {}", w.0);
-    }
-}
-
-/// `val Name = Color(0xFFAABBCC)` lines of `object EncoreColors`.
-fn kt_named_colors(src: &str) -> BTreeMap<String, String> {
-    let start = src.find("object EncoreColors").expect("EncoreColors");
-    let body = &src[start..start + src[start..].find("\n}").expect("end")];
-    body.lines()
-        .filter_map(|l| {
-            let l = l.trim().strip_prefix("val ")?;
-            let (name, v) = l.split_once(" = Color(0xFF")?;
-            Some((name.trim().to_string(), format!("#{}", v[..6].to_ascii_lowercase())))
+    s.split('}')
+        .filter_map(|block| {
+            let (sel, body) = block.split_once('{')?;
+            let decls =
+                body.split(';').filter_map(|d| d.split_once(':')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())).collect();
+            Some((sel.trim().to_string(), decls))
         })
         .collect()
 }
 
-/// A Kotlin colour expression as `#rrggbb`.
-fn kt_value(expr: &str, named: &BTreeMap<String, String>) -> String {
-    let e = expr.trim().trim_end_matches(',');
-    if let Some(v) = e.strip_prefix("Color(0xFF") {
-        return format!("#{}", v[..6].to_ascii_lowercase());
-    }
-    if let Some(n) = e.strip_prefix("EncoreColors.") {
-        return named[n].clone();
-    }
-    match e {
-        "Color.Black" => "#000000".into(),
-        "Color.White" => "#ffffff".into(),
-        other => panic!("unknown colour {other}"),
-    }
-}
-
-/// The fields of `val NAME: EncorePalette = EncorePalette(…)`.
-fn kt_palette(src: &str, name: &str) -> BTreeMap<String, String> {
-    let named = kt_named_colors(src);
-    let start = src.find(&format!("val {name}: EncorePalette = EncorePalette(")).unwrap_or_else(|| panic!("{name}"));
-    let body = &src[start..start + src[start..].find("\n)").expect("end")];
-    body.lines()
-        .skip(1)
-        .filter_map(|l| l.trim().split_once(" = "))
-        .filter(|(k, _)| *k != "dark")
-        .map(|(k, v)| (k.to_string(), kt_value(v, &named)))
-        .collect()
+/// The value a theme's block, or failing that `:root`, gives a variable: what the browser resolves.
+fn resolved(blocks: &[(String, Vec<(String, String)>)], selector: &str, var: &str) -> Option<String> {
+    let find = |sel: &str| blocks.iter().find(|b| b.0 == sel).and_then(|b| b.1.iter().find(|(k, _)| k == var).map(|(_, v)| v.clone()));
+    find(selector).or_else(|| find(":root"))
 }
 
 #[test]
-fn compose_palettes_equal_encores_theme() {
+fn css_resolves_every_theme_to_its_tokens() {
     let t = tokens();
-    let src = fixture("Theme.kt");
+    let blocks = css_blocks(&css(&t));
+    assert_eq!(blocks[0].0, ":root", "the default theme is :root");
+    assert_eq!(blocks.len(), t.themes.len());
     for th in &t.themes {
-        let want = kt_palette(&src, &t.compose.palette_names[&th.id]);
-        let p = t.compose_palette(th);
-        let got: BTreeMap<String, String> = [
-            ("bg", "bg"),
-            ("bg2", "bg-2"),
-            ("panel", "panel"),
-            ("panel2", "panel-2"),
-            ("border", "border"),
-            ("text", "text"),
-            ("muted", "muted"),
-            ("faint", "faint"),
-            ("accent", "accent"),
-            ("accent2", "accent-2"),
-            ("onAccent", "on-accent"),
-        ]
-        .iter()
-        .map(|(f, k)| (f.to_string(), p[*k].clone()))
-        .collect();
-        assert_eq!(got, want, "theme {}", th.id);
+        for k in SURFACE.iter().chain(ACCENT.iter()) {
+            assert_eq!(resolved(&blocks, &th.css_selector, &format!("--{k}")).as_deref(), Some(th.colors[*k].as_str()), "{} --{k}", th.id);
+        }
+        let (r, g, b) = rgb(&th.colors["accent"]);
+        assert_eq!(resolved(&blocks, &th.css_selector, "--accent-rgb"), Some(format!("{r}, {g}, {b}")), "{} --accent-rgb", th.id);
+        assert_eq!(resolved(&blocks, &th.css_selector, "--shadow").as_deref(), Some(th.shadow.as_str()), "{} --shadow", th.id);
+        let scheme = if th.dark { "dark" } else { "light" };
+        assert_eq!(resolved(&blocks, &th.css_selector, "color-scheme").as_deref(), Some(scheme), "{} color-scheme", th.id);
+    }
+    for (var, v) in [("--ok", &t.status.ok), ("--warn", &t.status.warn), ("--err", &t.status.err), ("--info", &t.status.info)] {
+        assert_eq!(resolved(&blocks, ":root", var).as_deref(), Some(v.as_str()));
+    }
+}
+
+#[test]
+fn css_theme_blocks_hold_only_what_differs() {
+    let t = tokens();
+    let blocks = css_blocks(&css(&t));
+    let root = &blocks[0].1;
+    for b in &blocks[1..] {
+        for (k, v) in &b.1 {
+            assert_ne!(root.iter().find(|(rk, _)| rk == k).map(|(_, rv)| rv), Some(v), "{} repeats {k}", b.0);
+        }
+    }
+}
+
+#[test]
+fn compose_has_every_palette_accent_preset_shape_and_type_role() {
+    let t = tokens();
+    let kt = compose(&t);
+    for th in &t.themes {
+        let name = camel(&th.id);
+        let start = kt.find(&format!("val {name}: KitPalette = KitPalette(")).unwrap_or_else(|| panic!("palette {name}"));
+        let body = &kt[start..start + kt[start..].find("\n    )").expect("end")];
+        for (f, k) in [("bg", "bg"), ("text", "text"), ("accent", "accent"), ("accent2", "accent-2"), ("onAccent", "on-accent")] {
+            let want = format!("{f} = Color(0xFF{}),", hex6(&th.colors[k]).unwrap()[1..].to_ascii_uppercase());
+            assert!(body.contains(&want), "{name}: {want}");
+        }
+        assert!(body.contains(&format!("dark = {},", th.dark)));
+    }
+    for a in &t.accents {
+        assert!(kt.contains(&format!("KitAccent(\"{}\", \"{}\", \"{}\", \"{}\")", a.id, a.name, a.a, a.b)), "accent {}", a.id);
+    }
+    for p in &t.presets {
+        assert!(kt.contains(&format!("KitPreset(\"{}\", \"{}\", \"{}\", \"{}\"", p.id, p.name, p.theme, p.accent)), "preset {}", p.id);
+    }
+    for (k, v) in &t.compose.shapes {
+        assert!(kt.contains(&format!("{k} = RoundedCornerShape({v}.dp)")), "shape {k}");
+    }
+    for r in &t.compose.typography {
+        assert!(kt.contains(&format!("    {} = TextStyle(", r.role)), "type role {}", r.role);
     }
 }
 
@@ -117,68 +102,42 @@ fn strings(src: &str) -> Vec<String> {
     src.split('"').skip(1).step_by(2).map(str::to_string).collect()
 }
 
-/// The text from `start` up to the first `end` after it.
-fn between<'a>(src: &'a str, start: &str, end: &str) -> &'a str {
-    let i = src.find(start).unwrap_or_else(|| panic!("{start}"));
-    let rest = &src[i + start.len()..];
-    &rest[..rest.find(end).unwrap_or(rest.len())]
-}
-
 #[test]
-fn compose_accents_presets_shapes_and_type_equal_encores() {
+fn iced_tokens_cover_every_theme_and_fall_back_to_the_default() {
     let t = tokens();
-    let src = fixture("Theme.kt");
-    let acc: Vec<String> = t.accents.iter().flat_map(|a| [a.id.clone(), a.name.clone(), a.a.clone(), a.b.clone()]).collect();
-    assert_eq!(strings(between(&src, "val ACCENTS: List<Accent> = listOf(", "\n    )")), acc);
-    // Encore's Kotlin names the themes by its enum (ThemeChoice.DARK …); the strings are id, name, accent, custom?, background
-    let presets = between(&src, "val PRESETS: List<Preset> = listOf(", "\n    )");
-    for p in &t.presets {
-        let line = presets.lines().find(|l| l.contains(&format!("Preset(\"{}\"", p.id))).unwrap_or_else(|| panic!("preset {}", p.id));
-        assert!(line.contains(&format!("ThemeChoice.{}", p.theme.to_ascii_uppercase())), "{line}");
-        let mut want = vec![p.id.clone(), p.name.clone(), p.accent.clone()];
-        want.extend(p.custom.clone());
-        want.push(p.background.clone());
-        assert_eq!(strings(line), want, "{line}");
-    }
-    assert!(src.contains(&format!("const val DEFAULT_CUSTOM = \"{}\"", t.default_custom)));
-    for (k, v) in &t.compose.shapes {
-        assert!(src.contains(&format!("{k} = RoundedCornerShape({v}.dp)")), "shape {k}");
-    }
-    let ty = fixture("Type.kt");
-    let gen = compose(&t);
-    for r in &t.compose.typography {
-        let line =
-            ty.lines().find(|l| l.trim_start().starts_with(&format!("{} = TextStyle(", r.role))).unwrap_or_else(|| panic!("{}", r.role));
-        assert!(gen.contains(line.trim()), "type role {} differs: {line}", r.role);
-    }
-}
-
-#[test]
-fn iced_tokens_equal_encores_desktop_theme() {
-    let t = tokens();
-    let src = fixture("desktop_theme.rs.txt");
-    let gen = iced(&t);
-    for (start, end) in [("pub const THEMES", "];"), ("pub const ACCENTS", "];"), ("pub const PRESETS", "];")] {
-        assert_eq!(strings(between(&gen, start, end)), strings(between(&src, start, end)), "{start}");
-    }
-    let arms = between(&src, "let (bg, bg2, panel, panel2, border, text, muted, faint) = match theme {", "};");
+    let rs = iced(&t);
+    let arms = |fun: &str| {
+        let i = rs.find(&format!("pub fn {fun}(")).expect(fun);
+        rs[i..i + rs[i..].find("\n}").unwrap()].lines().filter(|l| l.contains("=>")).map(str::trim).map(String::from).collect::<Vec<_>>()
+    };
+    let surface = arms("surface");
+    let accent = arms("accent");
     for th in &t.themes {
-        let id = if th.id == "default" { "_".to_string() } else { format!("\"{}\"", t.iced.theme_ids[&th.id]) };
-        let line = arms.lines().find(|l| l.trim_start().starts_with(&format!("{id} =>"))).unwrap_or_else(|| panic!("arm {id}"));
-        let want: Vec<String> = strings(line).into_iter().filter(|s| s.starts_with('#')).collect();
-        let got: Vec<String> = SURFACE.iter().map(|k| hex6(&th.colors[*k]).unwrap()).collect();
-        assert_eq!(got, want, "desktop theme {id}");
+        let id = if th.id == "encore" { "_".to_string() } else { format!("\"{}\"", th.id) };
+        let s = surface.iter().find(|l| l.starts_with(&format!("{id} =>"))).unwrap_or_else(|| panic!("surface {id}"));
+        let want: Vec<String> = SURFACE.iter().map(|k| hex6(&th.colors[*k]).unwrap()).collect();
+        assert_eq!(strings(s).into_iter().filter(|x| x.starts_with('#')).collect::<Vec<_>>(), want, "surface {id}");
+        let a = accent.iter().find(|l| l.starts_with(&format!("{id} =>"))).unwrap_or_else(|| panic!("accent {id}"));
+        let want: Vec<String> = ACCENT.iter().map(|k| hex6(&th.colors[*k]).unwrap()).collect();
+        assert_eq!(strings(a).into_iter().filter(|x| x.starts_with('#')).collect::<Vec<_>>(), want, "accent {id}");
     }
-    for (name, v) in [("RADIUS", t.iced.radius), ("SIDEBAR", t.iced.sidebar), ("PLAYER_H", t.iced.player_h)] {
-        assert!(src.contains(&format!("pub const {name}: f32 = {v:?};")), "{name}");
-    }
-    for c in [&t.status.ok, &t.status.warn, &t.status.err, &t.status.info] {
-        assert!(src.contains(&format!("hex(\"{c}\")")), "status {c}");
-    }
+    let picker: Vec<String> = t.theme_picker.iter().flat_map(|c| [c.id.clone(), c.name.clone()]).collect();
+    let i = rs.find("pub const THEMES").unwrap();
+    assert_eq!(strings(&rs[i..i + rs[i..].find("];").unwrap()]), picker);
 }
 
 #[test]
-fn on_accent_follows_appearance_rs() {
+fn flutter_has_a_palette_per_theme() {
+    let t = tokens();
+    let dart = flutter(&t);
+    for th in &t.themes {
+        assert!(dart.contains(&format!("static const KitPalette {} = KitPalette(", th.id)), "{}", th.id);
+    }
+    assert!(dart.contains("ThemeData kitThemeData(KitPalette p)"));
+}
+
+#[test]
+fn on_accent_is_dark_on_light_accents() {
     let t = tokens();
     assert_eq!(t.on_accent_for("#f0ead6", "#d6c49a"), "#16161f");
     assert_eq!(t.on_accent_for("#8b5cf6", "#ec4899"), "#fff");
@@ -194,10 +153,13 @@ fn hex_normalises() {
 
 #[test]
 fn bad_tokens_say_what_is_wrong() {
-    let mut v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(root().join("design/tokens.json")).unwrap()).unwrap();
+    let text = std::fs::read_to_string(root().join("design/tokens.json")).unwrap();
+    let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
     v["themes"][1]["colors"]["bg"] = "teal".into();
-    let e = Tokens::parse(&v.to_string()).unwrap_err();
-    assert_eq!(e.to_string(), "Theme encore: bg = teal is not a hex colour.");
+    assert_eq!(Tokens::parse(&v.to_string()).unwrap_err().to_string(), "Theme dark: bg = teal is not a hex colour.");
+    let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    v["presets"][0]["accent"] = "nope".into();
+    assert_eq!(Tokens::parse(&v.to_string()).unwrap_err().to_string(), "Preset encore names a missing accent nope.");
 }
 
 #[test]

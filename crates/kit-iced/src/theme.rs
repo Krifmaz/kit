@@ -123,8 +123,8 @@ pub fn mix(a: Color, b: Color, t: f32) -> Color {
     Color::from_rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t)
 }
 
-/// The tokens for a theme id (`encore`, `dark`, `oled`, `light`, `system`), an accent id (or
-/// `custom` with `custom` as `#rrggbb`) and a background (`solid` or `fade`). `system_dark`
+/// The tokens for a theme id (`encore`, `dark`, `oled`, `light`, `system`), an accent id (`""` for
+/// the theme's own accent, or `custom` with `custom` as `#rrggbb`) and a background (`solid` or `fade`). `system_dark`
 /// decides what `system` means.
 pub fn palette(theme: &str, accent: &str, custom: &str, background: &str, system_dark: bool) -> Palette {
     let theme = if theme == "system" {
@@ -138,15 +138,21 @@ pub fn palette(theme: &str, accent: &str, custom: &str, background: &str, system
     };
     let dark = theme != "light";
     let (bg, bg2, panel, panel2, border, text, muted, faint) = tokens::surface(theme);
-    let (a, b) = match ACCENTS.iter().find(|x| x.0 == accent) {
-        Some(x) => (hex(x.2), hex(x.3)),
+    let (dark_text, light_text, threshold) = tokens::ON_ACCENT;
+    let readable = |a: Color, b: Color| if (luminance(a) + luminance(b)) / 2.0 > threshold { hex(dark_text) } else { hex(light_text) };
+    let (a, b, on_accent) = match ACCENTS.iter().find(|x| x.0 == accent) {
+        Some(x) => (hex(x.2), hex(x.3), readable(hex(x.2), hex(x.3))),
+        // the theme's own accent, with the text colour the theme gives it
+        None if accent.is_empty() || accent == "theme" => {
+            let (a, b, on) = tokens::accent(theme);
+            (hex(a), hex(b), hex(on))
+        }
         None => {
             let a = hex(if custom.trim().is_empty() { tokens::DEFAULT_CUSTOM } else { custom });
-            (a, partner(a))
+            let b = partner(a);
+            (a, b, readable(a, b))
         }
     };
-    let (dark_text, light_text, threshold) = tokens::ON_ACCENT;
-    let on_accent = if (luminance(a) + luminance(b)) / 2.0 > threshold { hex(dark_text) } else { hex(light_text) };
     let (ok, warn, err, info) = tokens::STATUS;
     Palette {
         bg: hex(bg),
@@ -178,7 +184,7 @@ pub fn set(p: Palette) {
 
 /// The default look: the default theme (`encore`) with its own accent, solid background.
 pub fn default_look() -> Palette {
-    palette("encore", "logo", "", "solid", true)
+    palette("encore", "", "", "solid", true)
 }
 
 /// The active look ([`default_look`] before [`set`] was called).
@@ -682,7 +688,7 @@ mod tests {
 
     #[test]
     fn tokens_follow_the_css() {
-        let p = palette("encore", "logo", "", "solid", true);
+        let p = palette("encore", "cream", "", "solid", true);
         assert_eq!(to_hex(p.bg), "#161617");
         assert_eq!(to_hex(p.text), "#f0ead6");
         assert_eq!(to_hex(p.accent), "#f0ead6");
@@ -697,6 +703,18 @@ mod tests {
         let o = palette("oled", "custom", "#e5e5e5", "solid", true);
         assert_eq!(to_hex(o.bg), "#000000");
         assert_eq!(to_hex(o.accent), "#e5e5e5");
+    }
+
+    #[test]
+    fn each_theme_brings_its_own_accent() {
+        for id in ["encore", "dark", "oled", "light"] {
+            let (a, b, on) = tokens::accent(id);
+            let p = palette(id, "", "", "solid", true);
+            assert_eq!((to_hex(p.accent), to_hex(p.accent2), to_hex(p.on_accent)), (a.to_string(), b.to_string(), on.to_string()));
+            assert_eq!(palette(id, "theme", "", "solid", true), p);
+        }
+        assert_eq!(default_look(), palette("encore", "", "", "solid", true));
+        assert_eq!(to_hex(palette("dark", "", "", "solid", true).accent), "#8b5cf6");
     }
 
     #[test]

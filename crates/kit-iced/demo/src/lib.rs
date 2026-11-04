@@ -182,7 +182,7 @@ pub enum Message {
     Pressed(&'static str),
     /// A theme was picked (`encore`, `dark`, `oled`, `light`).
     Theme(String),
-    /// An accent was picked (an id of `theme::ACCENTS`).
+    /// An accent was picked (an id of `theme::ACCENTS`, or `""` for the theme's own).
     Accent(String),
     /// A background was picked (`solid` or `fade`).
     Background(String),
@@ -336,11 +336,10 @@ const BADGES: [(Badge, &str); 6] = [
     (Badge::Accent, "Accent"),
 ];
 
-/// An accent's name for the picker. The tokens name the `encore` accent after the default theme; the demo
-/// calls it by the preset that uses it (Pastel).
+/// An accent's name for the picker: `""` is the theme's own accent.
 pub fn accent_name(id: &str) -> &'static str {
     match id {
-        "encore" => "Pastel",
+        "" => "Theme",
         _ => theme::ACCENTS.iter().find(|a| a.0 == id).map(|a| a.1).unwrap_or("Custom"),
     }
 }
@@ -482,12 +481,12 @@ impl Demo {
         changelog.loaded(Ok(fake_changelog()));
         let mut diag = diagnostics::State::default();
         diag.checked(Ok(fake_checks()));
-        let palette = theme::palette("encore", "logo", "", "solid", true);
+        let palette = theme::palette("encore", "", "", "solid", true);
         theme::set(palette);
         Demo {
             page: Page::default(),
             theme: "encore".into(),
-            accent: "logo".into(),
+            accent: String::new(),
             background: "solid".into(),
             palette,
             toasts: Toasts::default(),
@@ -1005,7 +1004,12 @@ impl Demo {
     }
 
     fn appearance(&self) -> El<'_, Message> {
-        let mut accents = row![].spacing(8).align_y(Alignment::Center);
+        let mut accents = row![button(w::t("Theme").size(13).font(theme::semibold()))
+            .padding([4, 10])
+            .style(theme::btn(if self.accent.is_empty() { Btn::Primary } else { Btn::Default }))
+            .on_press(Message::Accent(String::new()))]
+        .spacing(8)
+        .align_y(Alignment::Center);
         for (id, _, a, b) in theme::ACCENTS {
             let (a, b) = (theme::hex(a), theme::hex(b));
             let chosen = self.accent == id;

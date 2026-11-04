@@ -55,7 +55,7 @@ enum class KitTheme(val id: String) {
  * @property custom the custom accent colour, "#rrggbb" (used when [accent] is "custom").
  * @property background "solid", or "fade" (a faint wash of the accent in the page colours).
  */
-data class KitLook(val theme: KitTheme = KitTheme.Encore, val accent: String = "logo", val custom: String = KitAppearance.DEFAULT_CUSTOM, val background: String = "solid")
+data class KitLook(val theme: KitTheme = KitTheme.Encore, val accent: String = "cream", val custom: String = KitAppearance.DEFAULT_CUSTOM, val background: String = "solid")
 
 /** The colour maths of Settings → Appearance (web-rs/src/appearance.rs), shared by every app. */
 object AppearanceRules {
@@ -146,10 +146,10 @@ object AppearanceRules {
 /** The palette of [theme] alone (System resolves to Dark or Light by [systemDark]). */
 fun basePaletteOf(theme: KitTheme, systemDark: Boolean): KitPalette = when (theme) {
     KitTheme.Encore -> KitPalettes.Encore
-    KitTheme.Dark -> KitPalettes.Default
+    KitTheme.Dark -> KitPalettes.Dark
     KitTheme.Oled -> KitPalettes.Oled
     KitTheme.Light -> KitPalettes.Light
-    KitTheme.System -> if (systemDark) KitPalettes.Default else KitPalettes.Light
+    KitTheme.System -> if (systemDark) KitPalettes.Dark else KitPalettes.Light
 }
 
 /**
@@ -159,7 +159,7 @@ fun basePaletteOf(theme: KitTheme, systemDark: Boolean): KitPalette = when (them
 fun kitPaletteOf(look: KitLook, systemDark: Boolean): KitPalette {
     val base = basePaletteOf(look.theme, systemDark)
     val accented =
-        if (look.accent == "logo") {
+        if (look.accent == "cream") {
             base
         } else {
             val (a, b) = AppearanceRules.accentHex(look.accent, look.custom)
@@ -250,7 +250,7 @@ fun KitTheme(palette: KitPalette, content: @Composable () -> Unit) {
 @Composable
 fun KitTheme(
     theme: KitTheme = KitTheme.Encore,
-    accent: String = "logo",
+    accent: String = "cream",
     custom: String = KitAppearance.DEFAULT_CUSTOM,
     background: String = "solid",
     content: @Composable () -> Unit,
