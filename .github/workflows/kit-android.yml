@@ -1,6 +1,6 @@
 name: kit-android
 
-# An app's signed Android APK, taken from Encore's apps.yml `android-native` job. It builds the release APK with
+# An app's signed Android APK. It builds the release APK with
 # Gradle (the version the wrapper properties name), runs the unit tests, checks the signature, the native libraries
 # the APK must carry, their 16 KB page alignment and (optionally) the Baseline Profile, and uploads the APK as the
 # artifact <app-name>-android (file <app-name>-android-<version>.apk), which kit-release attaches to the release.
@@ -81,7 +81,7 @@ on:
         required: false
         default: "4.1.2"
       native-libs:
-        description: "Native libraries every ABI must carry, space-separated (e.g. libencore_cadenza.so)"
+        description: "Native libraries every ABI must carry, space-separated (e.g. libapp_core.so)"
         type: string
         required: false
         default: ""
@@ -141,7 +141,7 @@ jobs:
         if: inputs.rust-dir != ''
         with:
           workspaces: ${{ inputs.rust-dir }}
-          key: android-native
+          key: android
       - name: cargo-ndk
         if: inputs.rust-targets != ''
         env:

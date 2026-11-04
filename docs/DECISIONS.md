@@ -118,3 +118,5 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · Update feed platforms are app-chosen string ids with `{version}` file name patterns, not a fixed enum, so an app can ship any set of builds.
 - 2026-11-04 · Every platform's update version is read from the file name (was: APK from the file name, desktop from the tag); a release that did not rebuild a platform is then never offered for it.
 - 2026-11-04 · `Feed::new` defaults to release prefix `v` and no hotfixes; an app opts into hotfixes with `.hotfix_prefix(...)`.
+- 2026-11-04 · Shared workflows made neutral: kit-desktop calls the app's own `package` bash command with `$V`, `$RELEASE`, `$FEATURES`, `$ARGS`, `$OUT` (no fixed script path or `--stamp`/`--universal` flags); runner defaults are `ubuntu-latest`/`macos-latest`; NSIS is opt-in.
+- 2026-11-04 · kit-release's `only: android` became `keep-previous: true` (any partial release keeps the previous release's other files, less `keep-drop`), so the input names no platform.

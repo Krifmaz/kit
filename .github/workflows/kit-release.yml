@@ -1,6 +1,6 @@
 name: kit-release
 
-# An app's release, taken from Encore's release.yml: a normal GitHub release tagged vMAJOR.MINOR.PATCH (never a
+# An app's release: a normal GitHub release tagged vMAJOR.MINOR.PATCH (never a
 # pre-release), its notes, the server and web app as Linux tarballs and SHA256SUMS over every file. The tag is
 # created through the release (the API may create tags; a git push from the Actions token may not).
 #
@@ -20,7 +20,8 @@ name: kit-release
 # v-tag takes the tag's version. The first release is `first-version`.
 #
 # Apps: a run that builds no app installers attaches the ones of the previous release (`carry-over`), so every
-# release offers the apps; `only: android` builds just the APK and keeps the previous release's other files.
+# release offers the apps. `keep-previous: true` makes a partial release (say, only one app rebuilt): this run's files
+# plus every other file of the previous release (less `keep-drop`).
 on:
   workflow_call:
     inputs:
@@ -29,7 +30,7 @@ on:
         type: string
         required: true
       app-name:
-        description: "The app's name in release titles (\"Encore 0.42.16\") and artifact names"
+        description: "The app's name in release titles (\"Notes 1.2.0\") and artifact names"
         type: string
         required: true
       # --- version (prepare) ---
@@ -100,11 +101,11 @@ on:
         required: false
         default: ""
       # --- publish ---
-      only:
-        description: "all, or android: the APK with the server and image, the other files kept from the previous release"
-        type: string
+      keep-previous:
+        description: "A partial release: also attach every file of the previous release that this run did not build (less keep-drop)"
+        type: boolean
         required: false
-        default: all
+        default: false
       apps-result:
         description: "success when every app job built, skipped when none ran, anything else when some failed"
         type: string
@@ -116,7 +117,7 @@ on:
         required: false
         default: ""
       notes:
-        description: "Bash run after the notes' Changes part to append to $NOTES (also gets $V, $OUT, $APPS, $ONLY)"
+        description: "Bash run after the notes' Changes part to append to $NOTES (also gets $V, $OUT, $APPS, $KEEP)"
         type: string
         required: false
         default: ""
@@ -136,7 +137,7 @@ on:
         required: false
         default: ""
       keep-drop:
-        description: "only = android: globs removed from the previous release's files before they are kept"
+        description: "keep-previous: globs removed from the previous release's files before they are kept (files this run builds again)"
         type: string
         required: false
         default: ""
@@ -305,7 +306,7 @@ jobs:
       V: ${{ inputs.version }}
       APP: ${{ inputs.app-name }}
       APPS: ${{ inputs.apps-result }}
-      ONLY: ${{ inputs.only }}
+      KEEP: ${{ inputs.keep-previous }}
       OUT: out
       NOTES: notes.md
       DIR: ${{ inputs.releases-dir }}
@@ -340,8 +341,8 @@ jobs:
           NOTES_SCRIPT: ${{ inputs.notes }}
         run: |
           mkdir -p out
-          if [ "$ONLY" = android ]; then
-            # Android only: keep the other files of the newest full release, with this run's APK and server
+          if [ "$KEEP" = true ]; then
+            # a partial release: keep the other files of the newest full release, with this run's
             # (SHA256SUMS is written again when publishing)
             PREV=$(gh release list --limit 200 --json tagName -q '.[].tagName' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
             mkdir -p keep
