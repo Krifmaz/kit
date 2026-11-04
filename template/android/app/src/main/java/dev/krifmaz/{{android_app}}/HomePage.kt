@@ -44,7 +44,7 @@ import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.update.UpdatesSection
 import dev.krifmaz.kit.compose.whatsnew.WhatsNewOnStart
-import dev.krifmaz.kit.compose.widgets.ConfirmDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.RowDivider
 import dev.krifmaz.kit.compose.widgets.SectionHead
