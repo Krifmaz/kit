@@ -1,0 +1,21 @@
+[package]
+name = "kit-iced-demo"
+description = "Every kit-iced component in one desktop window with fake data, for an imaginary app called Demo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+kit-iced = { path = ".." }
+kit-rules = { path = "../../kit-rules" }
+iced = { version = "0.14", features = ["image", "svg"] }
+serde_json = "1"
+
+[dev-dependencies]
+iced_test = "0.14"
+
+[lints]
+workspace = true

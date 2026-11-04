@@ -1,4 +1,4 @@
-//! The pieces every settings screen draws, as Encore's settings pages draw them: the titled card,
+//! The pieces every settings screen draws: the titled card,
 //! help lines, switches, selects, inputs, test results, links and the two-column row.
 
 use crate::theme::{self, Btn};

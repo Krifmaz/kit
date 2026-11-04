@@ -1,20 +1,24 @@
 # Krifmaz/kit — rules for every session
 
-The full spec is [docs/DESIGN.md](docs/DESIGN.md) (from [docs/Krifmaz-Kit.pdf](docs/Krifmaz-Kit.pdf)). Read it first.
+The design is [docs/DESIGN.md](docs/DESIGN.md). [docs/Krifmaz-Kit.pdf](docs/Krifmaz-Kit.pdf) is reference
+material only: where it talks about extracting from Encore or switching Encore over, DESIGN.md wins.
 
-- **Extract, don't invent.** Every feature, behaviour and word comes from Krifmaz/Encore's working code.
-- **Encore first.** Prove each piece by switching Encore to it with no visible change for its users.
-- **Same words everywhere.** The kit-wide parity test must pass; never reword a string Encore shows.
-- **Quality bar.** `cargo fmt`, `cargo clippy -D warnings` and tests clean (ktlint for Kotlin); full doc
-  comments; a README per crate and module; a CHANGELOG.md entry for every change.
-- **Safety.** No shell for user input. Distroless, non-root containers. Plain words, copyable errors.
-- **Decisions.** Decide yourself (DESIGN.md → Encore's behaviour → common sense) and log each non-obvious call
-  as one line in [docs/DECISIONS.md](docs/DECISIONS.md).
-- **PRs.** One PR per track; fix CI and bot findings until green; squash-merge yourself; delete the branch.
-  Merge order: tokens & contracts → rules & server → leptos, compose, iced → template.
-- **Releases.** Every merge to main makes a normal GitHub release `vMAJOR.MINOR.PATCH` (never pre-release,
-  rc, beta or edge). PATCH by default; add `docs/releases/<version>.md` in the PR for MINOR/MAJOR (it is
-  also the release notes). The first release is v0.1.0, once DESIGN.md §18 passes. The kit ships only tags.
-- **Never** skip, disable or delete a test to get green; never force-push main.
-- **Stop and ask only** for: deleting user data, a needed secret/paid service/new account, or a visible
-  Encore change DESIGN.md doesn't call for.
+- **A neutral base library.** Not an app, not an app refactor. It ships nothing but version tags.
+- **Nothing app-specific.** No Encore (or other app) names, domain concepts, routes, text or assets. The
+  `encore` colours are only the default theme.
+- **Configured per app.** App name, version, logo, routes, settings schema, changelog source, release targets
+  are inputs with neutral defaults.
+- **No other repos.** Do not open PRs in or change any other repository from kit work.
+- **Proof** is the template's demo app running every kit feature on web, Android and desktop with tests passing.
+- **Quality.** `cargo fmt`, `cargo clippy -D warnings`, tests (ktlint for Kotlin); full doc comments; a README
+  per crate and module; a CHANGELOG.md entry for every change. No shell for user input; distroless non-root
+  containers; plain words; copyable errors.
+- **Decisions.** Decide yourself (DESIGN.md → the PDF → common sense); log non-obvious calls as one line in
+  [docs/DECISIONS.md](docs/DECISIONS.md).
+- **PRs.** One per track; fix CI and bot findings until green; squash-merge yourself; delete the branch; merge
+  main in when needed.
+- **Releases.** Every merge to main makes a normal `vMAJOR.MINOR.PATCH` release (never pre-release, rc, beta
+  or edge). PATCH by default; add `docs/releases/<version>.md` for MINOR/MAJOR (also the notes). The first
+  is v0.1.0, when DESIGN.md §16 passes.
+- **Never** skip or disable tests; never force-push main.
+- **Stop and ask only** for a needed secret, paid service or new account.

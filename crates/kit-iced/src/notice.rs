@@ -1,7 +1,6 @@
-//! The notice banner: a plain-language sentence when something on the server is wrong ("the
-//! downloads folder is read-only – check the disk…"), in an amber box with Check again for the people
-//! who can fix it. Behaviour reference: Encore's desktop `storage_banner` (widgets/request_list.rs)
-//! and contracts/notices.md; which notices show, when to ask again and Check again's toast are
+//! The notice banner: a plain-language sentence when something on the server is wrong ("the data
+//! folder is read-only – check the disk…"), in an amber box with Check again for the people who can
+//! fix it (contracts/notices.md); which notices show, when to ask again and Check again's toast are
 //! kit-rules' `notices`, re-exported here.
 //!
 //! The app asks for the notices (`GET /api/notices`, or its own path), keeps them as [`Notice`]s,
@@ -57,8 +56,8 @@ mod tests {
 
     #[test]
     fn the_banner_needs_words() {
-        assert!(banner::<()>(Icon::Download, vec![], Some((false, ()))).is_none());
-        assert!(banner::<()>(Icon::Download, vec![String::new()], None).is_none());
-        assert!(banner(Icon::Download, vec!["The downloads folder is read-only".into()], Some((true, ()))).is_some());
+        assert!(banner::<()>(Icon::Shield, vec![], Some((false, ()))).is_none());
+        assert!(banner::<()>(Icon::Shield, vec![String::new()], None).is_none());
+        assert!(banner(Icon::Shield, vec!["The data folder is read-only".into()], Some((true, ()))).is_some());
     }
 }

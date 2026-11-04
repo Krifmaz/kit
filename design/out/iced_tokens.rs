@@ -19,9 +19,9 @@ pub const THEMES: [(&str, &str); 5] = [
 
 /// `(id, name, colour, second colour)`: the accents of Settings → Appearance.
 pub const ACCENTS: [(&str, &str, &str, &str); 10] = [
-    ("logo", "Logo", "#f0ead6", "#d6c49a"),
+    ("cream", "Cream", "#f0ead6", "#d6c49a"),
     ("violet", "Violet", "#8b5cf6", "#ec4899"),
-    ("encore", "Encore", "#f2a7e4", "#9fd2fb"),
+    ("pastel", "Pastel", "#f2a7e4", "#9fd2fb"),
     ("lilac", "Lilac", "#b48cf2", "#7cc4fa"),
     ("pink", "Pink", "#ec4899", "#f97316"),
     ("sky", "Sky", "#0ea5e9", "#8b5cf6"),
@@ -33,10 +33,10 @@ pub const ACCENTS: [(&str, &str, &str, &str); 10] = [
 
 /// `(id, name, theme, accent, custom colour, background)`: the presets of Settings → Appearance.
 pub const PRESETS: [(&str, &str, &str, &str, &str, &str); 6] = [
-    ("encore", "Encore", "encore", "logo", "", "solid"),
+    ("encore", "Encore", "encore", "cream", "", "solid"),
     ("default", "Violet dark", "dark", "violet", "", "fade"),
     ("oled", "OLED black", "oled", "violet", "", "solid"),
-    ("pastel", "Pastel", "dark", "encore", "", "fade"),
+    ("pastel", "Pastel", "dark", "pastel", "", "fade"),
     ("light", "Daylight", "light", "sky", "", "fade"),
     ("mono", "Mono", "oled", "custom", "#e5e5e5", "solid"),
 ];
@@ -51,12 +51,22 @@ pub const STATUS: (&str, &str, &str, &str) = ("#22c55e", "#f59e0b", "#ef4444", "
 pub const ON_ACCENT: (&str, &str, f32) = ("#16161f", "#ffffff", 0.45);
 
 /// `(bg, bg-2, panel, panel-2, border, text, muted, faint)` of a theme id (`encore`, `dark`, `oled`,
-/// `light`); any other id is `dark`.
+/// `light`); any other id is `encore`, the default.
 pub fn surface(theme: &str) -> (&'static str, &'static str, &'static str, &'static str, &'static str, &'static str, &'static str, &'static str) {
     match theme {
-        "encore" => ("#161617", "#1c1c1e", "#222224", "#2a2a2d", "#353538", "#f0ead6", "#aaa493", "#77725f"),
+        "dark" => ("#0b0b12", "#12121c", "#161624", "#1d1d2e", "#2a2a40", "#ececf4", "#9a9ab3", "#6b6b85"),
         "oled" => ("#000000", "#000000", "#0b0b0d", "#17171b", "#232329", "#ececf4", "#9a9aa8", "#66666f"),
         "light" => ("#f6f6fb", "#ffffff", "#ffffff", "#f0f0f7", "#e2e2ee", "#16161f", "#5d5d75", "#8d8da5"),
-        _ => ("#0b0b12", "#12121c", "#161624", "#1d1d2e", "#2a2a40", "#ececf4", "#9a9ab3", "#6b6b85"),
+        _ => ("#161617", "#1c1c1e", "#222224", "#2a2a2d", "#353538", "#f0ead6", "#aaa493", "#77725f"),
+    }
+}
+
+/// `(accent, accent-2, on-accent)` of a theme id; any other id is `encore`, the default.
+pub fn accent(theme: &str) -> (&'static str, &'static str, &'static str) {
+    match theme {
+        "dark" => ("#8b5cf6", "#ec4899", "#ffffff"),
+        "oled" => ("#f0ead6", "#d6c49a", "#16161f"),
+        "light" => ("#2a2a2d", "#8a7a4e", "#f0ead6"),
+        _ => ("#f0ead6", "#d6c49a", "#16161f"),
     }
 }
