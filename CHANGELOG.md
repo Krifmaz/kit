@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- `cleanup-branches.yml`: after every push to main, deletes branches whose pull request is merged and which have
+  no commits since.
+
 ### Changed
 - The server crates no longer assume one app's database. What each keeps is behind a small async trait with a
   SQLite and a Postgres implementation, in tables of the kit's own (`kit_*`) made by migrations (`Migrations`,

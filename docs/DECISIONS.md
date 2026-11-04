@@ -159,3 +159,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · Notices gained a store only for kept notices' last results (restored at start); notices an app reads itself stay the app's.
 - 2026-11-04 · Bug reports and crash logs are two traits that one store type (`SqliteReports` / `PgReports`) implements, so an app makes one store and hands it out twice; the crash routes need only the small `CrashHost`.
 - 2026-11-04 · The bug report stores share their list and unread SQL in one place and differ only in placeholders and LIKE vs ILIKE, so filters behave the same on SQLite and Postgres.
+- 2026-11-04 · Merged branches are deleted by a kit workflow (cleanup-branches.yml, GITHUB_TOKEN) because this environment's proxy refuses ref deletes; it only deletes a branch with no open PR whose head is a merged PR's head.
