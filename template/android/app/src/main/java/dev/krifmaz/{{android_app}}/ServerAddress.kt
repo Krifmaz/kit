@@ -3,8 +3,8 @@ package {{android_package}}
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
- * The server's address as a person types it, turned into the base URL the app calls (Encore's sign-in rules,
- * `EncoreApi.probe`). Plain Kotlin, so the unit tests run it on the JVM; [ServerApi.probe] does the asking.
+ * The server's address as a person types it, turned into the base URL the app calls (the kit's sign-in
+ * rules). Plain Kotlin, so the unit tests run it on the JVM; [ServerApi.probe] does the asking.
  */
 object ServerAddress {
     /** Shown when the field is empty. */
@@ -37,9 +37,9 @@ object ServerAddress {
     /** Whether a `/api/health` answer comes from a server: it says `ok`, or names its version. */
     fun isServer(ok: Boolean, version: String): Boolean = ok || version.isNotEmpty()
 
-    /** Shown when something answered but isn't this app's server ("That isn't an Encore server"). */
+    /** Shown when something answered but isn't this app's server ("That isn't an Orbit server"). */
     fun notServer(app: String): String = "That isn't ${article(app)} $app server"
 
-    /** "an" before a vowel ("an Encore server"), "a" otherwise ("a Filebrary server"). */
+    /** "an" before a vowel ("an Orbit server"), "a" otherwise ("a Filebrary server"). */
     private fun article(word: String): String = if (word.firstOrNull()?.lowercaseChar() in setOf('a', 'e', 'i', 'o', 'u')) "an" else "a"
 }

@@ -1,5 +1,5 @@
-//! The web app's icon set (web-rs/src/ui.rs `icon()`), the same names and paths, as SVG handles
-//! tinted to the theme. Generated from the web table; keep the names in sync.
+//! The kit's icon set (the same names and paths as kit-leptos), as SVG handles tinted to the theme,
+//! and the app's logo in the accent gradient ([`Logo`]).
 
 use super::El;
 use crate::theme;
@@ -14,7 +14,6 @@ use std::sync::{Mutex, OnceLock};
 pub enum Icon {
     Home,
     Search,
-    Library,
     Inbox,
     Download,
     Activity,
@@ -23,8 +22,6 @@ pub enum Icon {
     Settings,
     Play,
     Pause,
-    Next,
-    Prev,
     Plus,
     Check,
     X,
@@ -35,20 +32,16 @@ pub enum Icon {
     Trash,
     Refresh,
     Link,
-    Music,
-    Disc,
     User,
     Sun,
     Moon,
     Copy,
-    Volume,
     External,
     Shield,
     Heart,
     Spark,
     Chevron,
     More,
-    Shuffle,
     List,
     Devices,
     Bug,
@@ -58,10 +51,9 @@ pub enum Icon {
 
 impl Icon {
     /// Every icon.
-    pub const ALL: [Icon; 41] = [
+    pub const ALL: [Icon; 34] = [
         Icon::Home,
         Icon::Search,
-        Icon::Library,
         Icon::Inbox,
         Icon::Download,
         Icon::Activity,
@@ -70,8 +62,6 @@ impl Icon {
         Icon::Settings,
         Icon::Play,
         Icon::Pause,
-        Icon::Next,
-        Icon::Prev,
         Icon::Plus,
         Icon::Check,
         Icon::X,
@@ -82,20 +72,16 @@ impl Icon {
         Icon::Trash,
         Icon::Refresh,
         Icon::Link,
-        Icon::Music,
-        Icon::Disc,
         Icon::User,
         Icon::Sun,
         Icon::Moon,
         Icon::Copy,
-        Icon::Volume,
         Icon::External,
         Icon::Shield,
         Icon::Heart,
         Icon::Spark,
         Icon::Chevron,
         Icon::More,
-        Icon::Shuffle,
         Icon::List,
         Icon::Devices,
         Icon::Bug,
@@ -107,7 +93,6 @@ impl Icon {
         match self {
             Icon::Home => "home",
             Icon::Search => "search",
-            Icon::Library => "library",
             Icon::Inbox => "inbox",
             Icon::Download => "download",
             Icon::Video => "video",
@@ -117,8 +102,6 @@ impl Icon {
             Icon::Settings => "settings",
             Icon::Play => "play",
             Icon::Pause => "pause",
-            Icon::Next => "next",
-            Icon::Prev => "prev",
             Icon::Plus => "plus",
             Icon::Check => "check",
             Icon::X => "x",
@@ -129,20 +112,16 @@ impl Icon {
             Icon::Trash => "trash",
             Icon::Refresh => "refresh",
             Icon::Link => "link",
-            Icon::Music => "music",
-            Icon::Disc => "disc",
             Icon::User => "user",
             Icon::Sun => "sun",
             Icon::Moon => "moon",
             Icon::Copy => "copy",
-            Icon::Volume => "volume",
             Icon::External => "external",
             Icon::Shield => "shield",
             Icon::Heart => "heart",
             Icon::Spark => "spark",
             Icon::Chevron => "chevron",
             Icon::More => "more",
-            Icon::Shuffle => "shuffle",
             Icon::List => "list",
             Icon::Devices => "devices",
             Icon::Bug => "bug",
@@ -156,14 +135,13 @@ impl Icon {
 
     /// Filled shapes (the transport) are drawn with `fill`, the rest with a 2px stroke.
     fn filled(self) -> bool {
-        matches!(self, Icon::Play | Icon::Pause | Icon::Next | Icon::Prev)
+        matches!(self, Icon::Play | Icon::Pause)
     }
 
     fn body(self) -> &'static str {
         match self {
             Icon::Home => r##"<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>"##,
             Icon::Search => r##"<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>"##,
-            Icon::Library => r##"<path d="M4 4v16M9 4v16M14 4l6 16"/>"##,
             Icon::Inbox => {
                 r##"<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>"##
             }
@@ -181,12 +159,6 @@ impl Icon {
             }
             Icon::Play => r##"<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/>"##,
             Icon::Pause => r##"<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>"##,
-            Icon::Next => {
-                r##"<path d="M5 5.5v13a1 1 0 0 0 1.5.86L16 13.5V18a1 1 0 0 0 2 0V6a1 1 0 0 0-2 0v4.5L6.5 4.64A1 1 0 0 0 5 5.5z"/>"##
-            }
-            Icon::Prev => {
-                r##"<path d="M19 5.5v13a1 1 0 0 1-1.5.86L8 13.5V18a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v4.5l9.5-5.86A1 1 0 0 1 19 5.5z"/>"##
-            }
             Icon::Plus => r##"<path d="M12 5v14M5 12h14"/>"##,
             Icon::Check => r##"<path d="M20 6 9 17l-5-5"/>"##,
             Icon::X => r##"<path d="M18 6 6 18M6 6l12 12"/>"##,
@@ -201,8 +173,6 @@ impl Icon {
             Icon::Link => {
                 r##"<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>"##
             }
-            Icon::Music => r##"<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>"##,
-            Icon::Disc => r##"<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>"##,
             Icon::User => r##"<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>"##,
             Icon::Sun => {
                 r##"<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>"##
@@ -211,7 +181,6 @@ impl Icon {
             Icon::Copy => {
                 r##"<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>"##
             }
-            Icon::Volume => r##"<path d="M11 5 6 9H2v6h4l5 4zM15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/>"##,
             Icon::External => r##"<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>"##,
             Icon::Shield => r##"<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>"##,
             Icon::Heart => {
@@ -222,7 +191,6 @@ impl Icon {
             }
             Icon::Chevron => r##"<polyline points="6 9 12 15 18 9"/>"##,
             Icon::More => r##"<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>"##,
-            Icon::Shuffle => r##"<path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>"##,
             Icon::List => r##"<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>"##,
             Icon::Devices => {
                 r##"<rect x="2" y="4" width="13" height="10" rx="2"/><path d="M6 18h5M8.5 14v4"/><rect x="17" y="8" width="5" height="12" rx="1.5"/><path d="M19.5 17h.01"/>"##
@@ -261,39 +229,60 @@ pub fn icon<'a, M: 'a>(i: Icon, size: f32, color: Color) -> El<'a, M> {
     svg::Svg::new(handle(i)).width(size).height(size).style(move |_, _| svg::Style { color: Some(color) }).into()
 }
 
-const LOGO_PATHS: [&str; 3] = [
-    "M249.205 114.329 L510.699 32.377 C510.699 32.377 525.463 25.913 538.636 31.22 C551.81 36.528 551.358 49.709 551.358 49.709 L550.464 99.763 C550.464 99.763 550.049 113.161 538.636 121.587 C527.224 130.012 514.95 133.407 514.95 133.407 L308.537 197.811 C298.175 201.165 275.923 206.119 273.697 229.869 C273.697 229.869 275.227 403.645 275.227 443.582 C275.227 493.942 241.622 582.872 154.358 582.872 C65.76 582.872 47.709 513.389 47.709 470.406 C47.709 412.557 102.003 373.129 140.138 369.574 C178.273 366.019 204.127 385.087 204.127 385.087 L201.373 166.271 C199.204 125.931 244.035 116.052 249.205 114.329 Z",
-    "M345.928 420.623 C345.928 420.623 518.078 368.274 535.733 363.243 C553.388 358.212 564.789 368.142 564.274 383.837 L564.274 419.323 C564.274 449.986 539.212 459.963 525.178 464.079 L348.687 519.256 C329.357 525.979 320.186 517.423 320.186 498.97 L320.186 446.803 C320.186 430.002 326.687 425.907 345.928 420.623 Z",
-    "M339.143 254.402 L494.664 206.043 C507.578 202.394 520.795 206.043 520.795 221.613 L520.795 239.527 C520.795 274.769 508.753 302.967 450.793 319.539 L341.142 356.25 C330.333 359.74 319.414 354.699 320.186 340.976 L319.414 282.394 C319.414 269.641 322.93 259.403 339.143 254.402 Z",
-];
+/// An app's logo: SVG paths in a view box, filled with the accent gradient. The app gives its own.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Logo {
+    /// The SVG `viewBox` ("0 0 24 24").
+    pub view_box: &'static str,
+    /// The `d` of each path, filled with the gradient.
+    pub paths: &'static [&'static str],
+    /// Where the gradient runs, in view box units: `(x1, y1, x2, y2)`.
+    pub gradient: (f32, f32, f32, f32),
+}
 
-/// The Encore logo in the accent gradient (web-rs/src/appearance.rs `logo()`), cached per pair of colours.
-pub fn logo_handle(a: Color, b: Color) -> Handle {
+impl Logo {
+    /// A neutral mark (a rounded square with a spark) for apps without a logo yet, and the demo.
+    pub const KIT: Logo = Logo {
+        view_box: "0 0 24 24",
+        paths: &["M6 2h12a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4zm6 4-1.6 4.4L6 12l4.4 1.6L12 18l1.6-4.4L18 12l-4.4-1.6z"],
+        gradient: (2.0, 22.0, 22.0, 2.0),
+    };
+
+    /// The logo as an SVG document in the colours `a` → `b`.
+    pub fn svg(&self, a: Color, b: Color) -> String {
+        let (x1, y1, x2, y2) = self.gradient;
+        let mut s = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="{}"><defs><linearGradient id="g" x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{}"/><stop offset="1" stop-color="{}"/></linearGradient></defs>"#,
+            self.view_box,
+            theme::to_hex(a),
+            theme::to_hex(b)
+        );
+        for d in self.paths {
+            s.push_str(&format!(r##"<path d="{d}" fill="url(#g)" fill-rule="evenodd"/>"##));
+        }
+        s.push_str("</svg>");
+        s
+    }
+}
+
+/// The logo in the gradient `a` → `b`, cached per logo and pair of colours.
+pub fn logo_handle(logo: &Logo, a: Color, b: Color) -> Handle {
     static CACHE: Mutex<Option<HashMap<String, Handle>>> = Mutex::new(None);
-    let key = format!("{}{}", theme::to_hex(a), theme::to_hex(b));
+    let key = format!("{}{}{}", logo.paths.join("|"), theme::to_hex(a), theme::to_hex(b));
     let mut g = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     let map = g.get_or_insert_with(HashMap::new);
     if let Some(h) = map.get(&key) {
         return h.clone();
     }
-    let mut s = format!(
-        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 15 580 580"><defs><linearGradient id="g" x1="71" y1="351" x2="551" y2="257" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="{}"/><stop offset="1" stop-color="{}"/></linearGradient></defs>"#,
-        theme::to_hex(a),
-        theme::to_hex(b)
-    );
-    for d in LOGO_PATHS {
-        s.push_str(&format!(r##"<path d="{d}" fill="url(#g)"/>"##));
-    }
-    s.push_str("</svg>");
-    let h = Handle::from_memory(s.into_bytes());
+    let h = Handle::from_memory(logo.svg(a, b).into_bytes());
     map.insert(key, h.clone());
     h
 }
 
-/// The logo at `size` px in the active look's accent colours.
-pub fn logo<'a, M: 'a>(size: f32) -> El<'a, M> {
+/// The app's logo at `size` px in the active look's accent colours.
+pub fn logo<'a, M: 'a>(logo: &Logo, size: f32) -> El<'a, M> {
     let p = theme::look();
-    svg::Svg::new(logo_handle(p.accent, p.accent2)).width(size).height(size).into()
+    svg::Svg::new(logo_handle(logo, p.accent, p.accent2)).width(size).height(size).into()
 }
 
 #[cfg(test)]
@@ -309,5 +298,13 @@ mod tests {
         }
         assert_eq!(Icon::by_name("devices"), Some(Icon::Devices));
         assert_eq!(Icon::by_name("nothing"), None);
+    }
+
+    #[test]
+    fn a_logo_is_the_apps_paths_in_the_accent_gradient() {
+        let s = Logo::KIT.svg(Color::WHITE, Color::BLACK);
+        assert!(s.contains(r#"viewBox="0 0 24 24""#) && s.contains("#ffffff") && s.contains("#000000"));
+        assert!(s.contains(Logo::KIT.paths[0]));
+        let _ = logo::<()>(&Logo::KIT, 32.0);
     }
 }

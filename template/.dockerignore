@@ -3,6 +3,8 @@
 target
 web/dist
 android
+desktop
+scripts
 data
 *.md
 !docs/releases

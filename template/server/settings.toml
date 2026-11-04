@@ -1,6 +1,6 @@
 # The settings table: every server setting with its environment variable and default, and for the ones on the
-# Settings pages, the words and the layout of their field (Encore's server/crates/config/settings.toml is the
-# full example). build.rs turns this file into settings_gen.rs through kit-server-settings: the `Keys` names,
+# Settings pages, the words and the layout of their field (the kit's
+# crates/kit-server-settings README lists every option). build.rs turns this file into settings_gen.rs through kit-server-settings: the `Keys` names,
 # the `TABLE` of definitions the store reads, and `SCHEMA`, which GET /api/settings/schema answers with.
 #
 # [sections.<id>]  a page under Settings, in nav order: title.

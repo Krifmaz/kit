@@ -1,6 +1,6 @@
-//! Encore's design tokens and the generator that turns them into every platform's theme.
+//! The kit's design tokens and the generator that turns them into every platform's theme.
 //!
-//! `design/tokens.json` defines Encore's look once: the four themes (default, encore, oled, light), the
+//! `design/tokens.json` defines the look once: the four themes (`encore`, the default; `dark`, `oled`, `light`), the
 //! status colours, the accents and presets of Settings → Appearance, radii, type, spacing and motion. This
 //! crate reads it ([`Tokens::load`] / [`Tokens::parse`]) and renders four outputs:
 //!
@@ -11,8 +11,7 @@
 //! | Iced theme (Rust) | [`iced`] | `iced_tokens.rs` |
 //! | Flutter ThemeData (Dart) | [`flutter`] | `kit_tokens.dart` |
 //!
-//! The tests compare the output with Encore's current theme sources (copies in `design/fixtures/encore`),
-//! so moving Encore onto the tokens changes nothing visually.
+//! The tests check each output against the tokens and that `design/out/` is up to date.
 
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -26,12 +25,8 @@ pub struct Tokens {
     pub version: u32,
     /// `--ok`, `--warn`, `--err`, `--info`: the same in every theme.
     pub status: Status,
-    /// The themes, the default (`:root`) first.
+    /// The themes, the default (`encore`, `:root`) first.
     pub themes: Vec<Theme>,
-    /// The accent `:root` wears before the app applies the account's look.
-    pub default_accent: String,
-    /// The signed-out look (`:root[data-brand]`).
-    pub brand: Brand,
     /// How the text colour on an accent is chosen.
     pub on_accent: OnAccent,
     /// Settings → Appearance accents, in their order.
@@ -73,10 +68,10 @@ pub struct Status {
     pub info: String,
 }
 
-/// One theme's surface colours.
+/// One theme's colours.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Theme {
-    /// `default`, `encore`, `oled` or `light`.
+    /// `encore` (the default), `dark`, `oled` or `light`.
     pub id: String,
     /// Its name.
     pub name: String,
@@ -86,21 +81,10 @@ pub struct Theme {
     pub note: Option<String>,
     /// A dark theme (`color-scheme: dark`).
     pub dark: bool,
-    /// `bg`, `bg-2`, `panel`, `panel-2`, `border`, `text`, `muted`, `faint`.
+    /// `bg`, `bg-2`, `panel`, `panel-2`, `border`, `text`, `muted`, `faint`, `accent`, `accent-2`, `on-accent`.
     pub colors: BTreeMap<String, String>,
     /// `--shadow`.
     pub shadow: String,
-}
-
-/// The signed-out look.
-#[derive(Clone, Debug, Deserialize)]
-pub struct Brand {
-    /// The accent id it wears.
-    pub accent: String,
-    /// Its CSS selector.
-    pub css_selector: String,
-    /// The comment at the top of its CSS block.
-    pub note: String,
 }
 
 /// Dark or light text on an accent.
@@ -229,13 +213,9 @@ pub struct Motion {
     pub keyframes: BTreeMap<String, String>,
 }
 
-/// Android specifics: where Encore's Compose theme differs from the web's tokens today.
+/// Android specifics: Material shapes and type roles.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Compose {
-    /// The Kotlin name of each theme's palette in Encore's Theme.kt.
-    pub palette_names: BTreeMap<String, String>,
-    /// Per theme: colours that differ on Android.
-    pub overrides: BTreeMap<String, BTreeMap<String, String>>,
     /// Material shape sizes in dp.
     pub shapes: BTreeMap<String, u32>,
     /// The Material type scale.
@@ -260,8 +240,6 @@ pub struct ComposeType {
 /// Desktop specifics.
 #[derive(Clone, Debug, Deserialize)]
 pub struct Iced {
-    /// The desktop app's id for each theme.
-    pub theme_ids: BTreeMap<String, String>,
     /// `RADIUS`.
     pub radius: f32,
     /// `SIDEBAR`.
@@ -285,6 +263,9 @@ impl std::error::Error for Error {}
 /// The order of the surface colours in every output.
 pub const SURFACE: [&str; 8] = ["bg", "bg-2", "panel", "panel-2", "border", "text", "muted", "faint"];
 
+/// A theme's own accent colours, in every output's order.
+pub const ACCENT: [&str; 3] = ["accent", "accent-2", "on-accent"];
+
 impl Tokens {
     /// Read and check a `tokens.json`.
     pub fn load(path: &Path) -> Result<Tokens, Error> {
@@ -299,15 +280,15 @@ impl Tokens {
         Ok(t)
     }
 
-    /// Every theme has every surface colour, every colour is a hex colour, and every id a preset or the brand
-    /// names exists.
+    /// Every theme has every colour, every colour is a hex colour, the default theme comes first, and every
+    /// accent a preset names exists.
     fn check(&self) -> Result<(), Error> {
-        if self.themes.first().map(|t| t.id.as_str()) != Some("default") {
-            return Err(Error("The first theme must be \"default\" (the :root block).".into()));
+        if self.themes.first().map(|t| t.id.as_str()) != Some("encore") {
+            return Err(Error("The first theme must be \"encore\" (the default, the :root block).".into()));
         }
         for t in &self.themes {
-            for k in SURFACE {
-                let v = t.colors.get(k).ok_or_else(|| Error(format!("Theme {} has no colour {k}.", t.id)))?;
+            for k in SURFACE.iter().chain(ACCENT.iter()) {
+                let v = t.colors.get(*k).ok_or_else(|| Error(format!("Theme {} has no colour {k}.", t.id)))?;
                 hex6(v).ok_or_else(|| Error(format!("Theme {}: {k} = {v} is not a hex colour.", t.id)))?;
             }
         }
@@ -316,12 +297,12 @@ impl Tokens {
                 hex6(c).ok_or_else(|| Error(format!("Accent {}: {c} is not a hex colour.", a.id)))?;
             }
         }
-        for id in [&self.default_accent, &self.brand.accent] {
-            self.accent(id).ok_or_else(|| Error(format!("No accent {id}.")))?;
-        }
         for p in &self.presets {
             if p.accent != "custom" && self.accent(&p.accent).is_none() {
                 return Err(Error(format!("Preset {} names a missing accent {}.", p.id, p.accent)));
+            }
+            if p.theme != "system" && self.theme(&p.theme).is_none() {
+                return Err(Error(format!("Preset {} names a missing theme {}.", p.id, p.theme)));
             }
         }
         Ok(())
@@ -337,7 +318,7 @@ impl Tokens {
         self.accents.iter().find(|a| a.id == id)
     }
 
-    /// The text colour on an accent made of `a` and `b` (appearance.rs `apply`).
+    /// The text colour on an accent made of `a` and `b`: dark on light accents, light on dark ones.
     pub fn on_accent_for(&self, a: &str, b: &str) -> &str {
         if (luminance(a) + luminance(b)) / 2.0 > self.on_accent.threshold {
             &self.on_accent.dark
@@ -346,15 +327,9 @@ impl Tokens {
         }
     }
 
-    /// One theme's colours as Android draws them: the surface colours, then the Compose overrides.
-    pub fn compose_palette(&self, theme: &Theme) -> BTreeMap<String, String> {
-        let mut m: BTreeMap<String, String> = theme.colors.iter().map(|(k, v)| (k.clone(), hex6(v).unwrap_or_default())).collect();
-        if let Some(o) = self.compose.overrides.get(&theme.id) {
-            for (k, v) in o {
-                m.insert(k.clone(), hex6(v).unwrap_or_default());
-            }
-        }
-        m
+    /// One theme's colours as `#rrggbb`, by token name.
+    pub fn palette(&self, theme: &Theme) -> BTreeMap<String, String> {
+        theme.colors.iter().map(|(k, v)| (k.clone(), hex6(v).unwrap_or_default())).collect()
     }
 }
 
@@ -395,21 +370,30 @@ fn rgb_list(s: &str) -> String {
     format!("{r}, {g}, {b}")
 }
 
-/// The CSS variables: Encore's `:root` block and one block per theme (only what differs from `:root`), with
-/// the brand block after the `encore` theme, as in Encore's app.css.
+/// The CSS variables: the default theme's `:root` block (with the status colours, radius and layout sizes)
+/// and one `:root[data-theme="…"]` block per other theme with what differs from `:root`.
 pub fn css(t: &Tokens) -> String {
     let mut o = String::from("/* Generated by design/gen from design/tokens.json. Do not edit by hand. */\n");
     let root = &t.themes[0];
-    let acc = t.accent(&t.default_accent).expect("checked");
-    o.push_str(":root {\n");
+    let accent_vars = |o: &mut String, th: &Theme, only_changed: bool| {
+        let (a, b, on) = (&th.colors["accent"], &th.colors["accent-2"], &th.colors["on-accent"]);
+        if only_changed && a == &root.colors["accent"] && b == &root.colors["accent-2"] && on == &root.colors["on-accent"] {
+            return;
+        }
+        let _ = writeln!(o, "  --accent: {a};");
+        let _ = writeln!(o, "  --accent-2: {b};");
+        let _ = writeln!(o, "  --accent-rgb: {};", rgb_list(a));
+        let _ = writeln!(o, "  --accent-2-rgb: {};", rgb_list(b));
+        let _ = writeln!(o, "  --on-accent: {on};");
+    };
+    let _ = writeln!(o, "{} {{", root.css_selector);
+    if let Some(n) = &root.note {
+        let _ = writeln!(o, "  /* {n} */");
+    }
     for k in SURFACE {
         let _ = writeln!(o, "  --{k}: {};", root.colors[k]);
     }
-    let _ = writeln!(o, "  --accent: {};", acc.a);
-    let _ = writeln!(o, "  --accent-2: {};", acc.b);
-    let _ = writeln!(o, "  --accent-rgb: {};", rgb_list(&acc.a));
-    let _ = writeln!(o, "  --accent-2-rgb: {};", rgb_list(&acc.b));
-    let _ = writeln!(o, "  --on-accent: {};", t.on_accent_for(&acc.a, &acc.b));
+    accent_vars(&mut o, root, false);
     o.push_str("  --grad: linear-gradient(135deg, var(--accent), var(--accent-2));\n");
     let _ = writeln!(o, "  --content: {};   /* {} */", t.layout.content, t.layout.content_note);
     let _ = writeln!(o, "  --ok: {};", t.status.ok);
@@ -433,6 +417,7 @@ pub fn css(t: &Tokens) -> String {
                 let _ = writeln!(o, "  --{k}: {};", th.colors[k]);
             }
         }
+        accent_vars(&mut o, th, true);
         if th.shadow != root.shadow {
             let _ = writeln!(o, "  --shadow: {};", th.shadow);
         }
@@ -440,17 +425,6 @@ pub fn css(t: &Tokens) -> String {
             let _ = writeln!(o, "  color-scheme: {};", if th.dark { "dark" } else { "light" });
         }
         o.push_str("}\n");
-        if th.id == "encore" {
-            let b = t.accent(&t.brand.accent).expect("checked");
-            let _ = writeln!(o, "{} {{", t.brand.css_selector);
-            let _ = writeln!(o, "  /* {} */", t.brand.note);
-            let _ = writeln!(o, "  --accent: {};", b.a);
-            let _ = writeln!(o, "  --accent-2: {};", b.b);
-            let _ = writeln!(o, "  --accent-rgb: {};", rgb_list(&b.a));
-            let _ = writeln!(o, "  --accent-2-rgb: {};", rgb_list(&b.b));
-            let _ = writeln!(o, "  --on-accent: {};", t.on_accent_for(&b.a, &b.b));
-            o.push_str("}\n");
-        }
     }
     o
 }
@@ -470,7 +444,7 @@ fn num(v: f64) -> String {
 }
 
 /// The Compose theme: Kotlin palettes, accents, presets, shapes and type scale in package
-/// `dev.krifmaz.kit.compose.theme`, equal to Encore's current `Theme.kt` and `Type.kt`.
+/// `dev.krifmaz.kit.compose.theme`.
 pub fn compose(t: &Tokens) -> String {
     let mut o = String::new();
     o.push_str("// Generated by design/gen from design/tokens.json. Do not edit by hand.\n");
@@ -502,7 +476,7 @@ pub fn compose(t: &Tokens) -> String {
     o.push_str("    val gradient: Brush get() = Brush.linearGradient(listOf(accent, accent2))\n}\n\n");
     o.push_str("/** The palettes, by theme. */\nobject KitPalettes {\n");
     for th in &t.themes {
-        let p = t.compose_palette(th);
+        let p = t.palette(th);
         let name = camel(&th.id);
         let _ = writeln!(o, "    /** The {} theme ({}). */", th.name, th.css_selector.replace('"', "'"));
         let _ = writeln!(o, "    val {name}: KitPalette = KitPalette(");
@@ -566,7 +540,7 @@ fn camel(id: &str) -> String {
 }
 
 /// The Iced theme tokens: a Rust module with the theme picker, accents, presets, every theme's surface
-/// colours and the status colours, equal to Encore's desktop `clients/desktop/src/theme.rs`.
+/// colours, each theme's accent and the status colours.
 pub fn iced(t: &Tokens) -> String {
     let mut o = String::new();
     o.push_str("// Generated by design/gen from design/tokens.json. Do not edit by hand.\n");
@@ -612,21 +586,30 @@ pub fn iced(t: &Tokens) -> String {
     );
     let _ = writeln!(o, "/// The dark text on light accents and the light text on dark ones, and the luminance between them.\npub const ON_ACCENT: (&str, &str, f32) = (\"{}\", \"{}\", {:?});\n",
         hex6(&t.on_accent.dark).unwrap_or_default(), hex6(&t.on_accent.light).unwrap_or_default(), t.on_accent.threshold as f32);
-    o.push_str("/// `(bg, bg-2, panel, panel-2, border, text, muted, faint)` of a theme id (`encore`, `dark`, `oled`,\n/// `light`); any other id is `dark`.\n");
+    o.push_str("/// `(bg, bg-2, panel, panel-2, border, text, muted, faint)` of a theme id (`encore`, `dark`, `oled`,\n/// `light`); any other id is `encore`, the default.\n");
     o.push_str("pub fn surface(theme: &str) -> (&'static str, &'static str, &'static str, &'static str, &'static str, &'static str, &'static str, &'static str) {\n    match theme {\n");
     let arm = |th: &Theme| {
         let c: Vec<String> = SURFACE.iter().map(|k| format!("\"{}\"", hex6(&th.colors[*k]).unwrap_or_default())).collect();
         format!("({})", c.join(", "))
     };
     for th in &t.themes[1..] {
-        let id = t.iced.theme_ids.get(&th.id).cloned().unwrap_or_else(|| th.id.clone());
-        let _ = writeln!(o, "        \"{id}\" => {},", arm(th));
+        let _ = writeln!(o, "        \"{}\" => {},", th.id, arm(th));
     }
-    let _ = writeln!(o, "        _ => {},\n    }}\n}}", arm(&t.themes[0]));
+    let _ = writeln!(o, "        _ => {},\n    }}\n}}\n", arm(&t.themes[0]));
+    o.push_str("/// `(accent, accent-2, on-accent)` of a theme id; any other id is `encore`, the default.\n");
+    o.push_str("pub fn accent(theme: &str) -> (&'static str, &'static str, &'static str) {\n    match theme {\n");
+    let acc = |th: &Theme| {
+        let c: Vec<String> = ACCENT.iter().map(|k| format!("\"{}\"", hex6(&th.colors[*k]).unwrap_or_default())).collect();
+        format!("({})", c.join(", "))
+    };
+    for th in &t.themes[1..] {
+        let _ = writeln!(o, "        \"{}\" => {},", th.id, acc(th));
+    }
+    let _ = writeln!(o, "        _ => {},\n    }}\n}}", acc(&t.themes[0]));
     o
 }
 
-/// The Flutter theme: Dart palettes and a `ThemeData` per theme (for Photovault's Ente fork).
+/// The Flutter theme: Dart palettes and a `ThemeData` per theme (for Flutter apps).
 pub fn flutter(t: &Tokens) -> String {
     let dc = |s: &str| format!("Color(0xFF{})", hex6(s).unwrap_or_default()[1..].to_ascii_uppercase());
     let mut o = String::new();
@@ -655,10 +638,8 @@ pub fn flutter(t: &Tokens) -> String {
         let _ = writeln!(o, "      {f}: Color.lerp({f}, other.{f}, t)!,");
     }
     o.push_str("      dark: t < 0.5 ? dark : other.dark,\n    );\n  }\n}\n\n");
-    o.push_str("/// The palettes, by theme, with the logo accent.\nclass KitPalettes {\n  KitPalettes._();\n\n");
-    let logo = t.accent(&t.brand.accent).expect("checked");
+    o.push_str("/// The palettes, by theme, each with its own accent.\nclass KitPalettes {\n  KitPalettes._();\n\n");
     for th in &t.themes {
-        let on = t.on_accent_for(&logo.a, &logo.b).to_string();
         let _ = writeln!(o, "  /// The {} theme.\n  static const KitPalette {} = KitPalette(", th.name, th.id);
         for (f, k) in [
             ("bg", "bg"),
@@ -672,7 +653,13 @@ pub fn flutter(t: &Tokens) -> String {
         ] {
             let _ = writeln!(o, "    {f}: {},", dc(&th.colors[k]));
         }
-        let _ = writeln!(o, "    accent: {},\n    accent2: {},\n    onAccent: {},", dc(&logo.a), dc(&logo.b), dc(&on));
+        let _ = writeln!(
+            o,
+            "    accent: {},\n    accent2: {},\n    onAccent: {},",
+            dc(&th.colors["accent"]),
+            dc(&th.colors["accent-2"]),
+            dc(&th.colors["on-accent"])
+        );
         let _ = writeln!(
             o,
             "    ok: {},\n    warn: {},\n    err: {},\n    info: {},",
@@ -684,7 +671,7 @@ pub fn flutter(t: &Tokens) -> String {
         let _ = writeln!(o, "    dark: {},\n  );\n", th.dark);
     }
     o.push_str("}\n\n");
-    o.push_str("/// Material `ThemeData` for a palette: Encore's colours, radii and type sizes.\n");
+    o.push_str("/// Material `ThemeData` for a palette: the kit's colours, radii and type sizes.\n");
     o.push_str("ThemeData kitThemeData(KitPalette p) {\n");
     o.push_str("  final scheme = ColorScheme(\n    brightness: p.dark ? Brightness.dark : Brightness.light,\n");
     o.push_str("    primary: p.accent,\n    onPrimary: p.onAccent,\n    secondary: p.accent2,\n    onSecondary: p.onAccent,\n");

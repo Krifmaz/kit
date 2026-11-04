@@ -98,8 +98,8 @@ impl<A: Clone> Toasts<A> {
     }
 }
 
-/// The toast column, to be laid over the window bottom right, `bottom` px above the bottom edge (a
-/// player bar's height plus 18; Encore passes [`theme::PLAYER_H`] + 18). `on_dismiss(id)` closes one
+/// The toast column, to be laid over the window bottom right, `bottom` px above the bottom edge (18,
+/// plus the height of any bar the app keeps along the bottom). `on_dismiss(id)` closes one
 /// early; `on_copy(id)` copies an error's text; `on_action(id)` takes a toast's action.
 pub fn view<'a, A, M: Clone + 'a>(
     toasts: &'a [Toast<A>],

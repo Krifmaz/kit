@@ -1,6 +1,6 @@
 //! The app's notices and Diagnostics checks.
 //!
-//! - Notice `data`: the data folder can't be written (Encore's storage notice, for the one folder this app
+//! - Notice `data`: the data folder can't be written (the kit's storage notice, for the one folder this app
 //!   writes to), checked every minute and on Check again. Served at `/api/notices/data` (and in `/api/notices`).
 //! - Diagnostics: the data folder and the database. An app adds its own services, folders and tools here.
 
@@ -29,8 +29,8 @@ pub fn writable(dir: &Path) -> Result<(), String> {
     }
 }
 
-/// The data folder notice's sentence for a folder that can't be written (Encore's words for its downloads
-/// folder: "The downloads folder /downloads is read-only – check the disk (dmesg, fsck) or the mount").
+/// The data folder notice's sentence for a folder that can't be written, for example "The data folder
+/// /data is read-only – check the disk (dmesg, fsck) or the mount".
 pub fn data_notice_text(dir: &Path, why: &str) -> String {
     format!("The data folder {} is {why} – check the disk (dmesg, fsck) or the mount", dir.display())
 }

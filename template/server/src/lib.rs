@@ -48,7 +48,7 @@ pub const VERSION: &str = match option_env!("APP_VERSION") {
 
 /// The binary's name (`CARGO_PKG_NAME`, the project name): the session cookie's prefix, the web app's script
 /// name (`<name>-web-<hash>.js`), the `X-Requested-With` value the web app sends and the `x-<name>` mark on every
-/// answer (Encore: `encore`).
+/// answer.
 pub const NAME: &str = env!("CARGO_PKG_NAME");
 
 /// The port from `APP_PORT`, 8080 when it is not set or not a number.
@@ -192,8 +192,7 @@ pub fn app(st: AppState) -> Router {
         .layer(tower_http::compression::CompressionLayer::new())
 }
 
-/// Middleware: the security headers, the `x-<name>` mark and the cache policy on every answer (Encore's
-/// `security_headers`).
+/// Middleware: the security headers, the `x-<name>` mark and the cache policy on every answer.
 async fn security_headers(req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
     let path = req.uri().path().to_string();
     let mut resp = next.run(req).await;
@@ -220,7 +219,7 @@ async fn security_headers(req: axum::extract::Request, next: axum::middleware::N
 }
 
 /// `/<name>-web-f92ab5b84b305a59_bg.wasm`: a file at the root whose name ends in a hash of its content (12 hex
-/// digits or more; trunk drops leading zeros), so it never changes under that name (Encore's `hashed_asset`).
+/// digits or more; trunk drops leading zeros), so it never changes under that name.
 pub fn hashed_asset(path: &str) -> bool {
     let Some(name) = path.strip_prefix('/') else { return false };
     let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);

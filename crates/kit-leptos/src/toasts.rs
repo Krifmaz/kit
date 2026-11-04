@@ -1,25 +1,21 @@
-//! Toasts: `#toasts` and every toast in it, with a global API that hand-written pages call as they called
-//! Encore's `ui::toast`.
-//!
-//! From Encore's `web-rs/src/ui.rs` (`toast`, `toast_action`, `error_toast`, `error_toast_html`) and
-//! `web-rs/src/update.rs` (`show_toast`, the `#sw-update` toast). The rules are kit-rules'
-//! [`ToastStack`] under [`ToastPolicy::web`]: an error (`err`) stays until closed and has Copy and Close, at most
-//! three errors stay (a new one pushes out the oldest), the same error again is dropped while it is on screen,
-//! any other toast fades out from 3.8 s and goes at 4.2 s, an action toast (Undo) stays its own time and goes
-//! when its button is pressed. The markup is Encore's:
+//! Toasts: `#toasts` and every toast in it, with a global API any code can call (Leptos or hand-written).
 //!
 //! - `<div class="toast ok">Saved</div>` (any kind but a staying error);
 //! - `<div class="toast err stays" role="alert" data-msg="…">` with [`error_toast_html`] inside;
 //! - `<div class="toast act">` with the text and one `data-toast-action` button;
 //! - `<div {..()} id="sw-update" class="toast" role="status" …>`, the update toast ([`show_update`]).
 //!
-//! A Leptos app draws [`Toasts`] (`<div id="toasts">`); a page that already has an empty `#toasts` (Encore's
-//! index.html) calls [`mount`]. Either way [`toast`], [`toast_action`] and [`show`] work from any code.
+//! A Leptos app draws [`Toasts`] (`<div id="toasts">`); a page that already has an empty `#toasts` in its
+//! index.html calls [`mount`]. Either way [`toast`], [`toast_action`] and [`show`] work from any code.
+//!
+//! How they stack and go is the configured [`ToastPolicy`] ([`crate::config::AppConfig::toast_policy`], the
+//! web's by default: three errors stay, the same error again is shown once, 4.2 s with a fade), and Copy, Close
+//! and the failed-copy words are the configured [`ToastWords`](kit_rules::toasts::ToastWords).
 
 use crate::clipboard::copy_text;
 use crate::html::{esc, html};
 use crate::icons::icon;
-use kit_rules::toasts::{Toast, ToastKind, ToastPolicy, ToastStack, CLOSE, COPY};
+use kit_rules::toasts::{Toast, ToastKind, ToastPolicy, ToastStack};
 use leptos::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -45,7 +41,7 @@ pub struct Entry {
 /// The update toast while it is on screen.
 #[derive(Clone, Debug)]
 pub struct UpdateEntry {
-    /// "A new version of Encore is ready".
+    /// "A new version of Kit Demo is ready".
     pub text: String,
     /// "Reload".
     pub label: String,
@@ -53,7 +49,7 @@ pub struct UpdateEntry {
     pub why: ArcRwSignal<String>,
     /// Reload was pressed (the button is switched off).
     pub pressed: ArcRwSignal<bool>,
-    /// The newest toast it came after: toasts that arrived later are drawn under it, as Encore appends them.
+    /// The newest toast it came after: toasts that arrived later are drawn under it, in arrival order.
     pub after_seq: u64,
 }
 
@@ -88,7 +84,7 @@ type Host = (web_sys::Element, Vec<(u64, crate::rt::Mounted)>);
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State {
-        stack: ToastStack::new(ToastPolicy::web()),
+        stack: fresh_stack(),
         actions: HashMap::new(),
         fading: HashMap::new(),
         update: None,
@@ -97,6 +93,23 @@ thread_local! {
     static ITEMS: ArcRwSignal<Vec<Item>> = ArcRwSignal::new(Vec::new());
     /// The `#toasts` that [`mount`] draws into, and the toast each mounted view shows.
     static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
+}
+
+/// An empty stack under the configured policy and words.
+fn fresh_stack() -> ToastStack<u64> {
+    let c = crate::config::get();
+    let policy: ToastPolicy = c.toast_policy;
+    ToastStack::new(policy).with_copy_failed(c.words.toasts.copy_failed)
+}
+
+/// Takes the configured policy and words (from [`crate::config::set`]); the toasts on screen go.
+pub(crate) fn configure() {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.stack = fresh_stack();
+        s.actions.clear();
+    });
+    publish();
 }
 
 /// The lines of `#toasts`, for a view of one's own.
@@ -142,8 +155,8 @@ fn publish() {
 }
 
 /// Mounts each new toast on its own at the end of `#toasts` and takes the gone ones out, so the container holds
-/// only Encore's toast elements (no list markers) and a toast another part of the app appends by hand stays in
-/// arrival order, as with Encore's `appendChild`.
+/// only toast elements (no list markers) and a toast another part of the app appends by hand stays in arrival
+/// order.
 fn sync(list: &[Item]) {
     HOST.with(|h| {
         let mut h = h.borrow_mut();
@@ -187,13 +200,13 @@ fn arm(id: u64) {
     });
 }
 
-/// `toast(msg, kind)` with the kind as Encore names it (`""`, `info`, `ok`, `warn`, `err`).
+/// `toast(msg, kind)` with the kind as a word (`""`, `info`, `ok`, `warn`, `err`).
 pub fn toast(msg: &str, kind: &str) {
     show(msg, ToastKind::parse(kind));
 }
 
-/// A toast of `kind`. An error stays with Copy and Close (except
-/// [`COPY_FAILED`](kit_rules::toasts::COPY_FAILED)); the same error again while it is on screen is shown once.
+/// A toast of `kind`. An error stays with Copy and Close (except the failed-copy words); the same error again
+/// while it is on screen is shown once.
 pub fn show(msg: &str, kind: ToastKind) {
     let id = STATE.with(|s| s.borrow_mut().stack.show(msg, kind, crate::rt::now_ms()));
     publish();
@@ -239,15 +252,15 @@ pub fn press(id: u64) {
 pub fn clear() {
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        s.stack = ToastStack::new(ToastPolicy::web());
+        s.stack = fresh_stack();
         s.actions.clear();
     });
     publish();
 }
 
-/// Shows the update toast ("A new version of Encore is ready", the reason it waits, `label`): it stays until the
+/// Shows the update toast ("A new version of Kit Demo is ready", the reason it waits, `label`): it stays until the
 /// page reloads. `on_reload` runs when its button is pressed (the button is switched off then). Returns false
-/// when it is already on screen. From `update.rs` `show_toast`.
+/// when it is already on screen.
 pub fn show_update(text: &str, label: &str, on_reload: Rc<dyn Fn()>) -> bool {
     let shown = STATE.with(|s| {
         let mut s = s.borrow_mut();
@@ -271,8 +284,7 @@ pub fn show_update(text: &str, label: &str, on_reload: Rc<dyn Fn()>) -> bool {
     shown
 }
 
-/// The update toast's second line: what the reload waits for (`None` once nothing holds the page). From
-/// `update.rs` `set_reason`.
+/// The update toast's second line: what the reload waits for (`None` once nothing holds the page).
 pub fn set_update_reason(why: Option<&str>) {
     if let Some(u) = STATE.with(|s| s.borrow().update.clone()) {
         let text = why.unwrap_or("").to_string();
@@ -298,29 +310,33 @@ fn press_update() {
     f();
 }
 
-/// The error toast's inside: the whole message, Copy and Close. From `ui.rs` `error_toast_html`.
+/// The error toast's inside: the whole message, Copy and Close.
 pub fn error_toast_html(msg: &str) -> String {
+    let w = crate::config::get().words.toasts;
+    let (copy_w, close_w) = (w.copy, w.close);
     format!(
-        r#"<div class="toast-text">{m}</div><div class="toast-acts"><button type="button" class="btn sm ghost" data-copy-text="{m}">{copy}{COPY}</button><button type="button" class="btn sm ghost icon" data-toast-close title="{CLOSE}" aria-label="{CLOSE}">{x}</button></div>"#,
+        r#"<div class="toast-text">{m}</div><div class="toast-acts"><button type="button" class="btn sm ghost" data-copy-text="{m}">{copy}{copy_w}</button><button type="button" class="btn sm ghost icon" data-toast-close title="{close_w}" aria-label="{close_w}">{x}</button></div>"#,
         m = esc(msg),
         copy = icon("copy"),
         x = icon("x")
     )
 }
 
-/// One toast. From `ui.rs` `toast`, `error_toast` and `toast_action`.
+/// One toast.
 #[component]
 pub fn ToastView(
     /// The toast.
     entry: Entry,
 ) -> impl IntoView {
     let id = entry.id;
-    // the fade sets `opacity`, then `transition`, on the element's style, as Encore's `set_style` calls do
-    // (`style="opacity: 0; transition: opacity 0.3s;"`); before it the toast has no `style` at all
+    // the fade sets `opacity`, then `transition`, on the element's style (`style="opacity: 0; transition:
+    // opacity 0.3s;"`); before it the toast has no `style` at all
     let (f1, f2) = (entry.fading.clone(), entry.fading.clone());
     let opacity = move || f1.get().then_some("0");
     let transition = move || f2.get().then_some("opacity .3s");
     if entry.stays {
+        let w = crate::config::get().words.toasts;
+        let (copy_w, close_w) = (w.copy, w.close);
         let msg = entry.text.clone();
         let copy = msg.clone();
         return view! {
@@ -329,8 +345,8 @@ pub fn ToastView(
                 <div class="toast-acts">
                     <button {..()} type="button" class="btn sm ghost" data-copy-text=msg.clone()
                         on:click=move |e| { e.stop_propagation(); copy_text(&copy); }
-                        {..html(format!("{}{COPY}", icon("copy")))}>{""}</button>
-                    <button {..()} type="button" class="btn sm ghost icon" data-toast-close title=CLOSE aria-label=CLOSE
+                        {..html(format!("{}{copy_w}", icon("copy")))}>{""}</button>
+                    <button {..()} type="button" class="btn sm ghost icon" data-toast-close title=close_w aria-label=close_w
                         on:click=move |e| { e.stop_propagation(); close(id); }
                         {..html(icon("x"))}>{""}</button>
                 </div>
@@ -352,7 +368,7 @@ pub fn ToastView(
     view! { <div {..()} class=format!("toast {}", entry.kind.as_str()) style:opacity=opacity style:transition=transition>{entry.text.clone()}</div> }.into_any()
 }
 
-/// The update toast. From `update.rs` `show_toast`.
+/// The update toast.
 #[component]
 pub fn UpdateToastView(
     /// The update toast.
@@ -389,8 +405,8 @@ pub fn Toasts() -> impl IntoView {
     view! { <div id="toasts"><ToastList/></div> }
 }
 
-/// Draws the toasts into the page's existing `#toasts` (Encore's index.html has one). Call once at start-up.
-/// Each toast is mounted on its own and appended, as Encore's `appendChild` does.
+/// Draws the toasts into the page's existing `#toasts` (an index.html with its own). Call once at start-up.
+/// Each toast is mounted on its own and appended.
 pub fn mount() {
     if let Some(el) = crate::rt::by_id("toasts") {
         HOST.with(|h| *h.borrow_mut() = Some((el, Vec::new())));
@@ -409,29 +425,33 @@ mod tests {
         crate::testing::render(|| view! { <Toasts/> })
     }
 
-    /// Encore's `toast` and `error_toast` markup (`ui.rs`), as they put it into `#toasts`.
-    fn encore_plain(msg: &str, kind: &str) -> String {
-        format!(r#"<div class="toast {kind}">{}</div>"#, esc(msg))
-    }
-    fn encore_error(msg: &str) -> String {
-        format!(r#"<div class="toast err stays" role="alert" data-msg="{}">{}</div>"#, esc(msg), error_toast_html(msg))
+    const COPY_SVG: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>"#;
+    const X_SVG: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>"#;
+
+    /// The kit's markup of an error toast with `text` (already escaped) and the words Copy and Close.
+    fn error(text: &str) -> String {
+        format!(
+            r#"<div class="toast err stays" role="alert" data-msg="{text}"><div class="toast-text">{text}</div><div class="toast-acts"><button type="button" class="btn sm ghost" data-copy-text="{text}">{COPY_SVG}Copy</button><button type="button" class="btn sm ghost icon" data-toast-close title="Close" aria-label="Close">{X_SVG}</button></div></div>"#
+        )
     }
 
     #[test]
-    fn toasts_draw_encores_markup() {
+    fn each_kind_draws_its_markup() {
         clear();
         toast("Saved", "ok");
-        toast("import failed: <Band> & \"Co\"", "err");
+        toast("upload failed: <a.png> & \"b\"", "err");
         toast(COPY_FAILED, "err");
         toast("Some files were left out", "");
         let want = format!(
-            r#"<div id="toasts">{}{}{}{}</div>"#,
-            encore_plain("Saved", "ok"),
-            encore_error("import failed: <Band> & \"Co\""),
-            encore_plain(COPY_FAILED, "err"),
-            encore_plain("Some files were left out", "")
+            r#"<div id="toasts"><div class="toast ok">Saved</div>{}<div class="toast err">{COPY_FAILED}</div><div class="toast ">Some files were left out</div></div>"#,
+            error("upload failed: &lt;a.png&gt; &amp; &quot;b&quot;")
         );
         assert_same_html(&drawn(), &want);
+        // the string builder for hand-written pages draws the same inside
+        assert_same_html(
+            &format!(r#"<div class="toast err stays" role="alert" data-msg="x">{}</div>"#, error_toast_html("x")),
+            &error("x"),
+        );
     }
 
     #[test]
@@ -440,7 +460,7 @@ mod tests {
         for m in ["a", "b", "a", "c", "d"] {
             toast(m, "err");
         }
-        let want = format!(r#"<div id="toasts">{}{}{}</div>"#, encore_error("b"), encore_error("c"), encore_error("d"));
+        let want = format!(r#"<div id="toasts">{}{}{}</div>"#, error("b"), error("c"), error("d"));
         assert_same_html(&drawn(), &want);
     }
 
@@ -449,8 +469,8 @@ mod tests {
         clear();
         let ran = Rc::new(std::cell::Cell::new(0));
         let r = ran.clone();
-        toast_action("Up next cleared", "Undo", 6000, move || r.set(r.get() + 1));
-        let want = r#"<div id="toasts"><div class="toast act"><div class="toast-text">Up next cleared</div><div class="toast-acts"><button type="button" class="btn sm ghost" data-toast-action>Undo</button></div></div></div>"#;
+        toast_action("Note deleted", "Undo", 6000, move || r.set(r.get() + 1));
+        let want = r#"<div id="toasts"><div class="toast act"><div class="toast-text">Note deleted</div><div class="toast-acts"><button type="button" class="btn sm ghost" data-toast-action>Undo</button></div></div></div>"#;
         assert_same_html(&drawn(), want);
         let id = STATE.with(|s| s.borrow().stack.items()[0].id);
         press(id);
@@ -464,14 +484,34 @@ mod tests {
         clear();
         STATE.with(|s| s.borrow_mut().update = None);
         toast("before", "ok");
-        assert!(show_update("A new version of Encore is ready", "Reload", Rc::new(|| {})));
-        assert!(!show_update("A new version of Encore is ready", "Reload", Rc::new(|| {})));
+        assert!(show_update("A new version of Kit Demo is ready", "Reload", Rc::new(|| {})));
+        assert!(!show_update("A new version of Kit Demo is ready", "Reload", Rc::new(|| {})));
         toast("after", "ok");
-        set_update_reason(Some("It reloads when the music stops"));
-        // update.rs `show_toast`
-        let update = r#"<div id="sw-update" class="toast" role="status" style="display:flex;align-items:center;gap:12px"><span class="grow">A new version of Encore is ready<span class="small muted" data-update-why style="display:block">It reloads when the music stops</span></span><button class="btn sm primary" type="button">Reload</button></div>"#;
-        let want = format!(r#"<div id="toasts">{}{update}{}</div>"#, encore_plain("before", "ok"), encore_plain("after", "ok"));
+        set_update_reason(Some("It reloads when this dialog is closed"));
+        let update = r#"<div id="sw-update" class="toast" role="status" style="display:flex;align-items:center;gap:12px"><span class="grow">A new version of Kit Demo is ready<span class="small muted" data-update-why style="display:block">It reloads when this dialog is closed</span></span><button class="btn sm primary" type="button">Reload</button></div>"#;
+        let want = format!(r#"<div id="toasts"><div class="toast ok">before</div>{update}<div class="toast ok">after</div></div>"#);
         assert_same_html(&drawn(), &want);
         STATE.with(|s| s.borrow_mut().update = None);
+    }
+
+    #[test]
+    fn an_app_words_and_stacks_toasts_its_own_way() {
+        let mut cfg = crate::config::AppConfig::default();
+        cfg.words.toasts.copy = "Kopieren";
+        cfg.words.toasts.close = "Schließen";
+        cfg.words.toasts.copy_failed = "Kopieren fehlgeschlagen";
+        cfg.toast_policy = ToastPolicy::desktop();
+        crate::config::set(cfg);
+        toast("Kopieren fehlgeschlagen", "err");
+        toast("kaputt", "err");
+        let html = drawn();
+        assert!(html.contains(r#"<div class="toast err">Kopieren fehlgeschlagen</div>"#), "{html}");
+        assert!(html.contains("Kopieren</button>") && html.contains(r#"title="Schließen""#), "{html}");
+        for i in 0..9 {
+            toast(&format!("n{i}"), "ok");
+        }
+        let count = STATE.with(|s| s.borrow().stack.items().len());
+        assert_eq!(count, kit_rules::toasts::DESKTOP_MAX_TOASTS, "the desktop's cap");
+        crate::config::set(crate::config::AppConfig::default());
     }
 }

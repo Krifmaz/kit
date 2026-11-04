@@ -2469,6 +2469,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kit-iced-demo"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "iced_test",
+ "kit-iced",
+ "kit-rules",
+ "serde_json",
+]
+
+[[package]]
 name = "kit-leptos"
 version = "0.1.0"
 dependencies = [

@@ -1,4 +1,4 @@
-//! Reading the server's JSON answers the way Encore's desktop app does (`clients/desktop/src/fmt.rs`).
+//! Reading the server's JSON answers leniently: a field as text, and JavaScript truthiness.
 
 use serde_json::Value;
 

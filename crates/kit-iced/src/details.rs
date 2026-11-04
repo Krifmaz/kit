@@ -1,8 +1,8 @@
 //! Readable errors: the details dialog that shows a text in full – wrapped, selectable, with a
 //! Copy button – and the small Copy button the error lines carry (the web's details modal with
 //! its `<pre>` and `ui::copy_text`). The app holds the one open dialog; a screen only builds the
-//! text – and, when there is one, the one thing that fixes it ([`Act`]: Encore's Keep anyway or
-//! Download anyway), which the app sends itself. `P` is the app's page type, for [`Links`].
+//! text – and, when there is one, the one thing that fixes it ([`Act`], e.g. "Keep anyway"),
+//! which the app sends itself. `P` is the app's page type, for [`Links`].
 //!
 //! After a copy the app reads the clipboard back and checks it with [`copied`], then shows
 //! [`COPIED`] or [`COPY_FAILED`].
@@ -32,8 +32,8 @@ pub struct Act {
     pub done: String,
 }
 
-/// A few words above the text, in a warning box: why (in full) and where it came from – the
-/// reason the audio check turned a download away (the web's `anyway_box_html`).
+/// A few words above the text, in a warning box: why (in full) and where it came from (e.g. the
+/// reason a check turned an item away).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lead {
     /// Why, in full (semibold).
@@ -42,23 +42,21 @@ pub struct Lead {
     pub from: String,
 }
 
-/// What a dialog links to and plays (Encore: a request's details, the owner on Oct 23: "from the
-/// download i should be able to click on the artist song or album or play it if its downloaded"):
-/// the title and the artist as links to their pages, and Play with a path the app plays
-/// (Encore: the library path of what it brought in, `/library/tracks/<id>` or `/library/albums/<id>`).
+/// What a dialog links to: a title and a subtitle as links to their pages (above the text), and a
+/// main button that opens a page (e.g. "Open" on the item the text is about).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Links<P> {
     /// The title and the page it opens.
     pub title: Option<(String, P)>,
-    /// The artist (muted) and the page it opens.
-    pub artist: Option<(String, P)>,
-    /// What Play plays.
-    pub play: Option<String>,
+    /// The subtitle (muted) and the page it opens.
+    pub subtitle: Option<(String, P)>,
+    /// The main button: its label and the page it opens.
+    pub button: Option<(String, P)>,
 }
 
 impl<P> Default for Links<P> {
     fn default() -> Self {
-        Links { title: None, artist: None, play: None }
+        Links { title: None, subtitle: None, button: None }
     }
 }
 
@@ -73,7 +71,7 @@ pub struct Details<P> {
     pub lead: Option<Lead>,
     /// The button that acts on it, when there is one.
     pub act: Option<Act>,
-    /// The links and Play.
+    /// The links and the main button.
     pub links: Links<P>,
     content: Content,
 }
@@ -87,10 +85,8 @@ pub enum Msg<P> {
     Copy,
     /// The dialog's [`Act`] button.
     Act,
-    /// A link of the [`Links`]: open that page.
+    /// A link or the main button of the [`Links`]: open that page.
     Open(P),
-    /// The [`Links`]' Play.
-    Play,
     /// Close (the X, the backdrop, Escape, the Close button).
     Close,
 }
@@ -104,8 +100,6 @@ pub enum Out<P> {
     Act(Act),
     /// Close the dialog and open this page.
     Open(P),
-    /// Close the dialog and play what this library path holds (a song or an album).
-    Play(String),
 }
 
 impl<P: Clone> Details<P> {
@@ -115,7 +109,7 @@ impl<P: Clone> Details<P> {
         Details { title, text, lead, act, links: Links::default(), content }
     }
 
-    /// The same dialog with a request's [`Links`].
+    /// The same dialog with [`Links`].
     pub fn with_links(mut self, links: Links<P>) -> Details<P> {
         self.links = links;
         self
@@ -134,7 +128,6 @@ impl<P: Clone> Details<P> {
             Msg::Copy => return Some(Out::Copy(self.text.clone())),
             Msg::Act => return self.act.clone().map(Out::Act),
             Msg::Open(p) => return Some(Out::Open(p)),
-            Msg::Play => return self.links.play.clone().map(Out::Play),
         }
         None
     }
@@ -155,8 +148,8 @@ pub fn view<P: Clone>(d: &Details<P>) -> El<'_, Msg<P>> {
         .height(Length::Fixed((lines * 19.0 + 24.0).clamp(60.0, 480.0)))
         .style(w::text_area::style);
     let mut body = column![].spacing(12).width(Length::Fill);
-    // what was asked for, as links: the album (or song's album) · the artist
-    let links: Vec<El<'_, Msg<P>>> = [(&d.links.title, true), (&d.links.artist, false)]
+    // what the text is about, as links: the title · the subtitle
+    let links: Vec<El<'_, Msg<P>>> = [(&d.links.title, true), (&d.links.subtitle, false)]
         .into_iter()
         .filter_map(|(l, title)| l.as_ref().map(|(label, page)| (label.clone(), page.clone(), title)))
         .map(|(label, page, title)| if title { w::link(label, 14.0, Msg::Open(page)) } else { w::muted_link(label, 14.0, Msg::Open(page)) })
@@ -180,15 +173,15 @@ pub fn view<P: Clone>(d: &Details<P>) -> El<'_, Msg<P>> {
     }
     body = body.push(editor);
     // the action (Keep anyway) is the dialog's main button; Copy is then a plain one
-    let main = d.act.is_some() || d.links.play.is_some();
+    let main = d.act.is_some() || d.links.button.is_some();
     let mut footer = row![
         btn(kit_rules::details::CLOSE, Btn::Default, Some(Msg::Close)),
         btn_icon(Icon::Copy, COPY, if main { Btn::Default } else { Btn::Primary }, Some(Msg::Copy)),
     ]
     .spacing(10)
     .align_y(Alignment::Center);
-    if d.links.play.is_some() {
-        footer = footer.push(btn_icon(Icon::Play, "Play", Btn::Primary, Some(Msg::Play)));
+    if let Some((label, page)) = &d.links.button {
+        footer = footer.push(btn(label.clone(), Btn::Primary, Some(Msg::Open(page.clone()))));
     }
     if let Some(a) = &d.act {
         footer = footer.push(btn(a.label.clone(), Btn::Primary, Some(Msg::Act)));
@@ -235,12 +228,25 @@ mod tests {
     fn the_action_goes_to_the_app() {
         let act = Act {
             label: "Keep anyway".into(),
-            path: "/requests/12/keep-anyway".into(),
+            path: "/items/12/keep-anyway".into(),
             body: serde_json::json!({ "rejected": 1 }),
-            done: "It will be imported without the audio check".into(),
+            done: "It will be kept without the check".into(),
         };
-        let mut d: Details<()> =
-            Details::new("Moonlight Shadow – Machine Time".into(), "Encore request #12".into(), None, Some(act.clone()));
+        let mut d: Details<()> = Details::new("Item 12".into(), "Rejected by the size check".into(), None, Some(act.clone()));
         assert_eq!(d.update(Msg::Act), Some(Out::Act(act)));
+    }
+
+    #[test]
+    fn the_links_and_the_main_button_open_pages() {
+        let links = Links {
+            title: Some(("Report.pdf".into(), 1u8)),
+            subtitle: Some(("Documents".into(), 2u8)),
+            button: Some(("Open".into(), 3u8)),
+        };
+        let mut d: Details<u8> = Details::new("Import".into(), "done".into(), None, None).with_links(links);
+        assert_eq!(d.update(Msg::Open(3)), Some(Out::Open(3)));
+        let mut ui = iced_test::simulator(view(&d));
+        assert!(ui.find("Report.pdf").is_ok() && ui.find("Documents").is_ok());
+        assert!(ui.click("Open").is_ok());
     }
 }

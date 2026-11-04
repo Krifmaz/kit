@@ -1,4 +1,4 @@
-//! The web app: Encore's shell (sidebar, notice slot, view) drawn with Leptos, and every kit feature in it.
+//! The web app: the kit's shell (sidebar, notice slot, view) drawn with Leptos, and every kit feature in it.
 //!
 //! | Where | What |
 //! | --- | --- |
@@ -38,7 +38,7 @@ pub fn project() -> &'static str {
 /// This page's web build: the hash in its script's name, `<project>-web-<hash>.js`.
 fn this_build() -> Option<String> {
     let head = rt::document()?.head()?.inner_html();
-    kit_rules::update::build_in(&head, project())
+    kit_rules::update::build_in(&head, NAME)
 }
 
 /// The connection banner (kit-leptos `offline::watch_connection`, with the project name for the events and
@@ -51,6 +51,15 @@ fn watch_connection(app: &str) {
     rt::on_window("online", |_| offline::conn_banner(false, ""));
     rt::on_window(&format!("{}:server-down", project()), move |_| offline::conn_banner(true, &down));
     rt::on_window(&format!("{}:server-up", project()), |_| offline::conn_banner(false, ""));
+}
+
+/// The kit's configuration for this app: its id and name, its script stem and where its What's new page is.
+/// The server uses the kit's default routes, so no path is set here.
+fn kit_config(app: &str) -> kit_leptos::config::AppConfig {
+    let mut cfg = kit_leptos::config::AppConfig::new(kit_rules::app::App::new(project(), app));
+    cfg.script = NAME.to_string();
+    cfg.routes.changelog = "/settings?s=whats-new".into();
+    cfg
 }
 
 /// The page the address names: its path (`/settings`) and query (`s=diagnostics`).
@@ -92,6 +101,7 @@ pub fn navigate(path: &str) {
 fn main() {
     console_error();
     let app = app_name();
+    kit_leptos::config::set(kit_config(&app));
     api::set_backend(HttpBackend::new(project()));
     toasts::mount();
     details::init();
@@ -122,14 +132,22 @@ fn console_error() {
     std::panic::set_hook(Box::new(|p| web_sys::console::error_1(&p.to_string().into())));
 }
 
-/// One link of the sidebar (Encore's `nav_link`).
+/// One link of the sidebar.
 #[component]
 fn NavLink(href: &'static str, label: &'static str, route: ReadSignal<Route>) -> impl IntoView {
     let active = move || route.get().path == href || (href != "/" && route.get().path.starts_with(href));
     view! { <a href=format!("#{href}") data-nav=href class:active=active><span>{label}</span></a> }
 }
 
-/// Encore's shell: the sidebar with the app's pages, the notice slot and the page.
+/// The question Sign out asks first (the kit's confirm dialog; the desktop app asks the same).
+pub fn sign_out_question() -> kit_rules::dialogs::Confirm {
+    kit_rules::dialogs::Confirm::new("Sign out?")
+        .text("This browser forgets its sign-in. You'll need your password to sign in again.")
+        .ok("Sign out")
+        .danger(true)
+}
+
+/// The kit's shell: the sidebar with the app's pages, the notice slot and the page.
 #[component]
 fn Shell(me: Value) -> impl IntoView {
     let (route, set_route) = signal(current_route());
@@ -143,8 +161,10 @@ fn Shell(me: Value) -> impl IntoView {
     };
     let sign_out = move |_| {
         rt::spawn(async {
-            let _ = api::post_empty("/auth/logout").await;
-            rt::reload();
+            if kit_leptos::modal::confirm(sign_out_question()).await {
+                let _ = api::post_empty("/auth/logout").await;
+                rt::reload();
+            }
         })
     };
     let page = move || {
@@ -185,6 +205,12 @@ fn Shell(me: Value) -> impl IntoView {
 #[cfg(test)]
 mod tests {
     use super::Route;
+
+    #[test]
+    fn sign_out_asks_first() {
+        let q = super::sign_out_question();
+        assert_eq!((q.title.as_str(), q.ok.as_str(), q.danger), ("Sign out?", "Sign out", true));
+    }
 
     #[test]
     fn routes_come_from_the_hash() {

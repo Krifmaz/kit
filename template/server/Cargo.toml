@@ -1,5 +1,5 @@
 # {{app_title}}'s server: the API and the web app (web/, built by trunk) served by one binary.
-# A Cargo workspace of its own, like web/ (Encore keeps server/ and web-rs/ apart the same way).
+# A Cargo workspace of its own, like web/ and desktop/.
 [workspace]
 resolver = "2"
 

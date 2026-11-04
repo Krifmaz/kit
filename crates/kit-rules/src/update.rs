@@ -1,10 +1,5 @@
-//! Reloading an open page into a new build of the web app by itself, without cutting off the music.
-//!
-//! From Encore's `web-rs/src/update.rs` (`Watch`, `Gate`, `waiting_for`, `build_in`, `check`, `new_build`,
-//! `worker_ready`, `announce` and their constants) and `web-rs/src/sw.rs` (`Flow`, the service worker's side).
-//! The browser calls (fetch, timers, sessionStorage, `navigator.serviceWorker`) stay in the UI crate; here are
-//! the decisions, fed with answers and the time (`now_ms`) and returning what to do next. The contract is
-//! `contracts/health.md`.
+//! Reloading an open page into a new build of the web app by itself, without cutting off what the person is
+//! doing.
 //!
 //! How a new build is noticed, two ways that meet in [`Gate::ready`]:
 //! - `/api/health` names the build the server serves ([`Health::web`]); the page knows its own from the
@@ -17,75 +12,91 @@
 //!   first asks for the new worker and waits for it a while ([`new_build`], [`worker_wait`]).
 //!
 //! When to reload is [`Gate`]: at once when nothing holds the page ([`waiting_for`]); otherwise the toast
-//! ([`ready_text`], [`RELOAD`]) and a reload once nothing has held the page for [`IDLE_FOR_MS`]. A reload that
-//! did not bring the new build is not repeated ([`tried`], [`tried_key`]).
+//! ([`ready_text`], [`RELOAD`]) and a reload once nothing has held the page for [`IDLE_FOR_MS`]. What holds a
+//! page is the app's to say: each app passes its own reasons with their words ("It reloads when the upload is
+//! done"); the kit knows only an open dialog ([`WAITS_FOR_DIALOG`]). A reload that did not bring the new build is
+//! not repeated ([`tried`], [`tried_key`]). The words are [`UpdateWords`].
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-/// How often the page asks `/api/health` while all is well. From `update.rs` `POLL_MS`.
+/// How often the page asks `/api/health` while all is well.
 pub const POLL_MS: u64 = 60 * 1000;
-/// How often it asks while the server does not answer (a restart takes seconds). From `update.rs`
-/// `DOWN_POLL_MS`.
+/// How often it asks while the server does not answer (a restart takes seconds).
 pub const DOWN_POLL_MS: u64 = 3 * 1000;
-/// After this long without an answer the server is down, not restarting … From `update.rs`
-/// `DOWN_SLOW_AFTER_MS`.
+/// After this long without an answer the server is down, not restarting …
 pub const DOWN_SLOW_AFTER_MS: u64 = 2 * 60 * 1000;
-/// … and it is asked this often. From `update.rs` `DOWN_SLOW_POLL_MS`.
+/// … and it is asked this often.
 pub const DOWN_SLOW_POLL_MS: u64 = 15 * 1000;
-/// Coming back into view asks at most this often. From `update.rs` `FOCUS_GAP_MS`.
+/// Coming back into view asks at most this often.
 pub const FOCUS_GAP_MS: u64 = 15 * 1000;
-/// The first question after the page loads (the boot has its own calls to make first). From `update.rs`
-/// `FIRST_CHECK_MS`.
+/// The first question after the page loads (the boot has its own calls to make first).
 pub const FIRST_CHECK_MS: u64 = 10 * 1000;
-/// `/api/health` gets this long to answer before it counts as no answer. From `update.rs` `health` (3 s abort).
+/// `/api/health` gets this long to answer before it counts as no answer.
 pub const HEALTH_TIMEOUT_MS: u64 = 3000;
 /// With a service worker in charge, how long a new build waits for its new worker before reloading anyway.
-/// From `update.rs` `WORKER_WAIT_MS`.
 pub const WORKER_WAIT_MS: u64 = 20 * 1000;
-/// How often that wait looks whether the new worker is there. From `update.rs` `new_build` (`sleep(500)`).
+/// How often that wait looks whether the new worker is there.
 pub const WORKER_POLL_MS: u64 = 500;
-/// Nothing may have held the page for this long before it reloads by itself. From `update.rs` `IDLE_FOR_MS`.
+/// Nothing may have held the page for this long before it reloads by itself.
 pub const IDLE_FOR_MS: u64 = 5 * 1000;
-/// How often a waiting reload looks again whether the page is free. From `update.rs` `TICK_MS`.
+/// How often a waiting reload looks again whether the page is free.
 pub const TICK_MS: u64 = 1000;
 
-/// `visibilitychange` → visible asks the browser for a new service worker at most this often. From `sw.rs`
-/// `CHECK_EVERY_MS`.
+/// `visibilitychange` → visible asks the browser for a new service worker at most this often.
 pub const SW_CHECK_EVERY_MS: u64 = 10 * 60 * 1000;
-/// While the tab stays in view, a service worker check this often (the same throttle applies). From `sw.rs`
-/// `TIMER_MS`.
+/// While the tab stays in view, a service worker check this often (the same throttle applies).
 pub const SW_TIMER_MS: u64 = 60 * 60 * 1000;
-/// After Reload the page reloads on `controllerchange`; this long without one, it reloads anyway. From `sw.rs`
-/// `RELOAD_FALLBACK_MS`.
+/// After Reload the page reloads on `controllerchange`; this long without one, it reloads anyway.
 pub const RELOAD_FALLBACK_MS: u64 = 4000;
 
-/// The update toast's button. From `update.rs` `RELOAD_LABEL`.
+/// The update toast's button.
 pub const RELOAD: &str = "Reload";
-/// The toast's second line while music plays. From `update.rs` `waiting_for`.
-pub const WAITS_FOR_MUSIC: &str = "It reloads when the music stops";
-/// The toast's second line during an upload. From `update.rs` `waiting_for`.
-pub const WAITS_FOR_UPLOAD: &str = "It reloads when the upload is done";
-/// The toast's second line while songs are saved for offline. From `update.rs` `waiting_for`.
-pub const WAITS_FOR_DOWNLOAD: &str = "It reloads when the songs are saved";
-/// The toast's second line while a dialog is open. From `update.rs` `waiting_for`.
+/// The toast's second line while a dialog is open (the one reason the kit knows itself).
 pub const WAITS_FOR_DIALOG: &str = "It reloads when this dialog is closed";
+/// The update toast's text, `{app}` filled in ([`ready_text`]).
+pub const READY: &str = "A new version of {app} is ready";
 
-/// The update toast's text for `app` ("A new version of Encore is ready"). From `update.rs` `READY_TEXT`.
-pub fn ready_text(app: &str) -> String {
-    format!("A new version of {app} is ready")
+/// The update toast's words. [`UpdateWords::DEFAULT`] holds the kit's; an app passes its own to change any.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UpdateWords {
+    /// The toast's text, with `{app}` ([`READY`]).
+    pub ready: &'static str,
+    /// The toast's button ([`RELOAD`]).
+    pub reload: &'static str,
+    /// The second line while a dialog is open ([`WAITS_FOR_DIALOG`]).
+    pub waits_for_dialog: &'static str,
 }
 
-/// The sessionStorage key that keeps the build this tab last reloaded for, the loop guard (`app` in lower
-/// case: `encore.update.tried`). From `update.rs` `TRIED_KEY`.
-pub fn tried_key(app: &str) -> String {
-    format!("{}.update.tried", app.to_ascii_lowercase())
+impl UpdateWords {
+    /// The kit's words.
+    pub const DEFAULT: UpdateWords = UpdateWords { ready: READY, reload: RELOAD, waits_for_dialog: WAITS_FOR_DIALOG };
+
+    /// The toast's text for `app`.
+    pub fn ready(&self, app: &str) -> String {
+        crate::app::fill(self.ready, &[("app", app)])
+    }
+}
+
+impl Default for UpdateWords {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+/// The update toast's text for `app` ("A new version of Kit Demo is ready").
+pub fn ready_text(app: &str) -> String {
+    UpdateWords::DEFAULT.ready(app)
+}
+
+/// The sessionStorage key that keeps the build this tab last reloaded for, the loop guard: `<app id>.update.tried`
+/// (the id in lower case).
+pub fn tried_key(app_id: &str) -> String {
+    crate::app::key(&app_id.to_ascii_lowercase(), "update.tried")
 }
 
 /// Whether this tab already reloaded once for build `id` and it did not come (`stored` is the value under
 /// [`tried_key`]). An announcement without an id (the worker found a new shell while offline) never counts.
-///
-/// From `update.rs` `announce`.
 pub fn tried(stored: Option<&str>, id: &str) -> bool {
     !id.is_empty() && stored == Some(id)
 }
@@ -101,27 +112,23 @@ pub struct Health {
     pub version: String,
     /// The server's implementation (`"rust"`).
     pub server: Option<String>,
-    /// The build of the web app it serves (the hash in `<app>-web-<hash>.js`), or None.
+    /// The build of the web app it serves (the hash in the script's name, `<stem>-<hash>.js`), or None.
     pub web: Option<String>,
 }
 
-/// `null` (or a missing field) as "", the way Encore's `J::s` reads a string.
+/// `null` (or a missing field) as "", the way JavaScript's `String(v ?? '')` reads a string.
 fn null_as_empty<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
     Ok(Option::<String>::deserialize(d)?.unwrap_or_default())
 }
 
 impl Health {
     /// The answer's body, when it is one with `ok`; None otherwise (it then counts as no answer).
-    ///
-    /// From `update.rs` `health` (`v.truthy("ok").then_some(v)`).
     pub fn parse(body: &str) -> Option<Health> {
         serde_json::from_str::<Health>(body).ok().filter(|h| h.ok)
     }
 }
 
 /// What one answer of `/api/health` says about the build.
-///
-/// From `update.rs` `Seen`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Seen {
     /// The server serves the build this page runs.
@@ -133,8 +140,6 @@ pub enum Seen {
 }
 
 /// The comparison of this page's build with the server's, apart from the network.
-///
-/// From `update.rs` `Watch`.
 #[derive(Debug, Default, Clone)]
 pub struct Watch {
     /// This page's build (the hash of its script), when it could tell.
@@ -174,8 +179,6 @@ impl Watch {
 }
 
 /// What the page does next about a ready update.
-///
-/// From `update.rs` `Act`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Act {
     /// Nothing.
@@ -188,8 +191,6 @@ pub enum Act {
 }
 
 /// When to reload once a new version is ready.
-///
-/// From `update.rs` `Gate`.
 #[derive(Debug, Default, Clone)]
 pub struct Gate {
     ready: bool,
@@ -220,7 +221,7 @@ impl Gate {
     }
 
     /// The tick (every [`TICK_MS`]) while a reload waits: reload once nothing has held the page for
-    /// [`IDLE_FOR_MS`] (so the short gap between two songs does not count as stopped).
+    /// [`IDLE_FOR_MS`] (so a short pause between two things that hold it does not count as free).
     pub fn tick(&mut self, held: bool, now_ms: u64) -> Act {
         if !self.ready || self.reloading || self.manual {
             return Act::Nothing;
@@ -237,7 +238,7 @@ impl Gate {
         Act::Reload
     }
 
-    /// Reload pressed in the toast: reloads even while music plays.
+    /// Reload pressed in the toast: reloads even while something holds the page.
     pub fn pressed(&mut self) -> Act {
         if self.reloading {
             return Act::Nothing;
@@ -262,30 +263,18 @@ impl Gate {
     }
 }
 
-/// What holds the page from reloading, as the toast's second line says it; None when nothing does. The first
-/// one counts: music, then an upload, then saving for offline, then an open dialog.
-///
-/// From `update.rs` `waiting_for`.
-pub fn waiting_for(playing: bool, uploading: bool, downloading: bool, dialog: bool) -> Option<&'static str> {
-    if playing {
-        Some(WAITS_FOR_MUSIC)
-    } else if uploading {
-        Some(WAITS_FOR_UPLOAD)
-    } else if downloading {
-        Some(WAITS_FOR_DOWNLOAD)
-    } else if dialog {
-        Some(WAITS_FOR_DIALOG)
-    } else {
-        None
-    }
+/// What holds the page from reloading, as the toast's second line says it; None when nothing does. `holds`
+/// are the app's reasons in order, each whether it holds the page now and its words ("It reloads when the
+/// upload is done"); the first that holds counts.
+pub fn waiting_for<'a>(holds: &[(bool, &'a str)]) -> Option<&'a str> {
+    holds.iter().find(|(on, _)| *on).map(|(_, words)| *words)
 }
 
-/// The hash of the web app's script named in `html` (`<app>-web-<hash>.js` or `…_bg.wasm`, `app` in lower
-/// case): the build this page runs. Trunk drops leading zeros, so 12 hex digits or more count.
-///
-/// From `update.rs` `build_in` (where the prefix is `encore-web-`).
-pub fn build_in(html: &str, app: &str) -> Option<String> {
-    let prefix = format!("{}-web-", app.to_ascii_lowercase());
+/// The hash of the web app's script named in `html` (`<stem>-<hash>.js` or `<stem>-<hash>_bg.wasm`; `stem` is
+/// the name trunk gives the script, the web crate's binary name, in any case): the build this page runs.
+/// Trunk drops leading zeros, so 12 hex digits or more count.
+pub fn build_in(html: &str, stem: &str) -> Option<String> {
+    let prefix = format!("{}-", stem.to_ascii_lowercase());
     let mut rest = html;
     while let Some(i) = rest.find(&prefix) {
         rest = &rest[i + prefix.len()..];
@@ -300,8 +289,6 @@ pub fn build_in(html: &str, app: &str) -> Option<String> {
 
 /// How long to wait before asking a server that did not answer again, `waited_ms` after the check began: every
 /// 3 s, after two minutes every 15 s.
-///
-/// From `update.rs` `check`.
 pub fn down_poll_ms(waited_ms: u64) -> u64 {
     if waited_ms < DOWN_SLOW_AFTER_MS {
         DOWN_POLL_MS
@@ -333,8 +320,6 @@ pub enum CheckStep {
 }
 
 /// One check at a time, the back-off while the server restarts and the focus throttle.
-///
-/// From `update.rs` `check` / `start` (`CHECKING`, `LAST_FOCUS`).
 #[derive(Debug, Default, Clone)]
 pub struct Checker {
     /// When the check under way began.
@@ -394,8 +379,6 @@ pub enum NewBuild {
 
 /// With a service worker in charge (`controlled`) and no new worker waiting yet, have it installed first, so
 /// the reload lands in the new shell and not the old one.
-///
-/// From `update.rs` `new_build`.
 pub fn new_build(controlled: bool, waiting: bool) -> NewBuild {
     if controlled && !waiting {
         NewBuild::WaitForServiceWorker
@@ -406,8 +389,6 @@ pub fn new_build(controlled: bool, waiting: bool) -> NewBuild {
 
 /// While a new build waits for its worker (since `started_ms`): Some(ms) to look again after that long, None
 /// to announce now (the worker waits, or [`WORKER_WAIT_MS`] has passed).
-///
-/// From `update.rs` `new_build`.
 pub fn worker_wait(started_ms: u64, waiting: bool, now_ms: u64) -> Option<u64> {
     (!waiting && now_ms.saturating_sub(started_ms) < WORKER_WAIT_MS).then_some(WORKER_POLL_MS)
 }
@@ -425,8 +406,6 @@ pub enum WorkerReady {
 
 /// A new worker waits ([`SwStep::Ready`]): a reload when the server serves another build than this page's, a
 /// quiet takeover when this page already runs it.
-///
-/// From `update.rs` `worker_ready`.
 pub fn worker_ready(seen: Seen) -> WorkerReady {
     match seen {
         Seen::Same => WorkerReady::ActivateQuietly,
@@ -436,8 +415,6 @@ pub fn worker_ready(seen: Seen) -> WorkerReady {
 }
 
 /// What the page does after a service worker event.
-///
-/// From `sw.rs` `Step`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwStep {
     /// Nothing.
@@ -452,8 +429,6 @@ pub enum SwStep {
 }
 
 /// The page's side of a service worker update.
-///
-/// From `sw.rs` `Flow`.
 #[derive(Debug, Default, Clone)]
 pub struct Flow {
     app: String,
@@ -465,17 +440,18 @@ pub struct Flow {
 }
 
 impl Flow {
-    /// The flow for `app` (its worker answers `<app>:version` and names `<app>-shell-…` caches, in lower case).
-    pub fn new(app: &str) -> Self {
-        Flow { app: app.to_ascii_lowercase(), ..Flow::default() }
+    /// The flow for the app with id `app_id` (its worker answers `<id>:version` and names `<id>-shell-…`
+    /// caches, the id in lower case).
+    pub fn new(app_id: &str) -> Self {
+        Flow { app: app_id.to_ascii_lowercase(), ..Flow::default() }
     }
 
-    /// The message that lets a waiting worker take over. From `sw.rs` `skip_waiting_message`.
+    /// The message that lets a waiting worker take over.
     pub fn skip_waiting_message() -> Value {
         json!({ "type": "skip-waiting" })
     }
 
-    /// The question the worker answers with `{type: '<app>:version', cache}`. From `sw.rs` `version_question`.
+    /// The question the worker answers with `{type: '<app>:version', cache}`.
     pub fn version_question() -> Value {
         json!({ "type": "version?" })
     }
@@ -495,7 +471,7 @@ impl Flow {
         SwStep::Nothing
     }
 
-    /// The page reloads into the new version (Reload pressed, or the music stopped). `posted`: whether
+    /// The page reloads into the new version (Reload pressed, or the page became free). `posted`: whether
     /// [`Flow::skip_waiting_message`] went to a waiting worker (None: no worker waits).
     pub fn reload_pressed(&mut self, posted: Option<bool>) -> SwStep {
         if self.reloading {
@@ -570,32 +546,31 @@ mod tests {
         Health { ok: true, version: version.into(), server: Some("rust".into()), web: web.map(String::from) }
     }
 
-    /// Ported from `update.rs` `the_build_is_read_from_the_pages_script`.
     #[test]
     fn the_build_is_read_from_the_pages_script() {
-        let head = r#"<link rel="modulepreload" href="/encore-web-f92ab5b84b305a59.js" crossorigin="anonymous">
-            <link rel="preload" href="/encore-web-f92ab5b84b305a59_bg.wasm" as="fetch" type="application/wasm">"#;
-        assert_eq!(build_in(head, "Encore").as_deref(), Some("f92ab5b84b305a59"));
-        assert_eq!(build_in("import init from '/encore-web-59d563296e62da3.js';", "encore").as_deref(), Some("59d563296e62da3"));
-        assert_eq!(build_in(r#"href="/encore-web-f92ab5b84b305a59_bg.wasm""#, "encore").as_deref(), Some("f92ab5b84b305a59"));
+        let head = r#"<link rel="modulepreload" href="/kit-demo-web-f92ab5b84b305a59.js" crossorigin="anonymous">
+            <link rel="preload" href="/kit-demo-web-f92ab5b84b305a59_bg.wasm" as="fetch" type="application/wasm">"#;
+        assert_eq!(build_in(head, "Kit-Demo-Web").as_deref(), Some("f92ab5b84b305a59"));
+        assert_eq!(build_in("import init from '/kit-demo-web-59d563296e62da3.js';", "kit-demo-web").as_deref(), Some("59d563296e62da3"));
+        assert_eq!(build_in(r#"href="/kit-demo-web-f92ab5b84b305a59_bg.wasm""#, "kit-demo-web").as_deref(), Some("f92ab5b84b305a59"));
         assert_eq!(
-            build_in("encore-web-app encore-web-12ab.js /encore-web-0123456789abcdef.js", "encore").as_deref(),
+            build_in("kit-demo-web-app kit-demo-web-12ab.js /kit-demo-web-0123456789abcdef.js", "kit-demo-web").as_deref(),
             Some("0123456789abcdef")
         );
         for none in [
             "",
-            "<title>Encore</title>",
-            "encore-web-",
-            "encore-web-f92ab5b8.js",
-            "encore-web-f92ab5b84b305a59x.js",
-            "encore-web-f92ab5b84b305a59",
+            "<title>Kit Demo</title>",
+            "kit-demo-web-",
+            "kit-demo-web-f92ab5b8.js",
+            "kit-demo-web-f92ab5b84b305a59x.js",
+            "kit-demo-web-f92ab5b84b305a59",
         ] {
-            assert_eq!(build_in(none, "encore"), None, "{none}");
+            assert_eq!(build_in(none, "kit-demo-web"), None, "{none}");
         }
-        assert_eq!(build_in("/encore-web-f92ab5b84b305a59.js", "other"), None);
+        assert_eq!(build_in("/kit-demo-web-f92ab5b84b305a59.js", "other-web"), None);
+        assert_eq!(build_in("/photos-3f9a0c1b2d4e5f60.js", "photos").as_deref(), Some("3f9a0c1b2d4e5f60"), "any stem");
     }
 
-    /// Ported from `update.rs` `another_build_on_the_server_is_new`.
     #[test]
     fn another_build_on_the_server_is_new() {
         let mut w = Watch::new(Some("aaaaaaaaaaaa1111".into()));
@@ -607,7 +582,6 @@ mod tests {
         assert_eq!(w.seen(Some(&h("0.36.0", Some("aaaaaaaaaaaa1111")))), Seen::Same);
     }
 
-    /// Ported from `update.rs` `without_a_build_id_the_version_decides`.
     #[test]
     fn without_a_build_id_the_version_decides() {
         let mut w = Watch::new(Some("aaaaaaaaaaaa1111".into()));
@@ -633,9 +607,8 @@ mod tests {
         assert_eq!(Health::parse(r#"{"ok":true,"version":null}"#).unwrap().version, "");
     }
 
-    /// Ported from `update.rs` `nothing_playing_reloads_at_once`.
     #[test]
-    fn nothing_playing_reloads_at_once() {
+    fn nothing_holding_the_page_reloads_at_once() {
         let mut g = Gate::default();
         assert!(!g.is_ready());
         assert_eq!(g.ready(false, false, 0), Act::Reload);
@@ -644,9 +617,8 @@ mod tests {
         assert_eq!(g.pressed(), Act::Nothing);
     }
 
-    /// Ported from `update.rs` `music_waits_until_it_has_stopped_for_a_while` (times in whole ms).
     #[test]
-    fn music_waits_until_it_has_stopped_for_a_while() {
+    fn a_held_page_waits_until_it_has_been_free_for_a_while() {
         let mut g = Gate::default();
         assert_eq!(g.ready(true, false, 0), Act::ShowToast);
         assert!(g.has_toast());
@@ -660,9 +632,8 @@ mod tests {
         assert_eq!(g.tick(false, 20_000), Act::Nothing);
     }
 
-    /// Ported from `update.rs` `reload_in_the_toast_reloads_even_while_playing`.
     #[test]
-    fn reload_in_the_toast_reloads_even_while_playing() {
+    fn reload_in_the_toast_reloads_even_while_held() {
         let mut g = Gate::default();
         assert_eq!(g.ready(true, false, 0), Act::ShowToast);
         assert_eq!(g.pressed(), Act::Reload);
@@ -670,7 +641,6 @@ mod tests {
         assert_eq!(g.tick(false, 60_000), Act::Nothing);
     }
 
-    /// Ported from `update.rs` `a_reload_that_did_not_bring_the_build_is_not_repeated`.
     #[test]
     fn a_reload_that_did_not_bring_the_build_is_not_repeated() {
         let mut g = Gate::default();
@@ -682,18 +652,23 @@ mod tests {
         assert!(!tried(Some("abc"), "def"));
         assert!(!tried(Some(""), ""), "an announcement without a build never counts");
         assert!(!tried(None, "abc"));
-        assert_eq!(tried_key("Encore"), "encore.update.tried");
+        assert_eq!(tried_key("Kit-Demo"), "kit-demo.update.tried");
     }
 
-    /// Ported from `update.rs` `what_holds_the_page_comes_in_order`.
     #[test]
     fn what_holds_the_page_comes_in_order() {
-        assert_eq!(waiting_for(false, false, false, false), None);
-        assert_eq!(waiting_for(true, true, true, true), Some("It reloads when the music stops"));
-        assert_eq!(waiting_for(false, true, true, true), Some("It reloads when the upload is done"));
-        assert_eq!(waiting_for(false, false, true, true), Some("It reloads when the songs are saved"));
-        assert_eq!(waiting_for(false, false, false, true), Some("It reloads when this dialog is closed"));
-        assert_eq!(ready_text("Encore"), "A new version of Encore is ready");
+        const UPLOAD: &str = "It reloads when the upload is done";
+        const EDIT: &str = "It reloads when you have saved";
+        let holds = |upload, edit, dialog| [(upload, UPLOAD), (edit, EDIT), (dialog, WAITS_FOR_DIALOG)];
+        assert_eq!(waiting_for(&holds(false, false, false)), None);
+        assert_eq!(waiting_for(&holds(true, true, true)), Some(UPLOAD));
+        assert_eq!(waiting_for(&holds(false, true, true)), Some(EDIT));
+        assert_eq!(waiting_for(&holds(false, false, true)), Some("It reloads when this dialog is closed"));
+        assert_eq!(waiting_for(&[]), None, "an app with no reasons is never held");
+        assert_eq!(ready_text("Kit Demo"), "A new version of Kit Demo is ready");
+        let mine = UpdateWords { ready: "{app} hat eine neue Version", ..UpdateWords::DEFAULT };
+        assert_eq!(mine.ready("Filebrary"), "Filebrary hat eine neue Version");
+        assert_eq!(UpdateWords::default().reload, "Reload");
     }
 
     #[test]
@@ -736,10 +711,9 @@ mod tests {
         assert_eq!(worker_ready(Seen::Down), WorkerReady::Announce(String::new()));
     }
 
-    /// Ported from `sw.rs` `a_new_worker_is_reported_once_and_only_as_an_update`.
     #[test]
     fn a_new_worker_is_reported_once_and_only_as_an_update() {
-        let mut f = Flow::new("Encore");
+        let mut f = Flow::new("Kit-Demo");
         assert_eq!(f.worker_state("installing", false), SwStep::Nothing);
         assert_eq!(f.worker_state("installed", false), SwStep::Nothing);
         assert!(!f.ready_seen());
@@ -750,10 +724,9 @@ mod tests {
         assert_eq!(f.worker_state("activated", true), SwStep::Nothing);
     }
 
-    /// Ported from `sw.rs` `reload_posts_skip_waiting_then_reloads_on_controllerchange`.
     #[test]
     fn reload_posts_skip_waiting_then_reloads_on_controllerchange() {
-        let mut f = Flow::new("encore");
+        let mut f = Flow::new("kit-demo");
         f.worker_state("installed", true);
         assert_eq!(f.reload_pressed(Some(true)), SwStep::Posted);
         assert_eq!(Flow::skip_waiting_message(), json!({ "type": "skip-waiting" }));
@@ -763,57 +736,52 @@ mod tests {
         assert_eq!(f.reload_pressed(Some(true)), SwStep::Nothing);
     }
 
-    /// Ported from `sw.rs` `the_fallback_timer_reloads_when_controllerchange_never_comes`.
     #[test]
     fn the_fallback_timer_reloads_when_controllerchange_never_comes() {
-        let mut f = Flow::new("encore");
+        let mut f = Flow::new("kit-demo");
         assert_eq!(f.reload_pressed(Some(true)), SwStep::Posted);
         assert_eq!(f.reload_timeout(), SwStep::Reload);
         assert_eq!(f.controller_changed(), SwStep::Nothing);
     }
 
-    /// Ported from `sw.rs` `controllerchange_without_reload_pressed_keeps_the_page` and
-    /// `a_refused_message_reloads_at_once`.
     #[test]
     fn controllerchange_without_reload_pressed_keeps_the_page() {
-        let mut f = Flow::new("encore");
+        let mut f = Flow::new("kit-demo");
         assert_eq!(f.controller_changed(), SwStep::Nothing);
         f.worker_state("installed", true);
         assert_eq!(f.controller_changed(), SwStep::Nothing);
         assert_eq!(f.reload_pressed(None), SwStep::Reload);
-        let mut g = Flow::new("encore");
+        let mut g = Flow::new("kit-demo");
         assert_eq!(g.reload_pressed(Some(false)), SwStep::Reload, "a refused message reloads at once");
     }
 
-    /// Ported from `sw.rs` `update_checks_are_at_least_ten_minutes_apart`.
     #[test]
     fn update_checks_are_at_least_ten_minutes_apart() {
-        let mut f = Flow::new("encore");
+        let mut f = Flow::new("kit-demo");
         let t0 = 1_700_000_000_000;
         assert!(f.should_check(t0));
         assert!(!f.should_check(t0 + 60_000));
         assert!(!f.should_check(t0 + SW_CHECK_EVERY_MS - 1));
         assert!(f.should_check(t0 + SW_CHECK_EVERY_MS));
-        let mut g = Flow::new("encore");
+        let mut g = Flow::new("kit-demo");
         g.registered(t0);
         assert!(!g.should_check(t0 + 5 * 60_000));
         assert!(g.should_check(t0 + 11 * 60_000));
     }
 
-    /// Ported from `sw.rs` `the_version_answer_is_remembered`.
     #[test]
     fn the_version_answer_is_remembered() {
-        let mut f = Flow::new("Encore");
-        assert_eq!(f.message(&json!({ "type": "other", "cache": "encore-shell-abc" })), None);
-        assert_eq!(f.message(&json!({ "type": "encore:version" })), None);
-        assert_eq!(f.message(&json!({ "type": "encore:version", "cache": "encore-offline-v1" })), None);
+        let mut f = Flow::new("Kit-Demo");
+        assert_eq!(f.message(&json!({ "type": "other", "cache": "kit-demo-shell-abc" })), None);
+        assert_eq!(f.message(&json!({ "type": "kit-demo:version" })), None);
+        assert_eq!(f.message(&json!({ "type": "kit-demo:version", "cache": "kit-demo-offline-v1" })), None);
         assert_eq!(f.message(&Value::Null), None);
         assert_eq!(f.cache(), None);
         assert_eq!(
-            f.message(&json!({ "type": "encore:version", "cache": "encore-shell-e56412d8e3fb9a38" })).as_deref(),
-            Some("encore-shell-e56412d8e3fb9a38")
+            f.message(&json!({ "type": "kit-demo:version", "cache": "kit-demo-shell-e56412d8e3fb9a38" })).as_deref(),
+            Some("kit-demo-shell-e56412d8e3fb9a38")
         );
-        assert_eq!(f.cache(), Some("encore-shell-e56412d8e3fb9a38"));
+        assert_eq!(f.cache(), Some("kit-demo-shell-e56412d8e3fb9a38"));
         assert_eq!(Flow::version_question()["type"], "version?");
     }
 }

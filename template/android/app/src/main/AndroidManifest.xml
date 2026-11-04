@@ -23,7 +23,7 @@
             tools:targetApi="29" />
 
         <!-- configChanges: turning, folding or resizing the phone and dark mode keep the open page (Compose lays it
-             out again), as Encore's -->
+             out again) -->
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"

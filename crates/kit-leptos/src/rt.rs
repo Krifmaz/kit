@@ -1,7 +1,6 @@
 //! The browser glue the components share: the clock, timers, tasks, the document and event listeners.
 //!
-//! Encore's `web-rs/src/dom.rs` holds the same helpers for its hand-written pages. Off the browser (the markup
-//! tests run natively) the clock reads the system time and timers and listeners do nothing, so a component can
+//! Off the browser (the markup tests run natively) the clock reads the system time and timers and listeners do nothing, so a component can
 //! be rendered to a string without a window.
 
 use std::cell::RefCell;
@@ -141,8 +140,8 @@ pub fn on_window(kind: &str, f: impl FnMut(&Event) + 'static) {
     }
 }
 
-/// `window.dispatchEvent(new CustomEvent(name))`: the app-wide events Encore's pages listen for
-/// (`encore:bugs-changed`, …).
+/// `window.dispatchEvent(new CustomEvent(name))`: the app-wide events an app's pages listen for
+/// (`<app id>:bugs-changed`, …).
 pub fn dispatch(name: &str) {
     if let (Some(w), Ok(e)) = (window(), web_sys::CustomEvent::new(name)) {
         let _ = w.dispatch_event(&e);

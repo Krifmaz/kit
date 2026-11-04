@@ -1,15 +1,9 @@
 //! Version numbers compared by their numeric dot parts.
-//!
-//! From Encore's `server/crates/core/src/version.rs` (`parts`, `extract_version`, `compare`, `newer`) and
-//! `server/crates/api/src/routes/changelog.rs` (`base`). Encore's `extract_version` uses the regex
-//! `\d+(?:\.\d+)+`; here the same match is written out by hand, so the crate needs no regex engine.
 
 use std::cmp::Ordering;
 
 /// The numeric dot parts of a version (`"v2.4.10"` → `[2, 4, 10]`, `"rip, version 2.4.9"` → `[2, 4, 9]`);
 /// empty when the text holds no version.
-///
-/// From `encore_core::version::parts`.
 pub fn parts(v: &str) -> Vec<u64> {
     let Some(s) = extract_version(v) else { return vec![] };
     s.split('.').map(|p| p.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().unwrap_or(0)).collect()
@@ -17,8 +11,6 @@ pub fn parts(v: &str) -> Vec<u64> {
 
 /// The first dotted version number in a text (`"rip, version 2.4.9"` → `"2.4.9"`, `"v2.5.0"` → `"2.5.0"`);
 /// a bare number (`"v7"`) counts too.
-///
-/// From `encore_core::version::extract_version` (the regex `\d+(?:\.\d+)+`, else a plain number).
 pub fn extract_version(text: &str) -> Option<String> {
     let b = text.as_bytes();
     let mut i = 0;
@@ -57,8 +49,6 @@ pub fn extract_version(text: &str) -> Option<String> {
 }
 
 /// Compare two versions by their numeric dot parts (missing parts count as 0).
-///
-/// From `encore_core::version::compare`.
 pub fn compare(a: &str, b: &str) -> Ordering {
     let (x, y) = (parts(a), parts(b));
     for i in 0..x.len().max(y.len()) {
@@ -71,16 +61,12 @@ pub fn compare(a: &str, b: &str) -> Ordering {
 }
 
 /// `latest` is a version and a higher one than `installed`.
-///
-/// From `encore_core::version::newer`.
 pub fn newer(latest: &str, installed: &str) -> bool {
     !parts(latest).is_empty() && compare(latest, installed) == Ordering::Greater
 }
 
 /// `MAJOR.MINOR.PATCH` of a version: a hotfix `0.36.0.17` is release `0.36.0`, so it shares that release's
 /// notes and never brings What's new back on its own.
-///
-/// From `server/crates/api/src/routes/changelog.rs` `base`.
 pub fn base(v: &str) -> String {
     let p = parts(v);
     (0..3).map(|i| p.get(i).copied().unwrap_or(0).to_string()).collect::<Vec<_>>().join(".")
@@ -91,7 +77,6 @@ mod tests {
     use super::*;
     use std::cmp::Ordering::{Equal, Greater, Less};
 
-    /// Ported from `encore_core::version::tests::versions_compare_by_number`.
     #[test]
     fn versions_compare_by_number() {
         assert_eq!(compare("2026.10.09", "2026.9.30"), Greater);
@@ -117,7 +102,6 @@ mod tests {
         assert!(parts("dev").is_empty());
     }
 
-    /// From `changelog_tests.rs` `the_built_in_notes_parse` (its `base` line).
     #[test]
     fn a_hotfix_is_its_release() {
         assert_eq!(base("0.36.0.17"), "0.36.0");

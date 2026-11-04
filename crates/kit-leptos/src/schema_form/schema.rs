@@ -1,15 +1,12 @@
 //! The settings schema as the server describes it (`contracts/settings-schema.md`): pages (sections), the cards
 //! on each page (groups) and the fields on each card, with their words, type, options and visibility rule.
-//!
-//! From Encore's `web-rs/src/settings/fields.rs`, read from the JSON the same way (a missing type is `text`, a
-//! `when` rule that does not parse shows the field always, `step` is kept as the attribute reads it).
 
 use crate::json::{js_string, J};
 use serde_json::Value;
 use std::sync::Arc;
 
 /// A field's visibility rule: `key=value` (shown while the select `key` has that value) or `key!=value` (shown
-/// while it has any other). From `fields.rs` `When`.
+/// while it has any other).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct When {
     /// The select it follows.
@@ -43,7 +40,7 @@ impl When {
     }
 }
 
-/// One field of a card. From `fields.rs` `Field`.
+/// One field of a card.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Field {
     /// The setting's key (`app_name`).
@@ -93,7 +90,7 @@ impl Field {
     }
 }
 
-/// A card: a run of fields with Save (and Test when `test` is set). From `fields.rs` `Group`.
+/// A card: a run of fields with Save (and Test when `test` is set).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Group {
     /// Its id (`general`).
@@ -104,7 +101,7 @@ pub struct Group {
     pub desc: String,
     /// The heading over a run of cards ("" for none).
     pub part: String,
-    /// `POST /api/diagnostics/<test>/test`.
+    /// The card's Test calls `POST` on the configured [`test`](crate::config::Paths::test) path with this name.
     pub test: Option<String>,
     /// The Test button's words ("Test connection" when missing).
     pub test_label: Option<String>,
@@ -132,7 +129,7 @@ impl Group {
     }
 }
 
-/// A settings page. From `fields.rs` `Section`.
+/// A settings page.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Section {
     /// Its id (`general`).
@@ -145,7 +142,8 @@ pub struct Section {
     pub groups: Vec<Arc<Group>>,
 }
 
-/// The whole answer of `GET /api/settings/schema`. From `fields.rs` `Schema`.
+/// The whole answer of `GET /api/settings/schema` (the configured
+/// [`settings_schema`](crate::config::Paths::settings_schema)).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Schema {
     /// The pages.
@@ -180,7 +178,7 @@ impl Schema {
     }
 
     /// The page that shows `id`: a page's own id, one of its aliases, or the id of one of its cards, in that
-    /// order; anything else as it is. From `fields.rs` `page_of`.
+    /// order; anything else as it is.
     pub fn page_of(&self, id: &str) -> String {
         let page = self
             .sections
@@ -197,14 +195,13 @@ impl Schema {
     }
 }
 
-/// Release kinds and extras compare without case, spaces and punctuation: a saved "Spoken word" ticks the
-/// "Spokenword" box. From `fields.rs` `type_key`.
+/// The values of a `checks` field compare without case, spaces and punctuation: a saved "Read only" ticks the
+/// "readonly" box.
 pub fn type_key(s: &str) -> String {
     s.to_lowercase().chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).collect()
 }
 
 /// The cards of a page that this server has: each with the fields the values hold, cards with none left out.
-/// From `groups.rs` `visible_cards`.
 pub fn visible_cards(groups: &[Arc<Group>], values: &Value) -> Vec<(Arc<Group>, Vec<Field>)> {
     groups
         .iter()
@@ -217,19 +214,15 @@ pub fn visible_cards(groups: &[Arc<Group>], values: &Value) -> Vec<(Arc<Group>, 
 mod tests {
     use super::*;
 
-    /// Ported from `form_tests.rs` `when_rules_read_like_the_server_writes_them`.
     #[test]
     fn when_rules_read_like_the_server_writes_them() {
-        assert_eq!(
-            When::parse("torrent_client=qbittorrent"),
-            Some(When { key: "torrent_client".into(), value: "qbittorrent".into(), equal: true })
-        );
-        assert_eq!(When::parse("nzb_client!=blackhole"), Some(When { key: "nzb_client".into(), value: "blackhole".into(), equal: false }));
+        assert_eq!(When::parse("mail_mode=smtp"), Some(When { key: "mail_mode".into(), value: "smtp".into(), equal: true }));
+        assert_eq!(When::parse("storage!=local"), Some(When { key: "storage".into(), value: "local".into(), equal: false }));
         assert_eq!(When::parse("nothing"), None);
         assert_eq!(When::parse("=x"), None);
         assert_eq!(When::parse("k="), None);
-        let w = When::parse("nzb_client!=blackhole").unwrap();
-        assert!(w.shows("sabnzbd") && !w.shows("blackhole"));
-        assert_eq!(type_key("Spoken word"), "spokenword");
+        let w = When::parse("storage!=local").unwrap();
+        assert!(w.shows("s3") && !w.shows("local"));
+        assert_eq!(type_key("Read only"), "readonly");
     }
 }
