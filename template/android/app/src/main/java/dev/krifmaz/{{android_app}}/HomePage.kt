@@ -44,6 +44,7 @@ import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.update.UpdatesSection
 import dev.krifmaz.kit.compose.whatsnew.WhatsNewOnStart
+import dev.krifmaz.kit.compose.widgets.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.RowDivider
 import dev.krifmaz.kit.compose.widgets.SectionHead
@@ -74,6 +75,7 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
     // who is looking: null until the server says (or when it can't); the admin pages show unless it says no
     var me by remember { mutableStateOf<Me?>(null) }
     var details by remember { mutableStateOf(false) }
+    var askSignOut by remember { mutableStateOf(false) }
     var newReport by remember { mutableStateOf(false) }
     // offline mode: one /api/health check at start and on every Retry
     var offline by remember { mutableStateOf(false) }
@@ -136,9 +138,7 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
                 EntryRow("Server settings", "The server's settings, as the web app has them") { open(Page.ServerSettings) }
                 EntryRow("Diagnostics", "Checks of the server and the phone app's crash reports") { open(Page.Diagnostics) }
             }
-            EntryRow("Sign out", "Sign in again, as someone else or after a password change") {
-                scope.launch { withContext(Dispatchers.IO) { app.server.logout() } }
-            }
+            EntryRow("Sign out", "Sign in again, as someone else or after a password change") { askSignOut = true }
             BugReportsEntry(bugs)
             Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SmallButton("New report", iconRes = KitR.drawable.kit_ic_add) { newReport = true }
@@ -151,6 +151,16 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
         }
     }
 
+    if (askSignOut) {
+        ConfirmDialog(
+            title = "Sign out?",
+            text = "This phone forgets its sign-in. You'll need your password to sign in again.",
+            okLabel = "Sign out",
+            danger = true,
+            onDismiss = { askSignOut = false },
+            onConfirm = { scope.launch { withContext(Dispatchers.IO) { app.server.logout() } } },
+        )
+    }
     if (details) {
         DetailsDialog("Details", "java.io.IOException: unexpected end of stream on $base/api/health\n\tat okhttp3...") { details = false }
     }

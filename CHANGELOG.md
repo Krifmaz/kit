@@ -54,6 +54,7 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   desktop app uses `theme::default_look()`, kit-iced's confirm dialog and the app's `Logo` (`Logo::KIT` until
   it has one); the release workflow uses kit-desktop's `package` command, and an `apps` job hands the app
   artifacts to kit-release under the title, so a title with spaces still gets its APK and desktop files attached.
+- `template/android`: Sign out asks first in kit-compose's `ConfirmDialog`, as on the web and the desktop.
 - `template/web`: Sign out asks first in the kit's confirm dialog (the desktop app asks the same), and the kit's
   browser walk (`scripts/template-smoke.cjs`) checks that Cancel keeps the session and OK signs out.
 - `template/desktop/`: the generated app's desktop app (Iced 0.14 on kit-iced and kit-rules): connect to a server
