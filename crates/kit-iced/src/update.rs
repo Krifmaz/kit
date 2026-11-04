@@ -1,9 +1,9 @@
 //! In-app updates for a desktop app: the newest full release of the app on GitHub, compared with
 //! this build by semver; the file for this computer; checked against the release's SHA256SUMS; and
-//! the Updates block of the app's settings with the words for each step. Extracted from Encore's
-//! desktop updater (`clients/desktop/src/desktop/updater.rs`) and its Settings → This computer.
+//! the Updates block of the app's settings with the words for each step. The app's name, its GitHub
+//! repository ([`Feed`]) and its file names are the app's.
 //!
-//! Hotfix releases (`hotfix-<version>`) are the server's only and carry no apps: [`full_release`]
+//! Hotfix releases (`hotfix-<version>`) carry no desktop files: [`full_release`]
 //! passes over them, so they never offer a desktop update (contracts/update-feed.md). A file whose
 //! SHA-256 is not the one SHA256SUMS lists is never used ([`verify`]).
 //!
@@ -25,7 +25,7 @@ pub const SUMS: [&str; 2] = ["SHA256SUMS", "SHA256SUMS.txt"];
 /// Where an app's releases live on GitHub.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Feed {
-    /// The app's name in the words ("Encore").
+    /// The app's name in the words ("Demo").
     pub app: &'static str,
     /// The releases page (`https://github.com/<owner>/<repo>/releases`).
     pub page: &'static str,
@@ -130,9 +130,10 @@ pub fn describe(p: &Phase, app: &str) -> String {
     }
 }
 
-/// The toast when a new version was found (once per version).
-pub fn ready_words(app: &str, version: &str) -> String {
-    format!("{app} {version} is ready to install. Settings → This computer → Updates.")
+/// The toast when a new version was found (once per version). `place` says where the app's Updates
+/// block is ("Settings → Updates").
+pub fn ready_words(app: &str, version: &str, place: &str) -> String {
+    format!("{app} {version} is ready to install. {place}.")
 }
 
 /// The newest full release (tag v<major>.<minor>.<patch>, not a draft or prerelease) of GitHub's release list,
@@ -292,15 +293,15 @@ mod tests {
     use serde_json::json;
 
     const FEED: Feed = Feed {
-        app: "Encore",
-        page: "https://github.com/Krifmaz/Encore/releases",
-        downloads: "https://github.com/Krifmaz/Encore/releases/download/",
+        app: "Demo",
+        page: "https://github.com/example/demo/releases",
+        downloads: "https://github.com/example/demo/releases/download/",
     };
 
     fn release(tag: &str, names: &[&str]) -> Value {
         json!({
             "tag_name": tag,
-            "html_url": "https://github.com/Krifmaz/Encore/releases/tag/v0.28.0",
+            "html_url": "https://github.com/example/demo/releases/tag/v0.28.0",
             "body": "notes",
             "assets": names.iter().map(|n| json!({
                 "name": n,
@@ -311,7 +312,7 @@ mod tests {
     }
 
     fn appimage(v: &str) -> Option<String> {
-        Some(format!("Encore-{v}-linux-x86_64.AppImage"))
+        Some(format!("Demo-{v}-linux-x86_64.AppImage"))
     }
 
     #[test]
@@ -326,12 +327,12 @@ mod tests {
 
     #[test]
     fn a_newer_release_brings_this_computers_file_and_the_sums() {
-        let names = ["Encore-0.28.0-windows-x86_64.exe", "Encore-0.28.0-linux-x86_64.AppImage", "encore_0.28.0_amd64.deb", "SHA256SUMS"];
+        let names = ["Demo-0.28.0-windows-x86_64.exe", "Demo-0.28.0-linux-x86_64.AppImage", "demo_0.28.0_amd64.deb", "SHA256SUMS"];
         let r = newest(&release("v0.28.0", &names), "0.27.0", &FEED, appimage).unwrap().unwrap();
         assert_eq!(r.version, "0.28.0");
         assert_eq!(r.notes, "notes");
         assert!(r.sums.as_deref().unwrap().ends_with("/SHA256SUMS"));
-        assert_eq!(r.asset.unwrap().name, "Encore-0.28.0-linux-x86_64.AppImage");
+        assert_eq!(r.asset.unwrap().name, "Demo-0.28.0-linux-x86_64.AppImage");
         // no file for this computer at all: the release is still offered (the page opens)
         let none = newest(&release("v0.28.0", &names), "0.27.0", &FEED, |_| None).unwrap().unwrap();
         assert_eq!(none.asset, None);
@@ -347,10 +348,10 @@ mod tests {
         assert_eq!(newest(&pre, "0.27.0", &FEED, appimage), Ok(None));
         assert!(newest(&json!({ "message": "Not Found" }), "0.27.0", &FEED, appimage).unwrap_err().contains("Not Found"));
         // a newer release without this computer's file (a server-only release) is not offered
-        let old_files = release("v0.28.0", &["Encore-0.27.0-linux-x86_64.AppImage", "SHA256SUMS"]);
+        let old_files = release("v0.28.0", &["Demo-0.27.0-linux-x86_64.AppImage", "SHA256SUMS"]);
         assert_eq!(newest(&old_files, "0.27.0", &FEED, appimage), Ok(None));
         // files from anywhere else are ignored
-        let mut r = release("v0.28.0", &["SHA256SUMS", "Encore-0.28.0-linux-x86_64.AppImage"]);
+        let mut r = release("v0.28.0", &["SHA256SUMS", "Demo-0.28.0-linux-x86_64.AppImage"]);
         r["assets"][0]["browser_download_url"] = json!("https://evil.example/SHA256SUMS");
         assert_eq!(newest(&r, "0.27.0", &FEED, appimage).unwrap().unwrap().sums, None);
     }
@@ -359,23 +360,23 @@ mod tests {
     fn sums_are_read_in_both_sha256sum_styles() {
         let h1 = "a".repeat(64);
         let h2 = "B".repeat(64);
-        let text = format!("{h1}  Encore-1-linux-x86_64.AppImage\n{h2} *./encore_1_amd64.deb\nnot a line\n");
+        let text = format!("{h1}  Demo-1-linux-x86_64.AppImage\n{h2} *./demo_1_amd64.deb\nnot a line\n");
         let m = parse_sums(&text);
-        assert_eq!(m["Encore-1-linux-x86_64.AppImage"], h1);
-        assert_eq!(m["encore_1_amd64.deb"], "b".repeat(64));
+        assert_eq!(m["Demo-1-linux-x86_64.AppImage"], h1);
+        assert_eq!(m["demo_1_amd64.deb"], "b".repeat(64));
         assert_eq!(m.len(), 2);
     }
 
     #[test]
     fn a_file_that_does_not_match_its_sum_is_refused() {
         let good = "c".repeat(64);
-        let sums = format!("{good}  Encore-1.exe\n");
-        assert!(verify(Some(&sums), "Encore-1.exe", &good).is_ok());
-        assert!(verify(Some(&sums), "Encore-1.exe", &good.to_uppercase()).is_ok());
-        assert!(verify(Some(&sums), "Encore-1.exe", &"d".repeat(64)).unwrap_err().contains("does not match"));
-        assert!(verify(Some(&sums), "Encore-2.exe", &good).unwrap_err().contains("not listed"));
-        assert!(verify(Some(""), "Encore-1.exe", &good).is_err(), "an empty SHA256SUMS lists nothing");
-        assert!(verify(None, "Encore-1.exe", "anything").is_err(), "a release without sums is not installed");
+        let sums = format!("{good}  Demo-1.exe\n");
+        assert!(verify(Some(&sums), "Demo-1.exe", &good).is_ok());
+        assert!(verify(Some(&sums), "Demo-1.exe", &good.to_uppercase()).is_ok());
+        assert!(verify(Some(&sums), "Demo-1.exe", &"d".repeat(64)).unwrap_err().contains("does not match"));
+        assert!(verify(Some(&sums), "Demo-2.exe", &good).unwrap_err().contains("not listed"));
+        assert!(verify(Some(""), "Demo-1.exe", &good).is_err(), "an empty SHA256SUMS lists nothing");
+        assert!(verify(None, "Demo-1.exe", "anything").is_err(), "a release without sums is not installed");
     }
 
     #[test]
@@ -389,17 +390,17 @@ mod tests {
 
     #[test]
     fn the_words() {
-        assert_eq!(describe(&Phase::UpToDate, "Encore"), "Encore is up to date.");
+        assert_eq!(describe(&Phase::UpToDate, "Demo"), "Demo is up to date.");
         assert_eq!(
-            describe(&Phase::Downloading { version: "0.28.0".into(), got: 2_000_000, total: 40_000_000 }, "Encore"),
-            "Downloading Encore 0.28.0: 2.0 MB of 40.0 MB…"
+            describe(&Phase::Downloading { version: "0.28.0".into(), got: 2_000_000, total: 40_000_000 }, "Demo"),
+            "Downloading Demo 0.28.0: 2.0 MB of 40.0 MB…"
         );
-        assert_eq!(describe(&Phase::Installing("1.0.0".into()), "Encore"), "Installing Encore 1.0.0. Encore starts again by itself.");
-        assert_eq!(ready_words("Encore", "1.0.0"), "Encore 1.0.0 is ready to install. Settings → This computer → Updates.");
+        assert_eq!(describe(&Phase::Installing("1.0.0".into()), "Demo"), "Installing Demo 1.0.0. Demo starts again by itself.");
+        assert_eq!(ready_words("Demo", "1.0.0", "Settings → Updates"), "Demo 1.0.0 is ready to install. Settings → Updates.");
         assert_eq!(size(999.0), "999 B");
         assert_eq!(size(1_500_000.0), "1.5 MB");
         assert!(Phase::Checking.busy() && !Phase::UpToDate.busy());
-        assert_eq!(lines("Encore", "0.27.0", true, &Phase::Idle, Some("0.28.0")).len(), 3);
-        assert_eq!(lines("Encore", "0.27.0", true, &Phase::UpToDate, None).len(), 4);
+        assert_eq!(lines("Demo", "0.27.0", true, &Phase::Idle, Some("0.28.0")).len(), 3);
+        assert_eq!(lines("Demo", "0.27.0", true, &Phase::UpToDate, None).len(), 4);
     }
 }

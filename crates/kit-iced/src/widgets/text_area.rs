@@ -1,5 +1,5 @@
 //! A multi-line text box styled like `.input` (`textarea.input` on the web): the description of
-//! a bug report, a reply, a pasted list of songs. The page holds a `text_editor::Content` in
+//! a bug report, a reply, a pasted list. The page holds a `text_editor::Content` in
 //! its state and forwards the editor's `Action`s to it.
 
 use super::El;
