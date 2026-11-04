@@ -1,12 +1,12 @@
 # {{app_title}}
 
-Made from the [Krifmaz kit](https://github.com/Krifmaz/kit) template ({{kit_tag}}): Encore's look and its
+Made from the [Krifmaz kit](https://github.com/Krifmaz/kit) template ({{kit_tag}}): the kit's look and its
 ease-of-use features from the first commit.
 
 | Folder | What it is |
 | --- | --- |
 | `server/` | Axum server with the kit server crates: health, changelog (What's new), notices, bug reports, diagnostics, settings |
-| `web/` | Leptos web app with the kit components and the Encore theme, served at `/` by the server |{% if android %}
+| `web/` | Leptos web app with the kit components and the kit's default theme, served at `/` by the server |{% if android %}
 | `android/` | Compose app with kit-compose, a Baseline Profile and a benchmark module |{% endif %}
 | `docs/releases/` | one Markdown file per release: the release notes and What's new |
 

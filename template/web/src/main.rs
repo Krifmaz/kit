@@ -1,4 +1,4 @@
-//! The web app: Encore's shell (sidebar, notice slot, view) drawn with Leptos, and every kit feature in it.
+//! The web app: the kit's shell (sidebar, notice slot, view) drawn with Leptos, and every kit feature in it.
 //!
 //! | Where | What |
 //! | --- | --- |
@@ -122,14 +122,14 @@ fn console_error() {
     std::panic::set_hook(Box::new(|p| web_sys::console::error_1(&p.to_string().into())));
 }
 
-/// One link of the sidebar (Encore's `nav_link`).
+/// One link of the sidebar.
 #[component]
 fn NavLink(href: &'static str, label: &'static str, route: ReadSignal<Route>) -> impl IntoView {
     let active = move || route.get().path == href || (href != "/" && route.get().path.starts_with(href));
     view! { <a href=format!("#{href}") data-nav=href class:active=active><span>{label}</span></a> }
 }
 
-/// Encore's shell: the sidebar with the app's pages, the notice slot and the page.
+/// The kit's shell: the sidebar with the app's pages, the notice slot and the page.
 #[component]
 fn Shell(me: Value) -> impl IntoView {
     let (route, set_route) = signal(current_route());

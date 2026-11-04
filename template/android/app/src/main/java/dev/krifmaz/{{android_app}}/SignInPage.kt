@@ -39,7 +39,7 @@ import kotlinx.coroutines.withContext
 import dev.krifmaz.kit.compose.R as KitR
 
 /**
- * Signing in to the connected server, as Encore's app does (`AuthScreens.kt` `SignInScreen`): Username and
+ * Signing in to the connected server, with the kit's sign-in rules: Username and
  * Password, then the authenticator code when the account has two-step sign-in. The server's answer (for example
  * "Invalid username or password") shows in full with Copy. The app token it gives is kept ([ServerApi.login]);
  * the app comes back here whenever the server stops taking it.

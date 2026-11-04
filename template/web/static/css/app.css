@@ -1,6 +1,6 @@
-/* SOURCE: Krifmaz/Encore web-rs/static/css/app.css, commit 5c0bdcba82307c522e4516d1bc51a81c8efa4026, lines 73-913
-   (everything after the colour tokens, which come from tokens.css instead): Encore's look, which the kit's
-   components draw into. The kit's CI keeps it equal to the kit's copy (crates/kit-leptos/demo/encore-app.css). */
+/* The kit's stylesheet (everything after the colour tokens, which come from tokens.css): the look the kit's
+   components draw into, in every theme. The kit's CI keeps it equal to the kit's copy
+   (crates/kit-leptos/demo/encore-app.css). */
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }   /* the hidden attribute wins over .stack / .row display rules */
 html, body { margin: 0; height: 100%; }

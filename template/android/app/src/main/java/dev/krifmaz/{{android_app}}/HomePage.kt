@@ -119,7 +119,7 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
         ) {
             SectionHead(KitApp.name, subtitle = base.substringAfter("://"), action = "Change server", onAction = onChangeServer)
 
-            SectionHead("Try the kit", subtitle = "Toasts and details, in the Encore theme")
+            SectionHead("Try the kit", subtitle = "Toasts and details, in the kit's theme")
             Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SmallButton("Info") { Toasts.show("Saved") }
                 SmallButton("OK") { Toasts.show("Done", "ok") }
@@ -171,7 +171,7 @@ private fun EntryRow(title: String, line: String, onClick: () -> Unit) {
 /**
  * The crash reports this phone keeps until the server has them (admins read them under Diagnostics → App crashes),
  * Send crash log (a bug report of the kind Crash log) and Save as .txt (straight into Downloads, with Share on the
- * toast), as Encore's This device page has them.
+ * toast).
  */
 @Composable
 private fun CrashReports(app: App) {

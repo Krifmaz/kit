@@ -11,7 +11,7 @@ app (its `README.md` is the app's own).
 | You get | Where |
 | --- | --- |
 | Axum server with the kit server crates wired in: health, changelog, notices, bug reports, diagnostics, settings | `server/` |
-| Leptos web UI with the kit-leptos components and the Encore theme | `web/` |
+| Leptos web UI with the kit-leptos components and the kit's default theme | `web/` |
 | Optional Compose Android app with kit-compose, Baseline Profile and benchmark modules | `android/` (answer yes to "Add the Android app") |
 | Distroless, non-root, read-only-friendly Docker image with a health check | `Dockerfile` |
 | CI and releases through the kit's shared workflows | `.github/workflows/` |

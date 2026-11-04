@@ -1,4 +1,4 @@
-# {{app_title}}'s web app: Leptos (client-side, WebAssembly) with the kit's components and the Encore theme,
+# {{app_title}}'s web app: Leptos (client-side, WebAssembly) with the kit's components and the kit's default theme,
 # built by trunk into dist/ and served at / by the server. A Cargo workspace of its own, like server/.
 [workspace]
 resolver = "2"
