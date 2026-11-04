@@ -5,7 +5,7 @@ import android.net.Uri
 import dev.krifmaz.kit.compose.KitApp
 
 /**
- * "Send crash log" (This device → App crashes): the phone's crash log ([CrashLog.exportText]) as a bug report of the
+ * "Send crash log" (from the app's crash reports): the phone's crash log ([CrashLog.exportText]) as a bug report of the
  * kind `crash`, so it lands in the admin's Bug reports under Crash logs (and in its .txt export, written in whole).
  * The description is Android's exit records; the whole log is the attached .txt. Blocking: call it off the main thread.
  * Gives the new report's id.
@@ -17,8 +17,11 @@ object CrashLogReport {
     /** The server's limit for a description is 20,000 characters. */
     private const val MAX_BODY = 18_000
 
-    /** Sends the crash log through [reports] as a `crash` report, with [note] first; gives the new report's id. */
-    fun send(app: Application, reports: BugReportsApi, note: String = ""): Long {
+    /**
+     * Sends the crash log through [reports] as a `crash` report, with [note] first; gives the new report's id.
+     * [page] is the report's "page" (where it was sent from, "Settings" by default).
+     */
+    fun send(app: Application, reports: BugReportsApi, note: String = "", page: String = "Settings"): Long {
         val file = CrashLog.exportText(app)
         val bytes = file.readText().let { if (it.length > MAX_CHARS) it.take(MAX_CHARS) + "\n… (cut)" else it }.toByteArray()
         val summary = CrashLog.latestSummary(app).ifBlank { "sent from the app" }
@@ -32,7 +35,7 @@ object CrashLogReport {
             kind = "crash",
             title = BugRules.crashTitle(summary),
             body = body,
-            page = "This device",
+            page = page,
             appVersion = "${KitApp.versionName} (${KitApp.versionCode})",
             device = CrashLog.deviceLine(),
             files = listOf(Attachment(Uri.fromFile(file), file.name, "text/plain", bytes.size.toLong(), bytes)),

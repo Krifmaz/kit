@@ -2,33 +2,26 @@ package dev.krifmaz.kit.compose.theme
 
 import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
 
-/**
- * The kit's theme equals Encore's Android theme (clients/android/…/ui/theme/Theme.kt): the same palettes per theme,
- * the same accent maths (web-rs/src/appearance.rs) and the same theme ids.
- */
+/** The theme: the generated palettes per theme id, the System theme, the accents and the colour maths. */
 class KitThemeTest {
     @Test
-    fun encorePaletteIsTheLogoColours() {
+    fun theDefaultThemeIsCharcoalAndCream() {
         val p = KitPalettes.Encore
         assertEquals(Color(0xFF161617), p.bg)
-        assertEquals(Color(0xFF1C1C1E), p.bg2)
-        assertEquals(Color(0xFF222224), p.panel)
-        assertEquals(Color(0xFF2A2A2D), p.panel2)
-        assertEquals(Color(0xFF353538), p.border)
         assertEquals(Color(0xFFF0EAD6), p.text)
-        assertEquals(Color(0xFFAAA493), p.muted)
-        assertEquals(Color(0xFF77725F), p.faint)
         assertEquals(Color(0xFFF0EAD6), p.accent)
         assertEquals(Color(0xFFD6C49A), p.accent2)
         assertEquals(Color(0xFF16161F), p.onAccent)
+        assertEquals(KitTheme.Encore, KitLook().theme)
     }
 
     @Test
-    fun themesResolveLikeEncore() {
+    fun themesResolveByIdAndSystemFollowsTheDevice() {
         assertSame(KitPalettes.Encore, basePaletteOf(KitTheme.Encore, systemDark = false))
         assertSame(KitPalettes.Dark, basePaletteOf(KitTheme.Dark, systemDark = false))
         assertSame(KitPalettes.Oled, basePaletteOf(KitTheme.Oled, systemDark = true))
@@ -36,9 +29,31 @@ class KitThemeTest {
         assertSame(KitPalettes.Dark, basePaletteOf(KitTheme.System, systemDark = true))
         assertSame(KitPalettes.Light, basePaletteOf(KitTheme.System, systemDark = false))
         assertEquals(KitTheme.Encore, KitTheme.of("nonsense"))
-        assertEquals(KitTheme.Oled, KitTheme.of("oled"))
-        // the logo accent keeps the theme's own colours (charcoal on Light)
-        assertSame(KitPalettes.Light, kitPaletteOf(KitLook(theme = KitTheme.Light), systemDark = false))
+        assertEquals(KitTheme.Encore, KitTheme.of(null))
+        assertEquals(listOf("encore", "dark", "oled", "light", "system"), KitTheme.entries.map { it.id })
+    }
+
+    @Test
+    fun noAccentChosenKeepsTheThemesOwn() {
+        for (t in KitTheme.entries) {
+            assertSame(basePaletteOf(t, systemDark = true), kitPaletteOf(KitLook(theme = t), systemDark = true))
+            assertSame(basePaletteOf(t, systemDark = true), kitPaletteOf(KitLook(theme = t, accent = "theme"), systemDark = true))
+        }
+    }
+
+    @Test
+    fun aChosenAccentAndTheFadedBackground() {
+        val violet = kitPaletteOf(KitLook(theme = KitTheme.Encore, accent = "violet"), systemDark = true)
+        assertEquals(Color(0xFF8B5CF6), violet.accent)
+        assertEquals(Color(0xFFEC4899), violet.accent2)
+        assertEquals(Color.White, violet.onAccent)
+        assertEquals(KitPalettes.Encore.bg, violet.bg) // solid: the page colours stay
+        val faded = kitPaletteOf(KitLook(theme = KitTheme.Encore, accent = "violet", background = "fade"), systemDark = true)
+        assertNotEquals(KitPalettes.Encore.bg, faded.bg)
+        val custom = kitPaletteOf(KitLook(theme = KitTheme.Light, accent = "custom", custom = "#ff7a00"), systemDark = false)
+        assertEquals(Color(0xFFFF7A00), custom.accent)
+        assertEquals(Color(0xFF16161F), custom.onAccent) // dark text on a light accent
+        assertEquals(listOf("cream", "violet", "pastel", "lilac", "pink", "sky", "teal", "green", "amber", "red"), KitAppearance.ACCENTS.map { it.id })
     }
 
     @Test
@@ -47,7 +62,7 @@ class KitThemeTest {
         assertEquals("#aabbcc", AppearanceRules.cleanHex("#abc"))
         assertNull(AppearanceRules.cleanHex("#abcd"))
         assertNull(AppearanceRules.cleanHex("orange"))
-        // the same partner colour as web-rs/src/appearance.rs
+        // the partner is shifted around the colour wheel (the same maths as kit-rules and kit-iced)
         assertEquals("#ebff00", AppearanceRules.partner("#ff7a00"))
         assertEquals("#e5e5e5", AppearanceRules.partner("#e5e5e5"))
         assertEquals("#e75cf6", AppearanceRules.partner("#8b5cf6"))

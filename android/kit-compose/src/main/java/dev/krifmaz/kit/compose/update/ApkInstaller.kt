@@ -142,7 +142,7 @@ internal object ApkInstaller {
 /**
  * The outcome of the install session ([ApkInstaller.commit]). Not exported: only the session's PendingIntent, which
  * is this app's, reaches it. Android's confirm screen opens from here (the person just pressed Install, so the app
- * is in front); when it can't, Settings → This device keeps an Install button that opens it.
+ * is in front); when it can't, the Updates section keeps an Install button that opens it.
  *
  * Manifest: `<receiver android:name="dev.krifmaz.kit.compose.update.UpdateInstallReceiver" android:exported="false" />`
  */
@@ -162,7 +162,7 @@ class UpdateInstallReceiver : BroadcastReceiver() {
                 try {
                     context.startActivity(Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 } catch (_: Exception) {
-                    // Settings → This device → Install opens it
+                    // the Updates section's Install opens it
                 }
             }
 

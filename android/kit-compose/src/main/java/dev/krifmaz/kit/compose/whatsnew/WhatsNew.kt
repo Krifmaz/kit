@@ -55,7 +55,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * After signing in: asks the server whether something is new since this account last saw it and, when it is, shows
- * [WhatsNewPopup] once and marks this version seen (web-rs/src/whats_new.rs `start`). Put it once in the signed-in
+ * [WhatsNewPopup] once and marks this version seen. Put it once in the signed-in
  * root; it shows nothing when the server can't be reached.
  *
  * @param backend the app's changelog calls.

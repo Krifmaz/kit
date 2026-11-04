@@ -32,7 +32,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Crash capture (the owner on GrapheneOS: "the app randomly crashes and/or closes and then the music stops").
+ * Crash capture (an app that closes without a word, on any phone).
  *
  * - An uncaught exception on any thread writes a report (stack, app version, device, OS and the last 200 lines
  *   of [log]) to filesDir/crashes/<ts>.json before the previous handler (the system's) ends the process.
@@ -41,7 +41,7 @@ import java.util.TimeZone
  *   part it uses, by the user or by Android for another reason) are read from ApplicationExitInfo (Android 11+)
  *   into the same folder. Android stopping the app to install its own update is not a crash and files nothing
  *   ([CrashRules]).
- * - [exportText] writes the phone's own crash log as a .txt to share (This device → App crashes), without the
+ * - [exportText] writes the phone's own crash log as a .txt to share (the app's crash reports), without the
  *   server: Android's exit records, the reports kept here and the recent log.
  * - Every report is sent to POST /api/diagnostics/client-crash (Diagnostics → App crashes for admins) and deleted
  *   once the server has it; without a connection they wait for the next start ([CrashLogHost] gives the calls).
@@ -62,8 +62,8 @@ object CrashLog {
     /** on the first start with this code, system exit records this far back are still sent */
     private const val FIRST_LOOK_BACK_MS = 14L * 24 * 3600 * 1000
 
-    /** The app's own preferences file ("encore_crash" for Encore). */
-    private val PREFS: String get() = KitApp.name.lowercase() + "_crash"
+    /** The app's own preferences file ("<app id>_crash"). */
+    private val PREFS: String get() = KitApp.id + "_crash"
     private const val K_EXIT_SEEN = "exit_seen"
     private const val K_JAVA_CRASH_AT = "java_crash_at"
 
@@ -126,7 +126,7 @@ object CrashLog {
         })
     }
 
-    /** How many reports wait for the server (Settings → This device). */
+    /** How many reports wait for the server (shown in the app's settings). */
     fun pendingCount(): Int = dir?.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
 
     /** Collects the system's exit records and sends every waiting report, in the background. */
@@ -350,7 +350,7 @@ object CrashLog {
         out.mkdirs()
         out.listFiles()?.forEach { if (it.isFile) it.delete() }
         val day = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date(now))
-        return File(out, "${KitApp.name.lowercase()}-crash-log-$day.txt").also { it.writeText(text) }
+        return File(out, "${KitApp.id}-crash-log-$day.txt").also { it.writeText(text) }
     }
 
     /** The newest report's first line (kept here, sent or not), else Android's newest exit reason; "" for none. */
@@ -462,7 +462,7 @@ object CrashLog {
                 ),
             )
             try {
-                host.api.post("/api/diagnostics/client-crash", body)
+                host.api.post(KitApp.routes.clientCrash, body)
                 keepSent(d, f)
             } catch (e: ApiException) {
                 // a report the server refuses for good is dropped; an older server without the route (404/405),
