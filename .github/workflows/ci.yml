@@ -3,7 +3,9 @@ name: ci
 # The kit's own checks on every pull request and push to main, run through the kit's shared kit-ci.yml (so every
 # change also proves it): fmt, clippy, tests (the token tests prove the generated themes equal Encore's), that
 # design/out is up to date and the contracts parse; the web components (kit-leptos) and their demo are checked
-# and linted for wasm32. `workflows` lints every workflow file with actionlint (and
+# and linted for wasm32. `template` generates an app from template/ against this checkout and proves it builds,
+# runs, shows every kit feature in a browser and ships a healthy read-only Docker image (scripts/template-check.sh);
+# `template-android` builds and tests the generated app's Android part on kit-compose from source. `workflows` lints every workflow file with actionlint (and
 # shellcheck on their scripts). Required to pass before a merge.
 on:
   pull_request:
@@ -44,3 +46,76 @@ jobs:
         uses: docker://rhysd/actionlint:1.7.7
         with:
           args: -color
+
+  template:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ runner.temp }}/template/kit-demo/server
+            ${{ runner.temp }}/template/kit-demo/web
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-generate@0.26.0
+      - name: trunk
+        run: curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin trunk
+      - name: Playwright (the browser walk)
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Generate an app, build it, run it, walk every feature, ship its image
+        run: scripts/template-check.sh "$RUNNER_TEMP/template"
+      - name: Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-screenshots
+          path: ${{ runner.temp }}/template/screenshots
+          if-no-files-found: ignore
+
+  template-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-generate@0.26.0
+      - name: Generate an app with the Android part
+        run: |
+          cd "$RUNNER_TEMP"
+          cargo generate --path "$GITHUB_WORKSPACE/template" --name kit-demo --define app_title="Kit Demo" --define android=true --silent
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+      - name: Gradle version
+        id: gradle
+        run: |
+          G=$(sed -n 's/^distributionUrl=.*gradle-\([0-9][0-9.]*\)-\(bin\|all\)\.zip.*/\1/p' "$RUNNER_TEMP/kit-demo/android/gradle/wrapper/gradle-wrapper.properties")
+          [ -n "$G" ] || { echo "::error::no Gradle version in the generated app's gradle-wrapper.properties"; exit 1; }
+          echo "version=$G" >> "$GITHUB_OUTPUT"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+      - name: ktlint
+        env:
+          KTLINT_VERSION: "1.8.0"
+          KTLINT_SHA256: "a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75"
+        run: |
+          curl -sSLo ktlint "https://github.com/pinterest/ktlint/releases/download/${KTLINT_VERSION}/ktlint"
+          echo "${KTLINT_SHA256}  ktlint" | sha256sum -c -
+          chmod +x ktlint
+          cd "$RUNNER_TEMP/kit-demo/android" && "$GITHUB_WORKSPACE/ktlint" "**/*.kt" "**/*.kts" "!**/build/**"
+      - name: Build and test the app on this checkout's kit-compose
+        run: |
+          gradle -p "$RUNNER_TEMP/kit-demo/android" --no-daemon --stacktrace -PkitPath="$GITHUB_WORKSPACE" \
+            :app:testDebugUnitTest :app:assembleRelease :benchmark:assemble

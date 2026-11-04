@@ -1,0 +1,39 @@
+name: ci
+
+# Every pull request: the kit's checks (fmt, clippy -D warnings, tests of server/ and web/), the Docker image
+# built (not pushed){% if android %} and the Android app built and unit-tested{% endif %}. Required to pass before a merge.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+{% raw %}concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true{% endraw %}
+
+jobs:
+  test:
+    uses: Krifmaz/kit/.github/workflows/kit-ci.yml@{{kit_tag}}
+    with:
+      rust-dirs: server
+      wasm-dirs: web
+
+  docker:
+    needs: test
+    uses: Krifmaz/kit/.github/workflows/kit-docker.yml@{{kit_tag}}
+    with:
+      image: {{project-name}}
+      push: false
+      platforms: linux/amd64
+{% if android %}
+  android:
+    needs: test
+    uses: Krifmaz/kit/.github/workflows/kit-android.yml@{{kit_tag}}
+    with:
+      app-name: {{app_file}}
+      project-dir: android
+      baseline-profile: true
+{% endif %}

@@ -1,0 +1,90 @@
+name: release
+
+# Every push to main makes a normal GitHub release vMAJOR.MINOR.PATCH (never a pre-release) through the kit's
+# shared workflows: PATCH by default, MINOR or MAJOR when the merged pull request added docs/releases/<version>.md
+# (also the release notes and What's new). It ships the server and web app as Linux tarballs, the Docker image
+# {{image}}:<version> and :latest, and SHA256SUMS.{% if android %}
+# Actions → release → Run workflow with "apps" ticked also builds the signed APK (secrets ANDROID_KEYSTORE_BASE64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD); a release without it keeps the previous APK.{% endif %}
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Which number to bump for the next version"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      version:
+        description: "Or type the version to release (MAJOR.MINOR.PATCH); overrides bump"
+        type: string
+        default: ""
+      apps:
+        description: "Also build the apps{% if android %} (the Android APK){% endif %}"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: Krifmaz/kit/.github/workflows/kit-ci.yml@{{kit_tag}}
+    with:
+      rust-dirs: server
+      wasm-dirs: web
+
+  prepare:
+    needs: test
+    uses: Krifmaz/kit/.github/workflows/kit-release.yml@{{kit_tag}}
+    with:
+      stage: prepare
+      app-name: {{app_title}}
+{% raw %}      bump: ${{ inputs.bump || 'auto' }}
+      version: ${{ inputs.version || '' }}{% endraw %}
+      web-dir: web
+      server-dir: server
+      server-bin: {{project-name}}
+
+  docker:
+    needs: prepare
+    uses: Krifmaz/kit/.github/workflows/kit-docker.yml@{{kit_tag}}
+    with:
+      image: {{project-name}}
+{% raw %}      version: ${{ needs.prepare.outputs.version }}
+      build-args: |
+        APP_VERSION=${{ needs.prepare.outputs.version }}{% endraw %}
+{% if android %}
+  android:
+    needs: prepare
+    if: inputs.apps
+    uses: Krifmaz/kit/.github/workflows/kit-android.yml@{{kit_tag}}
+    with:
+      app-name: {{app_file}}
+{% raw %}      version: ${{ needs.prepare.outputs.version }}
+      code: ${{ needs.prepare.outputs.code }}{% endraw %}
+      project-dir: android
+      baseline-profile: true
+{% raw %}    secrets:
+      android-keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      android-keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      android-key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+      android-key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}{% endraw %}
+{% endif %}
+  publish:
+    needs: [prepare, docker{% if android %}, android{% endif %}]
+{% raw %}    if: always() && needs.prepare.result == 'success' && needs.docker.result == 'success'{% endraw %}
+    uses: Krifmaz/kit/.github/workflows/kit-release.yml@{{kit_tag}}
+    with:
+      stage: publish
+      app-name: {{app_title}}
+{% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}{% if android %}
+{% raw %}      apps-result: ${{ needs.android.result }}{% endraw %}
+      app-files: "{{app_file}}-android-*.apk"
+      carry-over: "{{app_file}}-android-*.apk"{% endif %}

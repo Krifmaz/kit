@@ -212,11 +212,15 @@ jobs:
       - name: Build APK
         env:
           PROP: ${{ inputs.version-property }}
+          # read access to GitHub Packages (dev.krifmaz.kit:kit-compose): the caller grants `packages: read`
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gradle -p "$PROJECT" --no-daemon --stacktrace ":$MODULE:assembleRelease" \
             "-P${PROP}VersionName=$APP_VERSION" "-P${PROP}VersionCode=$APP_CODE"
       - name: Unit tests
         # debug is the build type AGP always gives unit tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gradle -p "$PROJECT" --no-daemon --stacktrace ":$MODULE:testDebugUnitTest"
       - name: Collect
         env:

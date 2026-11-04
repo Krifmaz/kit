@@ -17,6 +17,18 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
 
 ### Added
+- `template/`: the new-app starter (`cargo generate krifmaz/kit template`): an Axum server with every kit server
+  crate wired in (health, What's new, notices with a data folder notice, bug reports and crash logs, diagnostics,
+  settings from a settings.toml) and Encore's sign-in (owner at first start, session cookie with the CSRF rule,
+  API key, phone app tokens); a Leptos web app with the kit-leptos components and the Encore theme (sign-in,
+  shell, settings form, Diagnostics, What's new, bug reports, self-update, offline and notice banners); an
+  optional Compose Android app on kit-compose with Baseline Profile and benchmark modules; a distroless, non-root,
+  read-only-friendly Docker image with its own health check; CI and releases through the shared workflows; and a
+  CLAUDE.md with the house rules. The kit's CI generates an app on every pull request and proves it builds, runs,
+  shows every kit feature in a browser and ships a healthy image (`scripts/template-check.sh`), and builds its
+  Android app on this checkout's kit-compose.
+- `kit-android.yml`: the Gradle steps get the run's `GITHUB_TOKEN`, so an app can read kit-compose from GitHub
+  Packages (the caller grants `packages: read`).
 - kit-iced: `Icon::Video` (Encore desktop's "Save video to this device" button).
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
