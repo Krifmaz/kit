@@ -1,0 +1,19 @@
+// AGP 9 compiles Kotlin itself ("built-in Kotlin"), so org.jetbrains.kotlin.android is not applied anywhere.
+// The classpath entry raises the Kotlin Gradle plugin AGP brings to the Kotlin pinned in gradle/libs.versions.toml
+// (the Compose compiler plugin must match it exactly). Same versions as Encore's Android app, so an app that
+// includes this build gets one AGP and one Kotlin.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21")
+    }
+}
+
+plugins {
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+}
