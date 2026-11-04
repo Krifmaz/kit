@@ -43,7 +43,7 @@ import kotlin.math.abs
 fun buildKitImageLoader(
     app: Application,
     http: OkHttpClient,
-    diskDir: File = File(app.cacheDir, "covers/images"),
+    diskDir: File = File(app.cacheDir, "images"),
     diskBytes: Long = 250L * 1024 * 1024,
     memoryPercent: Double = 0.20,
     crossfadeMs: Int = 120,

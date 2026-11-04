@@ -180,7 +180,7 @@ fun SmallButton(
     }
 }
 
-/** The web's `.btn` / `.btn.primary`: the page's main actions (Play, Shuffle, Import…). */
+/** The web's `.btn` / `.btn.primary`: the page's main actions (Save, New, Import…). */
 @Composable
 fun KitButton(label: String, modifier: Modifier = Modifier, iconRes: Int? = null, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val p = MaterialTheme.palette

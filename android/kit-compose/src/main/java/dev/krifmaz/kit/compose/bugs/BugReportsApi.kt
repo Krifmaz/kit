@@ -1,9 +1,9 @@
 package dev.krifmaz.kit.compose.bugs
 
-import dev.krifmaz.kit.compose.KitApp
-import dev.krifmaz.kit.compose.KitRoutes
 import android.content.ContentResolver
 import android.net.Uri
+import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
 import dev.krifmaz.kit.compose.core.ApiException
 import dev.krifmaz.kit.compose.core.Checked
 import dev.krifmaz.kit.compose.core.Items
@@ -180,8 +180,7 @@ class BugReportsApi(private val api: KitApi, private val client: OkHttpClient, p
     }
 
     /** GET /api/bug-reports with the list's filter. */
-    fun list(filter: BugRules.Filter, admin: Boolean): List<BugReportRow> =
-        model(getObject(base + BugRules.listQuery(filter, admin)), BugReportList.serializer()).reports
+    fun list(filter: BugRules.Filter, admin: Boolean): List<BugReportRow> = model(getObject(base + BugRules.listQuery(filter, admin)), BugReportList.serializer()).reports
 
     /** GET /api/bug-reports/unread: reports with something this account hasn't seen yet. */
     fun unread(): Int = getObject("$base/unread").int("count")
@@ -276,7 +275,7 @@ class BugReportsApi(private val api: KitApi, private val client: OkHttpClient, p
 }
 
 /**
- * The unread count behind the badge on Settings → This device → Bug reports (the web's side bar badge): reports with
+ * The unread count behind the badge on the app's Bug reports entry: reports with
  * an answer this person hasn't read, or for admins, reports and replies nobody has looked at yet.
  */
 object BugUnread {

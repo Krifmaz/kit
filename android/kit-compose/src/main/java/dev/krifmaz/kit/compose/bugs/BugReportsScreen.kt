@@ -80,10 +80,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ---- Settings → This device → Bug reports ------------------------------------------------------------------------
+// ---- Settings → Bug reports ------------------------------------------------------------------------------------
 
 /**
- * The entry on Settings → This device: "Bug reports" with the count of reports that have something new (the web's
+ * The entry in the app's settings: "Bug reports" with the count of reports that have something new (the web's
  * side bar badge), refreshed whenever Settings shows it.
  */
 @Composable

@@ -1,7 +1,5 @@
 package dev.krifmaz.kit.compose.offline
 
-import dev.krifmaz.kit.compose.KitApp
-import dev.krifmaz.kit.compose.KitRoutes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +34,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.krifmaz.kit.compose.KitApp
+import dev.krifmaz.kit.compose.KitRoutes
 import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette

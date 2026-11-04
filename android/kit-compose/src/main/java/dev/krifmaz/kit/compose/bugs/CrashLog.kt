@@ -41,7 +41,7 @@ import java.util.TimeZone
  *   part it uses, by the user or by Android for another reason) are read from ApplicationExitInfo (Android 11+)
  *   into the same folder. Android stopping the app to install its own update is not a crash and files nothing
  *   ([CrashRules]).
- * - [exportText] writes the phone's own crash log as a .txt to share (This device → App crashes), without the
+ * - [exportText] writes the phone's own crash log as a .txt to share (the app's crash reports), without the
  *   server: Android's exit records, the reports kept here and the recent log.
  * - Every report is sent to POST /api/diagnostics/client-crash (Diagnostics → App crashes for admins) and deleted
  *   once the server has it; without a connection they wait for the next start ([CrashLogHost] gives the calls).
@@ -126,7 +126,7 @@ object CrashLog {
         })
     }
 
-    /** How many reports wait for the server (Settings → This device). */
+    /** How many reports wait for the server (shown in the app's settings). */
     fun pendingCount(): Int = dir?.listFiles { f -> f.name.endsWith(".json") }?.size ?: 0
 
     /** Collects the system's exit records and sends every waiting report, in the background. */

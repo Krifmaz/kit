@@ -33,6 +33,7 @@ import dev.krifmaz.kit.compose.KitApp
 import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.details.CopyIconButton
 import dev.krifmaz.kit.compose.details.DetailsDialog
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.perf.KitPerf
 import dev.krifmaz.kit.compose.theme.KitTheme
 import dev.krifmaz.kit.compose.theme.palette
@@ -44,7 +45,6 @@ import dev.krifmaz.kit.compose.widgets.BackBar
 import dev.krifmaz.kit.compose.widgets.Badge
 import dev.krifmaz.kit.compose.widgets.CardBox
 import dev.krifmaz.kit.compose.widgets.ChoiceRow
-import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.EmptyState
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.KitButton

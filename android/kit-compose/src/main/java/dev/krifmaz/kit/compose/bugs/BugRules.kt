@@ -36,7 +36,7 @@ object BugRules {
     /** The kinds a new report can pick, as the server stores them and as people read them. */
     val PICK_KINDS: List<Pair<String, String>> = listOf("bug" to "Bug", "not_bug" to "Not a bug", "howto" to "How do I…")
 
-    /** Every kind (the list's chips): [PICK_KINDS] and the crash logs the app sends (This device → App crashes). */
+    /** Every kind (the list's chips): [PICK_KINDS] and the crash logs the app sends (the app's crash reports). */
     val KINDS: List<Pair<String, String>> = PICK_KINDS + ("crash" to "Crash log")
 
     /** The five statuses: key, label, badge colour (the web's badge classes). */

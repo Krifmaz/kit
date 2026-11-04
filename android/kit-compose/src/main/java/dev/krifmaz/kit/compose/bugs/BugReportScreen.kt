@@ -52,13 +52,13 @@ import androidx.compose.ui.window.DialogProperties
 import coil3.compose.AsyncImage
 import dev.krifmaz.kit.compose.R
 import dev.krifmaz.kit.compose.core.formatSize
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.widgets.BackBar
 import dev.krifmaz.kit.compose.widgets.Badge
 import dev.krifmaz.kit.compose.widgets.CardBox
-import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.ErrorBox
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.KitButton

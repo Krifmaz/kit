@@ -114,8 +114,7 @@ object WhatsNewRules {
     fun popupSaved(on: Boolean): String = if (on) TOAST_ON else TOAST_OFF
 
     /** Settings → What's new: the line under the heading. */
-    fun settingsIntro(app: String, version: String): String =
-        "This server runs $app $version. After an update, a short list of what changed shows once on the website and in the desktop app."
+    fun settingsIntro(app: String, version: String): String = "This server runs $app $version. After an update, a short list of what changed shows once when the app opens."
 
     /** Whether the popup shows: the server says so and there is something to show. */
     fun shouldShow(new: ChangelogNew): Boolean = new.show && new.releases.isNotEmpty()

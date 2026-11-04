@@ -68,7 +68,13 @@ fun ConfirmDialog(confirm: Confirm, onDismiss: () -> Unit, onConfirm: () -> Unit
             ) {
                 Text(
                     confirm.okLabel,
-                    color = if (!ok) p.faint else if (confirm.danger) KitStatusColors.Err else p.text,
+                    color = if (!ok) {
+                        p.faint
+                    } else if (confirm.danger) {
+                        KitStatusColors.Err
+                    } else {
+                        p.text
+                    },
                     fontWeight = FontWeight.SemiBold,
                 )
             }

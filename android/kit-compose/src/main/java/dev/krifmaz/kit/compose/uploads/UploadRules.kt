@@ -3,7 +3,7 @@ package dev.krifmaz.kit.compose.uploads
 /**
  * Which files an upload takes, checked the same way for the file picker and drag and drop, and the words for those it
  * refuses (the same rules as kit-rules' `uploads`). An upload's rule is an `accept` list like an HTML input's:
- * `.zip,application/zip`, `image/*`.
+ * `.zip,application/zip`, `image/png`, or every image type with `image/` and a star.
  */
 object UploadRules {
     /** The toast for a drop on an upload that can't be used right now. */
@@ -14,7 +14,7 @@ object UploadRules {
 
     /**
      * Whether a file with this [name] and MIME type [mime] passes [accept]: a comma-separated list of `.ext` (the
-     * name's ending, any case), `type/ *` (any subtype) and `type/subtype` (exactly). An empty [accept] takes every
+     * name's ending, any case), `type/` and a star (any subtype) and `type/subtype` (exactly). An empty [accept] takes every
      * file; a file without a type ("") only passes on its name.
      */
     fun accepts(accept: String, name: String, mime: String): Boolean {

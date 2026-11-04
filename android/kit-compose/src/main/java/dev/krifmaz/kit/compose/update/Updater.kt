@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The phone's own update (Settings → This device → Updates; the car follows the phone).
+ * The phone's own update (the app's Updates section, [UpdatesSection]).
  *
  * 1. **Check**: GitHub's newest release (`UpdateRules.LATEST`), at most once a day when the app opens and
  *    "Look for a new version when <app> starts" is on, or by hand with Check for updates. The ETag is kept, so an
@@ -179,7 +179,7 @@ object Updater {
         val prefs = prefs(context)
         if (prefs.getString(K_ANNOUNCED, "") == v) return
         prefs.edit().putString(K_ANNOUNCED, v).apply()
-        Toasts.show("${KitApp.name} $v is available – Settings → This device")
+        Toasts.show(UpdateRules.availableToast(KitApp.name, v))
     }
 
     private suspend fun check(context: Context): Release? {

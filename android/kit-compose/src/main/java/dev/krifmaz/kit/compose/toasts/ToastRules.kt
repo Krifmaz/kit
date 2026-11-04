@@ -109,16 +109,16 @@ object ToastRules {
     }
 
     /**
-     * How high the toasts sit, in dp above the navigation bar: [base] (above the mini player and the tabs), or just
+     * How high the toasts sit, in dp above the navigation bar: [base] (above a bottom bar and the tabs), or just
      * above the keyboard while it is open. [imeDp] and [navDp] are the keyboard's and the navigation bar's bottom
      * insets (the keyboard's counts from the bottom of the screen, the navigation bar included).
      */
     fun lift(base: Float, imeDp: Float, navDp: Float): Float = if (imeDp <= navDp) base else maxOf(base, imeDp - navDp + KEYBOARD_GAP)
 
     /**
-     * How far below the top of the screen the toasts sit when they are at the top (over the full player, whose seek bar
-     * and buttons fill the bottom), in dp: below the status bar ([statusDp], its top inset) and the [header] under it
-     * (the player's ⌄ / "Now playing" row), so neither is covered.
+     * How far below the top of the screen the toasts sit when they are at the top (over a full-screen view whose
+     * controls fill the bottom), in dp: below the status bar ([statusDp], its top inset) and the [header] under it
+     * (the view's own top row), so neither is covered.
      */
     fun drop(header: Float, statusDp: Float): Float = maxOf(0f, statusDp) + maxOf(0f, header)
 

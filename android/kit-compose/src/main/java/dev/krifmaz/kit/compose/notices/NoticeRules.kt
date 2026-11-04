@@ -49,11 +49,7 @@ data class Notice(val ok: Boolean = true, val text: String = "", val checking: B
  * The three sentences Check again's toast says for one notice: still failing (warn), still checking (warn) and
  * fixed (ok). The app gives them per notice id ([NoticeRules.checkToast]); the defaults say it generally.
  */
-data class CheckWords(
-    val failing: String = "Still not fixed",
-    val checking: String = "Still checking",
-    val fixed: String = "Fixed – all good again",
-)
+data class CheckWords(val failing: String = "Still not fixed", val checking: String = "Still checking", val fixed: String = "Fixed – all good again")
 
 /** The rules and words of notice banners, without Android (the unit tests run them on the JVM). */
 object NoticeRules {

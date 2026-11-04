@@ -41,12 +41,19 @@ data class UpdateSource(val owner: String, val repo: String, val apkPrefix: Stri
  * - Versions are MAJOR.MINOR.PATCH, compared by number. A build without a release number (`0.0.1-dev`, `dev.12`)
  *   counts every release as newer, as the server's update card does.
  * - Only files under the project's release downloads are used.
- * - The words are the web's (Settings → This computer, Diagnostics → Updates) and the desktop app's updater.
+ * - The words are the same on every client (kit-rules' `update`, kit-iced's updater).
  */
 object UpdateRules {
     /** Where the releases are; [UpdateSource.NONE] until the app sets it. */
     @Volatile
     var source: UpdateSource = UpdateSource.NONE
+
+    /** Where the app shows its Updates section, for the "is available" toast ("Settings", "Settings → About"). */
+    @Volatile
+    var updatesPlace: String = "Settings"
+
+    /** The toast for a newer version, once per version: "Notes 1.4.3 is available – Settings". */
+    fun availableToast(app: String, version: String, place: String = updatesPlace): String = "$app $version is available – $place"
 
     /** GitHub's release list of the [source] (newest first). */
     val LATEST: String get() = "https://api.github.com/repos/${source.owner}/${source.repo}/releases?per_page=30"

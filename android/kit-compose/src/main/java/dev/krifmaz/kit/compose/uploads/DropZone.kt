@@ -80,7 +80,7 @@ private fun Context.activity(): Activity? = when (this) {
  * its button opens the system picker. Both go through the same [accept] rule ([UploadRules]); refused files get a
  * toast saying why, and [onFiles] gets the rest. While files are dragged over it the zone lights up.
  *
- * @param accept the upload's rule (`image/ *`, `.zip,application/zip`; "" for any file).
+ * @param accept the upload's rule (`image/png`, `.zip,application/zip`; "" for any file).
  * @param multiple whether it takes several files (else the first acceptable one).
  * @param onFiles the accepted files.
  * @param modifier the zone's modifier.

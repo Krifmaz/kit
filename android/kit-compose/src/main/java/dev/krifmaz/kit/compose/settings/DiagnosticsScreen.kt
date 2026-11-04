@@ -40,11 +40,11 @@ import dev.krifmaz.kit.compose.core.str
 import dev.krifmaz.kit.compose.details.CopyIconButton
 import dev.krifmaz.kit.compose.details.DetailsDialog
 import dev.krifmaz.kit.compose.details.copyToClipboard
+import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.theme.KitStatusColors
 import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.widgets.Badge
-import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.widgets.ErrorBox
 import dev.krifmaz.kit.compose.widgets.KitButton
 import dev.krifmaz.kit.compose.widgets.RowDivider

@@ -85,8 +85,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Toasts like the web's `toast(msg, type)`: panels with a coloured left border at the bottom of
- * the screen (at the top over the full player, see [ToastHost]). Shared seam: any part calls [show] from any thread; [ToastHost] draws them, in a small window of their
- * own above every sheet, dialog and the full player (see there).
+ * the screen (or at the top over a full-screen view, see [ToastHost]). Shared seam: any part calls [show] from any thread; [ToastHost] draws them, in a small window of their
+ * own above every sheet and dialog (see there).
  *
  * `kind` is the web's type: "info" (the default, accent border), "ok" (green), "err" (red), "warn" (amber). A toast
  * goes after about four seconds; an error stays until its Close and has **Copy** (the whole message, for a bug
@@ -289,7 +289,7 @@ private class ToastWindow(private val activity: Activity, private val host: View
 
     /**
      * Where the toasts sit: at the [top] or the bottom of the screen, [px] from that edge. The space between the edge
-     * and the toasts (the status bar and a header, or the mini player and the tabs) is outside the window, so touches
+     * and the toasts (the status bar and a header, or a bottom bar and the tabs) is outside the window, so touches
      * there reach the app. The stack's order and slide follow the edge ([ToastStack]), so a change of edge draws the
      * window's content again.
      */
