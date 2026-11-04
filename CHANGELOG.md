@@ -4,6 +4,12 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.1.1 — 2026-11-04
+
+### Added
+- `docs/GOALS.md`: the goals for the kit and the apps built on it, linked from the README; the template's
+  `CLAUDE.md` starts every new app with the shared app block.
+
 ## v0.1.0 — 2026-11-04
 
 The first release: the neutral shared base for every app, configured per app. Notes:

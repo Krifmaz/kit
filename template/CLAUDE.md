@@ -23,3 +23,8 @@ and the kit's default theme. Read the kit's `CHANGELOG.md` before bumping the ki
 - **Releases.** Every merge to main is a normal release `vMAJOR.MINOR.PATCH` (never a pre-release). PATCH by
   default; add `docs/releases/<version>.md` in the PR for MINOR or MAJOR (it is also the release notes and
   What's new).
+
+## Shared app block
+
+Build on Krifmaz/kit (pin the latest kit tag; read its docs/DESIGN.md and CLAUDE.md first). Use the kit for the look (Encore theme), What's new and changelog, self-updating web app, notice banners, smart toasts with Copy, confirm dialogs, bug reports and crash logs, diagnostics, settings from a schema, offline mode and the shared release workflows. Don't rebuild what the kit has; if something is missing or generic, add it to the kit instead of the app.
+Work hands-off: make your own calls (log non-obvious ones in docs/DECISIONS.md), one PR per change, fix CI until green, squash-merge yourself, delete the branch. Every merge ships a normal vX.Y.Z release (no pre-releases). Never skip tests or force-push main. Only stop to ask about deleting user data, a needed secret or paid service. One short summary per finished goal.
