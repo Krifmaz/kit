@@ -57,6 +57,16 @@ likes to send later (`Outbox<i64>` is the web's document, `Outbox<String>` Andro
 `FileLimits` (6 files, 8 MB each). From `web-rs/src/dropzone.rs`, the desktop's `widgets/drop_zone.rs` and
 `web-rs/src/pages/bugreports.rs`.
 
+**`dialogs`** — the words every dialog shares (`CANCEL`, `CLOSE`). From `web-rs/src/ui.rs` `confirm_dialog`.
+
+**`bugs`** — bug reports: the kinds and statuses with their words and badge classes, the New report sheet's
+words, its limits (200 / 20 000 characters), the line about what is sent along, the `device` field and what
+Send says is missing. From `web-rs/src/pages/bugreports.rs` and `contracts/bug-reports.md`.
+
+**`diagnostics`** — the Diagnostics page's words, its groups of checks, a check's level and HTTP badge, the
+summary and sources lines and the copied report (`report_text`), with Encore's number formatting. From
+`web-rs/src/pages/diagnostics.rs`.
+
 ## Checks
 
 ```sh

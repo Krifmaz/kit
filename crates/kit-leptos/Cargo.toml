@@ -1,0 +1,45 @@
+[package]
+name = "kit-leptos"
+description = "Encore's web components (toasts, dialogs, What's new, self-update, notices, drop zones, settings form, bug reports, diagnostics, offline banner) as Leptos components on kit-rules."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Leptos 0.8 needs Rust 1.88
+rust-version = "1.88"
+
+[features]
+default = ["csr"]
+# client-side rendering in the browser (WebAssembly), the way every kit app runs
+csr = ["leptos/csr"]
+# server-side rendering to strings: what the markup tests use to compare with Encore's HTML
+ssr = ["leptos/ssr"]
+
+[dependencies]
+kit-rules = { path = "../kit-rules" }
+leptos = { workspace = true }
+serde.workspace = true
+serde_json.workspace = true
+futures = "0.3"
+send_wrapper = "0.6"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+gloo-timers = { version = "0.4", features = ["futures"] }
+gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+web-sys = { version = "0.3", features = [
+  "Window", "Document", "Element", "HtmlElement", "HtmlInputElement", "HtmlTextAreaElement", "HtmlSelectElement",
+  "HtmlCollection", "Node", "NodeList", "DomTokenList", "CssStyleDeclaration", "DomRect",
+  "Event", "EventTarget", "EventInit", "KeyboardEvent", "MouseEvent", "MessageEvent", "CustomEvent", "CustomEventInit",
+  "Navigator", "Clipboard", "Screen", "Selection", "Storage", "Location", "History",
+  "File", "FileList", "Blob", "DataTransfer", "DataTransferItem", "DataTransferItemList", "FormData", "Url",
+  "AbortController", "AbortSignal", "RequestCache", "RequestCredentials", "Headers",
+  "ServiceWorker", "ServiceWorkerContainer", "ServiceWorkerRegistration", "ServiceWorkerState",
+  "MutationObserver", "MutationObserverInit", "console",
+] }
+
+[dev-dependencies]
+leptos = { workspace = true, features = ["ssr"] }
+
+[lints]
+workspace = true

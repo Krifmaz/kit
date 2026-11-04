@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["design/gen", "crates/*"]
+members = ["design/gen", "crates/*", "crates/kit-leptos/demo"]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,6 +27,8 @@ toml = { version = "0.8.23", default-features = false, features = ["parse", "pre
 futures-util = "0.3.34"
 sha2 = "0.10"
 kit-server-core = { path = "crates/kit-server-core" }
+# pinned exactly: Leptos is before 1.0, so it is upgraded deliberately (DESIGN.md §10)
+leptos = { version = "=0.8.23", default-features = false }
 
 [workspace.lints.rust]
 missing_docs = "warn"
