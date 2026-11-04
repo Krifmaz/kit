@@ -87,7 +87,7 @@ jobs:
     if: inputs.apps
     uses: Krifmaz/kit/.github/workflows/kit-desktop.yml@{{kit_tag}}
     with:
-      # the artifacts are <app-name>-desktop-<OS>, named like the files (no spaces)
+      # kit-desktop uploads kit-app-desktop-<OS>, which kit-release collects (any app name works)
       app-name: {{app_file}}
 {% raw %}      version: ${{ needs.prepare.outputs.version }}{% endraw %}
       project-dir: desktop
@@ -107,28 +107,8 @@ jobs:
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
       apple-app-password: ${{ secrets.APPLE_APP_PASSWORD }}{% endraw %}
 
-{% if app_title != app_file %}  # kit-release attaches the artifacts named after its app-name ("{{app_title}}-…"); the apps' artifacts are named
-  # after the files ("{{app_file}}-…", no spaces), so this hands them over under the title
-  apps:
-    needs: [desktop{% if android %}, android{% endif %}]
-{% raw %}    if: always() && contains(needs.*.result, 'success'){% endraw %}
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: {{app_file}}-*
-          path: apps
-          merge-multiple: true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: {{app_title}}-apps
-          path: apps/*
-          if-no-files-found: error
-
-{% endif %}  publish:
-    needs: [prepare, docker, desktop{% if android %}, android{% endif %}{% if app_title != app_file %}, apps{% endif %}]
+  publish:
+    needs: [prepare, docker, desktop{% if android %}, android{% endif %}]
 {% raw %}    if: always() && needs.prepare.result == 'success' && needs.docker.result == 'success'{% endraw %}
     uses: Krifmaz/kit/.github/workflows/kit-release.yml@{{kit_tag}}
     with:
