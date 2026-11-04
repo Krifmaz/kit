@@ -61,6 +61,39 @@ thread_local! {
     static LAST: ArcRwSignal<Notice> = ArcRwSignal::new(Notice::default());
     static ADMIN: ArcRwSignal<bool> = ArcRwSignal::new(false);
     static SOURCE: RefCell<Option<NoticeSource>> = const { RefCell::new(None) };
+    /// The slot [`mount`] draws into, and the banner on it now (its sentence and view).
+    static SLOT: RefCell<Option<Slot>> = const { RefCell::new(None) };
+}
+
+/// The banner's slot and what is drawn on it: the sentence shown and its view, none while no banner shows.
+type Slot = (web_sys::Element, Option<(String, crate::rt::Mounted)>);
+
+/// Draws the banner in [`mount`]'s slot again, as Encore's `paint` does after every answer: a new sentence is a
+/// new banner (its button ready again), none takes it away and leaves the slot empty (no placeholder).
+fn repaint() {
+    let text = LAST.with(|l| l.get_untracked().banner().map(str::to_string)).filter(|_| ADMIN.with(|a| a.get_untracked()));
+    let gone = SLOT.with(|s| {
+        let mut s = s.borrow_mut();
+        let (el, now) = s.as_mut()?;
+        if now.as_ref().map(|(t, _)| t) == text.as_ref() {
+            return None;
+        }
+        let old = now.take();
+        if let Some(t) = text {
+            let busy = ArcRwSignal::new(false);
+            let shown = t.clone();
+            let m = crate::rt::mount(el, move || {
+                let b = busy.clone();
+                view! { <NoticeBanner text=shown busy=Signal::derive(move || b.get()) on_check=Callback::new(move |_| check_again(busy.clone()))/> }
+            });
+            if let Some(m) = m {
+                *now = Some((t, m));
+            }
+        }
+        old
+    });
+    // the old banner leaves the page outside the borrow
+    drop(gone);
 }
 
 /// The last notice the server sent.
@@ -74,17 +107,20 @@ pub fn keep(answer: &Value) {
     let n = SOURCE.with(|s| s.borrow().as_ref().map(|s| s.notice_of(answer)));
     if let Some(n) = n {
         LAST.with(|l| l.set(n));
+        repaint();
     }
 }
 
 /// Sets the notice itself.
 pub fn set(n: Notice) {
     LAST.with(|l| l.set(n));
+    repaint();
 }
 
 /// Whether the banner is for this user (admins only).
 pub fn set_admin(admin: bool) {
     ADMIN.with(|a| a.set(admin));
+    repaint();
 }
 
 async fn load() {
@@ -183,11 +219,13 @@ pub fn ServerNotice() -> impl IntoView {
     }
 }
 
-/// Draws [`ServerNotice`] into the page's existing `#server-notice` (Encore's shell has one).
+/// Draws the banner into the page's existing `#server-notice` (Encore's shell has one), and again there after
+/// every answer. The slot holds only the banner: nothing at all while there is none, as in Encore.
 pub fn mount() {
-    if let Some(el) = crate::rt::by_id("server-notice") {
-        crate::rt::keep("server-notice", crate::rt::mount(&el, ServerNotice));
-    }
+    let Some(el) = crate::rt::by_id("server-notice") else { return };
+    let old = SLOT.with(|s| s.borrow_mut().replace((el, None)));
+    drop(old);
+    repaint();
 }
 
 #[cfg(test)]

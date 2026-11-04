@@ -166,11 +166,11 @@ pub fn sheet_body(s: Sheet, page: &str, version: &str) -> impl IntoView {
             .collect::<Vec<_>>()
     };
     view! {
-        <div class="stack" style="gap:12px" data-dropzone="br-files">
+        <div {..()} class="stack" style="gap:12px" data-dropzone="br-files">
             <div class="seg" id="br-kind">{seg}</div>
             <label class="field"><span>{TITLE}</span><input class="input" id="br-title" maxlength=TITLE_MAX placeholder=TITLE_PLACEHOLDER node_ref=s.title/></label>
             <label class="field"><span>{DESCRIPTION}</span><textarea class="input" id="br-body" rows="6" maxlength=TEXT_MAX placeholder=DESCRIPTION_PLACEHOLDER node_ref=s.body></textarea></label>
-            <div class="row wrap" style="gap:10px">
+            <div {..()} class="row wrap" style="gap:10px">
                 <button {..()} type="button" class="btn sm" id="br-add" on:click=move |e| { e.prevent_default(); if let Some(i) = s.input.get_untracked() { i.click(); } }
                     {..html(format!("{}{ADD_IMAGES}", icon("plus")))}>{""}</button>
                 <input type="file" id="br-files" multiple accept=ACCEPT hidden node_ref=s.input

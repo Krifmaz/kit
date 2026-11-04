@@ -35,7 +35,7 @@ web-sys = { version = "0.3", features = [
   "File", "FileList", "Blob", "DataTransfer", "DataTransferItem", "DataTransferItemList", "FormData", "Url",
   "AbortController", "AbortSignal", "RequestCache", "RequestCredentials", "Headers",
   "ServiceWorker", "ServiceWorkerContainer", "ServiceWorkerRegistration", "ServiceWorkerState",
-  "MutationObserver", "MutationObserverInit", "console",
+  "MutationObserver", "MutationObserverInit", "HtmlTemplateElement", "DocumentFragment", "console",
 ] }
 
 [dev-dependencies]

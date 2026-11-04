@@ -132,6 +132,7 @@ impl Modal {
     /// Takes the modal away (once); the [`Modal::on_close`] callbacks run.
     pub fn close(&self) {
         let Some(m) = self.0.mounted.borrow_mut().take() else { return };
+        OPEN.with(|o| o.borrow_mut().retain(|x| !Rc::ptr_eq(&x.0, &self.0)));
         drop(m);
         self.0.listeners.borrow_mut().clear();
         let fs: Vec<_> = self.0.on_close.borrow_mut().drain(..).collect();
@@ -169,9 +170,25 @@ impl Modal {
         self.0.bg.as_ref().map(|b| rt::qsa_in(b, sel)).unwrap_or_default()
     }
 
-    /// Whether it is still on screen.
+    /// Whether it is still on screen: not closed, and its `.modal-bg` still in the page (Encore's
+    /// `el.is_connected()`, so a dialog that other code took off the page counts as gone).
     pub fn is_open(&self) -> bool {
-        self.0.mounted.borrow().is_some()
+        self.0.mounted.borrow().is_some() && self.0.bg.as_ref().is_some_and(|b| b.is_connected())
+    }
+}
+
+thread_local! {
+    /// The modals on screen. A modal stays open until it is closed, whether or not its caller keeps the
+    /// handle (Encore's pages often drop it, as the DOM kept Encore's).
+    static OPEN: RefCell<Vec<Modal>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Closes every modal on screen (a new page: Encore's router empties `#modal-root`); each one's
+/// [`Modal::on_close`] callbacks run, so a confirm dialog that was open answers false.
+pub fn close_all() {
+    let all: Vec<Modal> = OPEN.with(|o| o.borrow_mut().drain(..).collect());
+    for m in all {
+        m.close();
     }
 }
 
@@ -214,6 +231,7 @@ pub fn open(o: ModalOpts) -> Modal {
         ls.push(rt::listen(&b, "click", move |_| c()));
     }
     *m.0.listeners.borrow_mut() = ls;
+    OPEN.with(|o| o.borrow_mut().push(m.clone()));
     m
 }
 

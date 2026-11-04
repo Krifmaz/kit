@@ -19,7 +19,7 @@ pub mod schema;
 use crate::api::{self, ApiError};
 use crate::clipboard::copy_text;
 use crate::details::CopyButton;
-use crate::html::html;
+use crate::html::{html, opt, seq};
 use crate::icons::{chevron, icon, EYE, EYE_OFF};
 use crate::json::{js_string, truthy, J};
 use crate::toasts::toast;
@@ -85,42 +85,41 @@ pub fn EnvNote(
 
 /// The note under a field: set by an environment variable, a saved secret (with clear), a secret that is not
 /// set, a plugin's value, or the environment variable that would set it. From `schema_form.rs` `source_note`.
-fn source_note(f: &Field, v: &Value, meta: &Value) -> Option<AnyView> {
+fn source_note(f: &Field, v: &Value, meta: &Value) -> AnyView {
     let m = meta.o(&f.key);
     let secret = f.is_secret();
     if env_locked(meta, &f.key) {
-        return Some(view! { <EnvNote env=m.s("env")/> }.into_any());
+        return view! { <EnvNote env=m.s("env")/> }.into_any();
     }
     if secret && truthy(v) {
-        return Some(view! { <small class="src">"Saved ✓ (hidden) · "<a href="#" data-clear=f.key.clone()>"clear"</a></small> }.into_any());
+        return view! { <small class="src">"Saved ✓ (hidden) · "<a href="#" data-clear=f.key.clone()>"clear"</a></small> }.into_any();
     }
     if secret {
         let env = m.truthy("env").then(|| view! { " – or set "<span class="mono">{m.s("env")}</span>" in your compose file" });
-        return Some(view! { <small class="src">"Not set"{env}</small> }.into_any());
+        return view! { <small class="src">"Not set"{opt(env)}</small> }.into_any();
     }
     if m.s("source") == "plugin" {
-        return Some(
-            view! { <small class="src plugin">"🔗 Filled in by the "<b>{m.s("plugin")}</b>" plugin – it changes this itself"</small> }
-                .into_any(),
-        );
+        return view! { <small class="src plugin">"🔗 Filled in by the "<b>{m.s("plugin")}</b>" plugin – it changes this itself"</small> }
+            .into_any();
     }
     if m.s("source") == "ui" {
-        return None;
+        return "".into_any();
     }
-    m.truthy("env")
-        .then(|| view! { <small class="src faint">"Default · env var "<span class="mono">{m.s("env")}</span></small> }.into_any())
+    opt(m.truthy("env").then(|| view! { <small class="src faint">"Default · env var "<span class="mono">{m.s("env")}</span></small> }))
 }
 
 /// The values of the `when` selects of a run of fields, as they change.
 pub type Selects = ArcRwSignal<HashMap<String, String>>;
 
 /// One field: `v` its value from `GET /api/admin/settings`, `meta` that answer's `_meta`, `reveal` whether the
-/// server lets admins see saved secrets. From `schema_form.rs` `field_html` and `show_when`.
+/// server lets admins see saved secrets. From `schema_form.rs` `field_html` and `show_when`: the same elements,
+/// attributes in the same order (a `when` rule's `data-when`, `data-when-in` or `data-when-not` and `hidden` before
+/// `class`) and the same text nodes, so the page is Encore's node for node.
 pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Selects) -> AnyView {
     let key = f.key.clone();
     let locked = meta.o(&f.key).s("source") == "env";
     let readonly = !locked && meta.o(&f.key).s("source") == "plugin";
-    let help = (f.help.clone().map(|h| view! { <small>{h}</small> }), source_note(f, v, meta));
+    let help = (opt(f.help.clone().map(|h| view! { <small>{h}</small> })), source_note(f, v, meta));
     let cls = if f.full || f.kind == "textarea" { "field full" } else { "field " };
     let label = f.label.clone();
     // the `when` rule: shown while its select has the value (bind_show_when)
@@ -134,24 +133,20 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
     let hidden = move || rule.as_ref().is_some_and(|w| !w.shows(watched.get().get(&w.key).map(String::as_str).unwrap_or("")));
     match f.kind.as_str() {
         "bool" => view! {
-            <div class=cls style="justify-content:center" data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden>
-                <label class="switch"><input type="checkbox" data-k=key checked=truthy(v) disabled=locked readonly=readonly/><i></i>{label}</label>{help}
+            <div {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls style="justify-content:center">
+                <label class="switch"><input type="checkbox" data-k=key checked=truthy(v) disabled=locked readonly=readonly/><i>{""}</i>{label}</label>{help}
             </div>
         }
         .into_any(),
         "checks" => {
             let vs = if v.is_null() { String::new() } else { js_string(v) };
             let on: Vec<String> = vs.split(',').map(type_key).collect();
-            let boxes: Vec<_> = f
-                .options
-                .iter()
-                .map(|(val, lab)| {
-                    view! { <label class="row" style="gap:6px;align-items:center"><input type="checkbox" value=val.clone() checked=on.contains(&type_key(val)) disabled=locked readonly=readonly/>" "{lab.clone()}</label> }
-                })
-                .collect();
+            let boxes = seq(f.options.iter().map(|(val, lab)| {
+                view! { <label {..()} class="row" style="gap:6px;align-items:center"><input type="checkbox" value=val.clone() checked=on.contains(&type_key(val)) disabled=locked readonly=readonly/>" "{lab.clone()}</label> }
+            }));
             view! {
-                <div class=cls data-k=key data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden>
-                    <span>{label}</span><div class="row wrap" style="gap:6px 14px">{boxes}</div>{help}
+                <div {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls data-k=key>
+                    <span>{label}</span><div {..()} class="row wrap" style="gap:6px 14px">{boxes}</div>{help}
                 </div>
             }
             .into_any()
@@ -159,16 +154,16 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
         "select" => {
             // option values are text; a numeric setting (streamrip_quality = 2) compares as text
             let vs = js_string(v);
-            let opts: Vec<_> = f.options.iter().map(|(val, lab)| view! { <option value=val.clone() selected=*val == vs>{lab.clone()}</option> }).collect();
+            let opts = seq(f.options.iter().map(|(val, lab)| view! { <option value=val.clone() selected=*val == vs>{lab.clone()}</option> }));
             let k2 = key.clone();
             let sel = selects.clone();
             let select = view! {
                 <select class="input" data-k=key.clone() id=format!("f-{key}") disabled=locked
-                    on:change=move |e| { let v = event_target_value(&e); sel.update(|m| { m.insert(k2.clone(), v); }); }>{opts}</select>
+                    on:change=move |e| { let v = event_target_value(&e); sel.update(|m| { m.insert(k2.clone(), v); }); }>{"\n      "}{opts}</select>
             }
             .attr("readonly", readonly.then_some(""));
             view! {
-                <label class=cls data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden>
+                <label {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls>
                     <span>{label}</span>{select}{help}
                 </label>
             }
@@ -180,7 +175,7 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
             if f.kind == "textarea" {
                 let btns = reveal.then(|| {
                     view! {
-                        <span class="row" style="gap:8px">
+                        <span {..()} class="row" style="gap:8px">
                             <button {..()} type="button" class="btn sm" data-reveal=key.clone() {..html(format!("{EYE}{SHOW_SAVED}"))}>{""}</button>
                             <button {..()} type="button" class="btn sm" data-copy=key.clone() {..html(format!("{}{COPY}", icon("copy")))}>{""}</button>
                         </span>
@@ -188,8 +183,8 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
                 });
                 let ph = if truthy(v) { "Saved – paste to replace" } else { "" };
                 return view! {
-                    <label class=cls data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden>
-                        <span>{label}</span><textarea class="input mono" data-k=key.clone() disabled=locked readonly=readonly placeholder=ph></textarea>{btns}{help}
+                    <label {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls>
+                        <span>{label}</span><textarea class="input mono" data-k=key.clone() disabled=locked readonly=readonly placeholder=ph>{""}</textarea>{opt(btns)}{help}
                     </label>
                 }
                 .into_any();
@@ -217,13 +212,13 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
                 } else {
                     input.into_any()
                 };
-                return view! { <label class=cls data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden><span>{label}</span>{wrapped}{help}</label> }
+                return view! { <label {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls><span>{label}</span>{wrapped}{help}</label> }
                     .into_any();
             }
             // text, path, url and number (and any type this client does not know yet)
             let kind = if f.kind == "number" { "number" } else { "text" };
             view! {
-                <label class=cls data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden>
+                <label {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls>
                     <span>{label}</span><input class="input" type=kind data-k=key step=f.step.clone() value=js_string(v) autocomplete="off" disabled=locked readonly=readonly/>{help}
                 </label>
             }
@@ -232,8 +227,21 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
     }
 }
 
+/// Draws a run of fields as a block of the app's own (Encore's VPN for Soulseek around the `vpn_` fields).
+pub type Block = Arc<dyn Fn(AnyView) -> AnyView + Send + Sync>;
+
+/// A block of fields: those whose key starts with `prefix` are drawn by `draw`, in place of the first of them,
+/// and the fields after them in a grid of their own (`form-grid mt`). From `schema_form.rs` `grid_html`.
+#[derive(Clone)]
+pub struct FieldBlock {
+    /// The key prefix of the block's fields (`vpn_`).
+    pub prefix: String,
+    /// Draws the block around its fields' grid cells.
+    pub draw: Block,
+}
+
 /// The fields of a card with their values: a grid, and the advanced ones folded under "Show advanced". From
-/// `schema_form.rs` `form_html` / `fields_html`.
+/// `schema_form.rs` `form_html` / `fields_html` / `grid_html`.
 #[component]
 pub fn SchemaFields(
     /// The fields to draw (those the values hold, [`visible_cards`]).
@@ -243,6 +251,9 @@ pub fn SchemaFields(
     /// The server lets admins see saved secrets.
     #[prop(optional)]
     reveal: bool,
+    /// A run of fields the app draws as a block of its own.
+    #[prop(optional)]
+    block: Option<FieldBlock>,
 ) -> impl IntoView {
     let meta = values.o("_meta");
     let mut start = HashMap::new();
@@ -254,12 +265,22 @@ pub fn SchemaFields(
     let selects: Selects = ArcRwSignal::new(start);
     let (adv, plain): (Vec<&Field>, Vec<&Field>) = fields.iter().partition(|f| f.advanced);
     let one = |f: &Field| field_view(f, values.g(&f.key), &meta, reveal, selects.clone());
-    let grid: Vec<_> = plain.iter().map(|f| one(f)).collect();
+    let in_block = |f: &Field| block.as_ref().is_some_and(|b| f.key.starts_with(&b.prefix));
+    let grid = match (plain.iter().position(|f| in_block(f)), &block) {
+        (Some(at), Some(b)) => {
+            let rest: Vec<&Field> = plain.iter().copied().filter(|f| !in_block(f)).collect();
+            let at = at.min(rest.len());
+            let inner = seq(plain.iter().filter(|f| in_block(f)).map(|f| one(f)));
+            let after = (rest.len() > at).then(|| view! { <div class="form-grid mt">{seq(rest[at..].iter().map(|f| one(f)))}</div> });
+            view! { <div class="form-grid">{seq(rest[..at].iter().map(|f| one(f)))}</div>{(b.draw)(inner)}{opt(after)} }.into_any()
+        }
+        _ => view! { <div class="form-grid">{seq(plain.iter().map(|f| one(f)))}</div> }.into_any(),
+    };
     let folded = (!adv.is_empty()).then(|| {
-        let inner: Vec<_> = adv.iter().map(|f| one(f)).collect();
+        let inner = seq(adv.iter().map(|f| one(f)));
         view! { <details class="adv-fields mt"><summary class="small muted">{SHOW_ADVANCED}</summary><div class="form-grid mt">{inner}</div></details> }
     });
-    view! { <div class="form-grid">{grid}</div>{folded} }
+    view! { {grid}{opt(folded)} }
 }
 
 /// A test result line: passed (✓) or failed (× and Copy). From `settings/mod.rs` `test_result`.
@@ -283,7 +304,7 @@ pub fn TestResult(
     view! {
         <div class=if ok { "test-result ok" } else { "test-result err" }>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" {..html(crate::icons::paths(if ok { "check" } else { "x" }))}>{""}</svg>
-            <span>{msg}</span>{copy}
+            <span>{msg}</span>{opt(copy)}
         </div>
     }
 }
@@ -310,7 +331,7 @@ pub struct CardHooks {
 }
 
 /// A card: a fold with the title, description and Test button in its summary, then the result line, the fields
-/// and Save. From `groups.rs` `card_html`.
+/// and Save. From `groups.rs` `card_html`, with its line breaks between the tags.
 #[component]
 pub fn SettingsCard(
     /// The card.
@@ -325,7 +346,7 @@ pub fn SettingsCard(
     /// Starts unfolded.
     #[prop(optional)]
     open: bool,
-    /// What the result line shows.
+    /// What the result line shows (left alone, the line is the app's to write into).
     #[prop(optional, into)]
     out: Option<ArcRwSignal<Out>>,
     /// Save was pressed (the card's `<details>`).
@@ -334,46 +355,57 @@ pub fn SettingsCard(
     /// Test was pressed (the card's `<details>`).
     #[prop(optional, into)]
     on_test: Option<Callback<Element>>,
+    /// Drawn before the fields (Encore's YouTube sign-in block).
+    #[prop(default = None)]
+    before: Option<AnyView>,
     /// The card's extra blocks after its fields.
     #[prop(default = None)]
     extra: Option<AnyView>,
+    /// A run of fields drawn as a block of the app's own.
+    #[prop(optional)]
+    block: Option<FieldBlock>,
 ) -> impl IntoView {
     let node = NodeRef::<leptos::html::Details>::new();
     let el = move || node.get_untracked().map(|d| d.unchecked_into::<Element>());
-    let out = out.unwrap_or_else(|| ArcRwSignal::new(Out::Empty));
-    let out_view = {
-        let out = out.clone();
+    let out_view = out.map(|out| {
         move || match out.get() {
-            Out::Empty => None,
-            Out::Testing => Some(view! { <div class="test-result"><span class="spinner"></span><span>{TESTING}</span></div> }.into_any()),
-            Out::Results(rs) => Some(rs.into_iter().map(|r| view! { <TestResult result=r/> }).collect::<Vec<_>>().into_any()),
+            Out::Empty => "".into_any(),
+            Out::Testing => view! { <div class="test-result"><span class="spinner">{""}</span><span>{TESTING}</span></div> }.into_any(),
+            Out::Results(rs) => seq(rs.into_iter().map(|r| view! { <TestResult result=r/> })),
         }
-    };
+    });
     let desc = (!group.desc.is_empty())
-        .then(|| view! { <div class="small muted" style="margin-top:4px;font-weight:400">{group.desc.clone()}</div> });
+        .then(|| view! { <div {..()} class="small muted" style="margin-top:4px;font-weight:400">{group.desc.clone()}</div> });
     let test = group.test.as_ref().map(|_| {
         let label = group.test_label.clone().unwrap_or_else(|| TEST_CONNECTION.to_string());
         view! {
             <button class="btn sm" data-test on:click=move |e| {
-                e.prevent_default();
-                if let (Some(el), Some(f)) = (el(), on_test) { f.run(el); }
+                if let (Some(el), Some(f)) = (el(), on_test) { e.prevent_default(); f.run(el); }
             } {..html(format!("{}{}", icon("refresh"), crate::html::esc(&label)))}>{""}</button>
         }
     });
     view! {
         <details class="card settings-card" data-sec=group.id.clone() open=open node_ref=node>
-            <summary class="row between" style="gap:10px;flex-wrap:nowrap;align-items:flex-start">
-                <div style="min-width:0"><h2>{group.title.clone()}</h2>{desc}</div>
-                <span class="row" style="gap:8px">{test}<span class="chev" {..html(chevron())}>{""}</span></span>
+            {"\n      "}
+            <summary {..()} class="row between" style="gap:10px;flex-wrap:nowrap;align-items:flex-start">
+                <div {..()} style="min-width:0"><h2>{group.title.clone()}</h2>{opt(desc)}</div>
+                {"\n        "}
+                <span {..()} class="row" style="gap:8px">{opt(test)}<span class="chev" {..html(chevron())}>{""}</span></span>
             </summary>
-            <div style="height:14px"></div>
-            <div data-out>{out_view}</div>
-            <SchemaFields fields=fields values=values reveal=reveal/>
-            {extra}
-            <div class="row mt" style="justify-content:flex-end">
+            {"\n      "}
+            <div {..()} style="height:14px">{""}</div>
+            {"\n      "}
+            <div data-out>{opt(out_view)}</div>
+            {"\n      "}
+            {opt(before)}
+            <SchemaFields fields=fields values=values reveal=reveal block=block.unwrap_or_else(|| FieldBlock { prefix: "\u{0}".into(), draw: Arc::new(|v| v) })/>
+            {opt(extra)}
+            {"\n      "}
+            <div {..()} class="row mt" style="justify-content:flex-end">
                 <button class="btn primary" data-save on:click=move |_| { if let (Some(el), Some(f)) = (el(), on_save) { f.run(el); } }
                     {..html(format!("{}{SAVE}", icon("check")))}>{""}</button>
             </div>
+            {"\n    "}
         </details>
     }
 }
@@ -546,7 +578,7 @@ pub fn SettingsCards(
             if part.as_deref() != Some(g.part.as_str()) {
                 part = Some(g.part.clone());
                 if !g.part.is_empty() {
-                    out.push(view! { <div class="nav-label" style="padding:18px 4px 8px">{g.part.clone()}</div> }.into_any());
+                    out.push(view! { <div {..()} class="nav-label" style="padding:18px 4px 8px">{g.part.clone()}</div> }.into_any());
                 }
             }
             let open = (i == 0 && focus.is_none()) || n == 1 || focus.as_deref() == Some(g.id.as_str());
@@ -593,7 +625,7 @@ pub fn SettingsCards(
             let (values, drawn) = (values.clone(), drawn.clone());
             request_animation_frame(move || bind_page(values, drawn));
         }
-        out
+        seq(out)
     }
 }
 

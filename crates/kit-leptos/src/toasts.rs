@@ -315,8 +315,11 @@ pub fn ToastView(
     entry: Entry,
 ) -> impl IntoView {
     let id = entry.id;
-    let fading = entry.fading.clone();
-    let style = move || fading.get().then_some("opacity:0;transition:opacity .3s");
+    // the fade sets `opacity`, then `transition`, on the element's style, as Encore's `set_style` calls do
+    // (`style="opacity: 0; transition: opacity 0.3s;"`); before it the toast has no `style` at all
+    let (f1, f2) = (entry.fading.clone(), entry.fading.clone());
+    let opacity = move || f1.get().then_some("0");
+    let transition = move || f2.get().then_some("opacity .3s");
     if entry.stays {
         let msg = entry.text.clone();
         let copy = msg.clone();
@@ -337,7 +340,7 @@ pub fn ToastView(
     }
     if let Some(label) = entry.action.clone() {
         return view! {
-            <div {..()} class="toast act" style=style>
+            <div {..()} class="toast act" style:opacity=opacity style:transition=transition>
                 <div class="toast-text">{entry.text.clone()}</div>
                 <div class="toast-acts">
                     <button {..()} type="button" class="btn sm ghost" data-toast-action on:click=move |_| press(id)>{label}</button>
@@ -346,7 +349,7 @@ pub fn ToastView(
         }
         .into_any();
     }
-    view! { <div class=format!("toast {}", entry.kind.as_str()) style=style>{entry.text.clone()}</div> }.into_any()
+    view! { <div {..()} class=format!("toast {}", entry.kind.as_str()) style:opacity=opacity style:transition=transition>{entry.text.clone()}</div> }.into_any()
 }
 
 /// The update toast. From `update.rs` `show_toast`.
