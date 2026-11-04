@@ -21,6 +21,12 @@ Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
 ### Fixed
 - kit-server-bugreports: the same crash sent twice at once is kept once instead of failing with a 500.
 
+## v0.1.3 — 2026-11-04
+
+### Changed
+- `docs/GOALS.md` keeps only the shared app block and the kit's own goal, with no app names; each app's goals
+  live in its own repo.
+
 ## v0.1.2 — 2026-11-04
 
 ### Changed
