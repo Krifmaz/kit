@@ -42,15 +42,15 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 | --- | --- | --- |
 | `toasts` | `toast(msg, "ok"/"err"/"warn"/"")`, `show(msg, ToastKind)`, `toast_action(msg, "Undo", ms, f)`, `show_update(text, label, on_reload)`, `close`, `clear`; `<Toasts/>` or `mount()` into `#toasts` | `ui.rs`, `update.rs` |
 | `clipboard` | `copy_text(t)`, `copy_then(t, toast)`, with the plain-http fallback | `ui.rs` |
-| `modal` | `open(ModalOpts::new(title_html, body_html).footer(html).wide(true)) -> Modal` (`el`, `bg`, `qs`, `qsa`, `close`, `on_close`, at once); `ModalOpts::with_view` for Leptos bodies; `confirm_dialog(title, text, ok, danger).await`, `confirm_dialog_html` | `ui.rs` |
+| `modal` | `open(ModalOpts::new(title_html, body_html).footer(html).wide(true)) -> Modal` (`el`, `bg`, `qs`, `qsa`, `close`, `on_close`, at once); `close_all()` when a router clears `#modal-root`; `ModalOpts::with_view` for Leptos bodies; `confirm_dialog(title, text, ok, danger).await`, `confirm_dialog_html` | `ui.rs` |
 | `details` | `show(title, text)`, `attrs(title, text)` for `data-details`, `<CopyButton/>`, `init()` | `details.rs` |
 | `whats_new` | `start(navigate)`, `popup(releases, navigate)`, `<ChangelogPage app/>`, `<ChangelogView app answer/>` | `whats_new.rs` |
 | `update` | `start(UpdateConfig)`, `check_now()`, `register_worker(url)`, `apply_update()` | `update.rs`, `sw.rs` |
 | `notice` | `start(NoticeSource, admin)`, `mount()`, `keep(answer)`, `<ServerNotice/>`, `<NoticeBanner text busy on_check/>` | `notice.rs` |
 | `dropzone` | `init()`, `<DropZone input="id">…</DropZone>` | `dropzone.rs` |
-| `schema_form` | `Schema::from_json`, `visible_cards`, `<SettingsCards cards values reveal focus hooks/>`, `<SettingsCard …/>`, `form_values` | `settings/schema_form.rs`, `fields.rs`, `groups.rs` |
+| `schema_form` | `Schema::from_json`, `visible_cards`, `<SettingsCards cards values reveal focus hooks/>`, `<SettingsCard …/>` (with an app's `before`/`extra` HTML and a `FieldBlock` for a sub-block of fields), `form_values` | `settings/schema_form.rs`, `fields.rs`, `groups.rs` |
 | `bug_report` | `open(SheetOpts::new(app, page, version)) -> Modal` | `pages/bugreports.rs` |
-| `diagnostics` | `<DiagnosticsPage app hooks/>`, `<DiagnosticsView app data/>`, `DiagHooks` for an app's own blocks | `settings/diagnostics.rs` |
+| `diagnostics` | `<DiagnosticsPage app hooks/>`, `<DiagnosticsView app data/>`, `DiagHooks` for an app's own blocks, check details, Copy report and what it does with the answer | `settings/diagnostics.rs` |
 | `offline` | `show_banner(grace_ended, on_retry)`, `set_trying`, `conn_banner(on, text)`, `watch_connection(app)` | `offline/mode.rs`, `app.rs` |
 | `api` | `get`/`post`/`post_empty`/`put`/`del`/`post_form`, `Backend`, `HttpBackend` | `api.rs` |
 
@@ -60,17 +60,22 @@ Hand-written code keeps its calls: Encore's `ui::toast`, `ui::toast_action`, `ui
 
 ## Matching Encore's DOM
 
-Leptos 0.8 differs from hand-written HTML in three ways, and the components handle each:
+Leptos 0.8 differs from hand-written HTML in these ways, and the components handle each, so Encore's pages
+are the same `outerHTML` byte for byte (the shots compare of Encore's switch to the kit proves it):
 
-- `view!` puts `class` and `style` before the other attributes. An element whose first attribute is not
-  `class` starts with an empty spread, `<button {..()} type="button" class="…">`, which keeps the written order.
+- `view!` puts `style` and then `class` before the other attributes. An element with an attribute before
+  `class`, or with both `class` and `style`, starts with an empty spread, `<button {..()} type="button"
+  class="…">`, which keeps the written order.
 - An element without children gets an empty `<!---->` placeholder, also after `inner_html`. HTML goes in as
   `{..html(s)}` with an empty text child `{""}` (`html::html`), which adds nothing to `outerHTML`.
+- White space alone between tags is dropped. Encore's templates keep their line breaks and indents as text
+  nodes, so the components write them as text: `{"\n      "}`.
+- An `Option` that is `None` and a `Vec` of views leave a placeholder comment. `html::opt` draws `None` as an
+  empty text node and `html::seq` draws a list with nothing after it; `html::raw` puts an app's own HTML
+  fragment in place, node for node, with no wrapper or marker.
 - A `<For>` leaves an end marker in its parent. `#toasts` and `#modal-root`, which other code also writes into,
-  get one separately mounted view per toast or dialog instead.
-
-Inside parts the kit draws alone (a settings card, the Diagnostics page) conditional parts may still leave
-placeholder comments; they change neither the elements nor the text.
+  get one separately mounted view per toast or dialog instead; the notice banner is mounted and dropped on its
+  own in `#server-notice`.
 
 ## Tests
 

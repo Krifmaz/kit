@@ -8,7 +8,7 @@
 //! [`changelog::group`](kit_rules::changelog::group); the words are kit-rules' constants.
 
 use crate::api;
-use crate::html::html;
+use crate::html::{html, opt, seq};
 use crate::icons::chevron;
 use crate::modal::{self, Modal, ModalOpts};
 use crate::toasts::toast;
@@ -59,27 +59,28 @@ pub fn start(navigate: Rc<dyn Fn(&str)>) {
 
 /// One release in the popup: its title, summary and highlights. From `whats_new.rs` `release_html`.
 pub fn release_view(r: &Release) -> impl IntoView {
-    let summary = (!r.summary.is_empty()).then(|| view! { <p class="muted" style="margin:0">{r.summary.clone()}</p> });
+    let summary = (!r.summary.is_empty()).then(|| view! { <p {..()} class="muted" style="margin:0">{r.summary.clone()}</p> });
     let highlights = (!r.highlights.is_empty()).then(|| {
-        let items: Vec<_> = r.highlights.iter().map(|h| view! { <li>{h.clone()}</li> }).collect();
+        let items = seq(r.highlights.iter().map(|h| view! { <li>{h.clone()}</li> }));
         view! { <ul style="margin:0;padding-left:20px">{items}</ul> }
     });
-    view! { <div class="stack" style="gap:6px"><h3 style="margin:0">{r.title.clone()}</h3>{summary}{highlights}</div> }
+    view! { <div {..()} class="stack" style="gap:6px"><h3 style="margin:0">{r.title.clone()}</h3>{opt(summary)}{opt(highlights)}</div> }
 }
 
 /// The popup's body. From `whats_new.rs` `popup`.
 pub fn popup_body(releases: &[Release]) -> impl IntoView {
-    let list: Vec<_> = releases.iter().map(release_view).collect();
-    view! { <div class="stack" style="gap:18px">{list}</div> }
+    let list = seq(releases.iter().map(release_view));
+    view! { <div {..()} class="stack" style="gap:18px">{list}</div> }
 }
 
 /// The popup's footer: the switch, Full changelog and Close. `on_full` runs for Full changelog. From
-/// `whats_new.rs` `popup`.
+/// `whats_new.rs` `popup` (with the line break Encore's template has after the switch).
 pub fn popup_footer(on_full: impl Fn() + 'static) -> impl IntoView {
     view! {
-        <label class="switch" style="margin-right:auto">
-            <input type="checkbox" id="wn-on" checked on:change=move |e| save_popup(event_target_checked(&e))/><i></i><span>{SHOW_THIS_AFTER_UPDATES}</span>
+        <label {..()} class="switch" style="margin-right:auto">
+            <input type="checkbox" id="wn-on" checked on:change=move |e| save_popup(event_target_checked(&e))/><i>{""}</i><span>{SHOW_THIS_AFTER_UPDATES}</span>
         </label>
+        {"\n      "}
         <button class="btn" type="button" id="wn-full" on:click=move |_| on_full()>{FULL_CHANGELOG}</button>
         <button class="btn primary" type="button" data-close>{CLOSE}</button>
     }
@@ -115,45 +116,33 @@ const CELL: &str = "text-align:left;padding:4px 10px 4px 0;vertical-align:top";
 
 /// A release's notes: bullets and table rows grouped into their lists and tables. From `whats_new.rs`
 /// `notes_html` and `block_html`.
-pub fn notes_view(blocks: &[Block]) -> impl IntoView {
-    group(blocks)
-        .into_iter()
-        .map(|g| match g {
-            Group::Heading(t) => view! { <h3 style="margin:10px 0 0">{t}</h3> }.into_any(),
-            Group::Paragraph(t) => view! { <p style="margin:0">{t}</p> }.into_any(),
-            Group::List(items) => {
-                let lis: Vec<_> = items
-                    .into_iter()
-                    .map(|i| {
-                        let lead = (!i.lead.is_empty()).then(|| view! { <strong>{i.lead}</strong>" " });
-                        view! { <li>{lead}{i.text}</li> }
-                    })
-                    .collect();
-                view! { <ul style="margin:0;padding-left:20px" class="stack">{lis}</ul> }.into_any()
-            }
-            Group::Table(rows) => {
-                let trs: Vec<_> = rows
-                    .into_iter()
-                    .map(|r| {
-                        let head = r.head;
-                        let cells: Vec<_> = r
-                            .cells
-                            .into_iter()
-                            .map(|c| {
-                                if head {
-                                    view! { <th style=CELL>{c}</th> }.into_any()
-                                } else {
-                                    view! { <td style=CELL>{c}</td> }.into_any()
-                                }
-                            })
-                            .collect();
-                        view! { <tr>{cells}</tr> }
-                    })
-                    .collect();
-                view! { <table class="small" style="border-collapse:collapse">{trs}</table> }.into_any()
-            }
-        })
-        .collect::<Vec<_>>()
+pub fn notes_view(blocks: &[Block]) -> AnyView {
+    seq(group(blocks).into_iter().map(|g| match g {
+        Group::Heading(t) => view! { <h3 style="margin:10px 0 0">{t}</h3> }.into_any(),
+        Group::Paragraph(t) => view! { <p style="margin:0">{t}</p> }.into_any(),
+        Group::List(items) => {
+            let lis = seq(items.into_iter().map(|i| {
+                let lead = (!i.lead.is_empty()).then(|| view! { <strong>{i.lead}</strong>" " });
+                view! { <li>{opt(lead)}{i.text}</li> }
+            }));
+            view! { <ul {..()} style="margin:0;padding-left:20px" class="stack">{lis}</ul> }.into_any()
+        }
+        Group::Table(rows) => {
+            let trs = seq(rows.into_iter().map(|r| {
+                let head = r.head;
+                let cells = seq(r.cells.into_iter().map(move |c| {
+                    if head {
+                        view! { <th style=CELL>{c}</th> }.into_any()
+                    } else {
+                        view! { <td style=CELL>{c}</td> }.into_any()
+                    }
+                }));
+                view! { <tr>{cells}</tr> }
+            }));
+            // the `<tbody>` the browser's parser adds around rows written straight into a `<table>`
+            view! { <table {..()} class="small" style="border-collapse:collapse"><tbody>{trs}</tbody></table> }.into_any()
+        }
+    }))
 }
 
 /// Settings → What's new drawn from an answer of `GET /api/changelog`, for `app` ("Encore"). From
@@ -169,29 +158,33 @@ pub fn ChangelogView(
     let list = if answer.releases.is_empty() {
         view! { <div class="card muted">{NO_RELEASE_NOTES}</div> }.into_any()
     } else {
-        answer
-            .releases
-            .iter()
-            .enumerate()
-            .map(|(i, x)| {
-                view! {
-                    <details class="card settings-card" open=i == 0>
-                        <summary class="row" style="justify-content:space-between"><h2 style="margin:0">{x.title.clone()}</h2><span class="row" style="gap:8px"><span class="badge">{x.version.clone()}</span><span class="chev" {..html(chevron())}>{""}</span></span></summary>
-                        <div class="stack" style="gap:10px;margin-top:12px">{notes_view(&x.blocks)}</div>
-                    </details>
-                }
-            })
-            .collect::<Vec<_>>()
-            .into_any()
+        seq(answer.releases.iter().enumerate().map(|(i, x)| {
+            view! {
+                <details class="card settings-card" open=i == 0>
+                    {"\n          "}
+                    <summary {..()} class="row" style="justify-content:space-between"><h2 style="margin:0">{x.title.clone()}</h2><span {..()} class="row" style="gap:8px"><span class="badge">{x.version.clone()}</span><span class="chev" {..html(chevron())}>{""}</span></span></summary>
+                    {"\n          "}
+                    <div {..()} class="stack" style="gap:10px;margin-top:12px">{notes_view(&x.blocks)}</div>
+                </details>
+            }
+        }))
     };
+    // the line breaks and indents of Encore's template are text nodes of the page, so they are drawn too
     view! {
         <div class="stack">
+            {"\n          "}
             <div class="card stack">
+                {"\n            "}
                 <h2>{WHATS_NEW}</h2>
-                <p class="small muted" style="margin:0">{settings_intro(&app, &answer.version)}</p>
-                <label class="switch"><input type="checkbox" id="wn-on" checked=answer.popup on:change=move |e| save_popup(event_target_checked(&e))/><i></i><span>{SHOW_WHATS_NEW_AFTER_UPDATES}</span></label>
+                {"\n            "}
+                <p {..()} class="small muted" style="margin:0">{settings_intro(&app, &answer.version)}</p>
+                {"\n            "}
+                <label class="switch"><input type="checkbox" id="wn-on" checked=answer.popup on:change=move |e| save_popup(event_target_checked(&e))/><i>{""}</i><span>{SHOW_WHATS_NEW_AFTER_UPDATES}</span></label>
+                {"\n          "}
             </div>
+            {"\n          "}
             {list}
+            {"\n        "}
         </div>
     }
 }
@@ -210,7 +203,7 @@ pub fn ChangelogPage(
         answer.set(Some(r));
     });
     move || match answer.get() {
-        None => view! { <div class="skeleton" style="height:200px"></div> }.into_any(),
+        None => view! { <div {..()} class="skeleton" style="height:200px"></div> }.into_any(),
         Some(Ok(a)) => view! { <ChangelogView app=app.clone() answer=a/> }.into_any(),
         Some(Err(e)) => view! { <div class="error-box">{e}</div> }.into_any(),
     }

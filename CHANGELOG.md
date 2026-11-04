@@ -4,6 +4,15 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Changed
+- `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
+  DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
+  without Leptos' placeholders; the components keep Encore's attribute order and the white space between its
+  tags; toasts fade with Encore's inline styles; `modal::close_all` drops the dialogs a router wipes; the notice
+  banner leaves no placeholder in `#server-notice`; the settings card takes an app's HTML before and after its
+  fields and a `FieldBlock` (Encore's VPN block); `DiagHooks` gains `check_detail`, `copy`, `loaded` and
+  `quiet_errors` for Encore's own Diagnostics parts.
+
 ### Added
 - `design/tokens.json`: Encore's look defined once (four themes, status colours, accents, presets, radii,
   type, spacing, motion), with `design/gen` (`kit-tokens`) generating CSS variables, a Compose theme, an Iced
