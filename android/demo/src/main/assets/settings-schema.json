@@ -1,0 +1,64 @@
+{
+  "sections": [
+    {
+      "id": "general",
+      "title": "General",
+      "aliases": ["basics"],
+      "groups": [
+        {
+          "id": "site",
+          "title": "Site",
+          "part": "App",
+          "desc": "What people see when they open the app.",
+          "test": "",
+          "test_label": "",
+          "fields": [
+            {"key": "site_name", "label": "Site name", "help": "Shown in the title bar and in emails.", "type": "text", "options": [], "when": "", "secret": false, "env": "SITE_NAME", "env_locked": false, "default": "My site", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "api_url", "label": "Public address", "help": "The address people type to reach the app.", "type": "url", "options": [], "when": "", "secret": false, "env": "APP_BASE_URL", "env_locked": true, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "data_dir", "label": "Data folder", "help": "Where uploads are kept.", "type": "path", "options": [], "when": "", "secret": false, "env": "DATA_DIR", "env_locked": false, "default": "/data", "unit": "", "min": null, "max": null, "step": null, "full": true, "advanced": false},
+            {"key": "welcome", "label": "Welcome text", "help": "Shown on the start page.", "type": "textarea", "options": [], "when": "", "secret": false, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": true, "advanced": false},
+            {"key": "page_size", "label": "Rows per page", "help": "", "type": "number", "options": [], "when": "", "secret": false, "env": "", "env_locked": false, "default": 50, "unit": "rows", "min": 10, "max": 200, "step": null, "full": false, "advanced": false},
+            {"key": "send_rate", "label": "Send rate (advanced)", "help": "Messages a second, at most.", "type": "number", "options": [], "when": "", "secret": false, "env": "", "env_locked": false, "default": 1.5, "unit": "per second", "min": 0.1, "max": 10, "step": 0.1, "full": false, "advanced": true},
+            {"key": "sign_ups", "label": "Allow sign-ups", "help": "Anyone with the address can make an account.", "type": "bool", "options": [], "when": "", "secret": false, "env": "", "env_locked": false, "default": false, "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false}
+          ]
+        },
+        {
+          "id": "mail",
+          "title": "Email",
+          "part": "Notifications",
+          "desc": "How the app sends email.",
+          "test": "mail",
+          "test_label": "Send test email",
+          "fields": [
+            {"key": "mail_mode", "label": "Send email", "help": "", "type": "select", "options": [{"value": "off", "label": "Don't send"}, {"value": "smtp", "label": "Through a mail server"}, {"value": "command", "label": "With a command"}], "when": "", "secret": false, "env": "", "env_locked": false, "default": "off", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "smtp_host", "label": "Mail server", "help": "", "type": "text", "options": [], "when": "mail_mode=smtp", "secret": false, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "smtp_port", "label": "Port", "help": "", "type": "number", "options": [], "when": "mail_mode=smtp", "secret": false, "env": "", "env_locked": false, "default": 587, "unit": "", "min": 1, "max": 65535, "step": null, "full": false, "advanced": false},
+            {"key": "smtp_password", "label": "Password", "help": "Kept on the server; never sent back.", "type": "password", "options": [], "when": "mail_mode=smtp", "secret": true, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "mail_command", "label": "Command (advanced)", "help": "Gets the message on its input.", "type": "text", "options": [], "when": "mail_mode=command", "secret": false, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": true, "advanced": true},
+            {"key": "notify_on", "label": "Email me about", "help": "", "type": "checks", "options": [{"value": "signup", "label": "New accounts"}, {"value": "report", "label": "Bug reports"}, {"value": "crash", "label": "App crashes"}], "when": "mail_mode!=off", "secret": false, "env": "", "env_locked": false, "default": "report", "unit": "", "min": null, "max": null, "step": null, "full": true, "advanced": false}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "title": "Network",
+      "aliases": [],
+      "groups": [
+        {
+          "id": "tunnel",
+          "title": "Tunnel",
+          "part": "",
+          "desc": "Reach the app from outside your home network.",
+          "test": "tunnel",
+          "test_label": "Test the tunnel",
+          "fields": [
+            {"key": "tunnel_mode", "label": "Tunnel", "help": "", "type": "select", "options": [{"value": "off", "label": "Off"}, {"value": "on", "label": "On"}], "when": "", "secret": false, "env": "", "env_locked": false, "default": "off", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "tunnel_endpoint", "label": "Endpoint", "help": "host:port of the other end.", "type": "text", "options": [], "when": "tunnel_mode=on", "secret": false, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": false, "advanced": false},
+            {"key": "tunnel_key", "label": "Private key", "help": "", "type": "password", "options": [], "when": "tunnel_mode=on", "secret": true, "env": "", "env_locked": false, "default": "", "unit": "", "min": null, "max": null, "step": null, "full": true, "advanced": false}
+          ]
+        }
+      ]
+    }
+  ]
+}

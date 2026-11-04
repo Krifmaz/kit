@@ -47,7 +47,7 @@ class SchemaRulesTest {
              "when":null,"secret":false,"env":null,"env_locked":false,"default":"sendmail","unit":null,"min":null,"max":null,
              "step":null,"full":true,"advanced":true,"some_later_attribute":{"x":1}}
           ]}]},
-          {"id":"blocked","title":"Blocked","aliases":[],"groups":[]}]}
+          {"id":"about","title":"About","aliases":[],"groups":[]}]}
     """.trimIndent()
 
     private val schema: SettingsSchema = KitJson.decodeFromString(SettingsSchema.serializer(), mail)
@@ -72,9 +72,9 @@ class SchemaRulesTest {
 
     @Test
     fun theAnswerDecodesWithEveryAttribute() {
-        assertEquals(listOf("connections", "blocked"), schema.sections.map { it.id })
+        assertEquals(listOf("connections", "about"), schema.sections.map { it.id })
         assertEquals(listOf("storage", "sharing"), schema.section("connections")!!.aliases)
-        assertTrue(schema.section("blocked")!!.groups.isEmpty())
+        assertTrue(schema.section("about")!!.groups.isEmpty())
         assertEquals("Notifications", card.part)
         assertEquals("mail", card.test)
         assertEquals("Test connection", SchemaRules.testLabel(card))

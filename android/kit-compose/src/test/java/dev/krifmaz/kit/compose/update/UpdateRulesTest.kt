@@ -60,7 +60,7 @@ class UpdateRulesTest {
         assertEquals(Check.None, UpdateRules.newest(release("v0.30.0", "notes-android-0.30.0.apk"), "0.30.0"))
         assertEquals(Check.None, UpdateRules.newest(release("v0.29.9", "notes-android-0.29.9.apk"), "0.30.0"))
         // a server-only release has nothing for the phone
-        assertEquals(Check.None, UpdateRules.newest(release("v0.30.1", "encore-0.30.1-linux-x86_64.tar.gz", "SHA256SUMS"), "0.30.0"))
+        assertEquals(Check.None, UpdateRules.newest(release("v0.30.1", "notes-0.30.1-linux-x86_64.tar.gz", "SHA256SUMS"), "0.30.0"))
         assertEquals(Check.None, UpdateRules.newest(release("v0.31.0", "notes-android-0.31.0.apk", extra = ""","prerelease":true"""), "0.30.0"))
         assertEquals(Check.None, UpdateRules.newest(release("v0.31.0", "notes-android-0.31.0.apk", extra = ""","draft":true"""), "0.30.0"))
         // the legacy Tauri APK and other names are not the app's file

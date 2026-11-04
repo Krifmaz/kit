@@ -76,7 +76,7 @@ data class SchemaField(
     @Serializable(with = Items::class) val options: List<SchemaOption> = emptyList(),
     /** visibility rule, `key=value` or `key!=value` ("" for always shown) */
     @SerialName("when") val rule: LString = "",
-    /** the server never sends the value back (passwords, the WireGuard config, pasted cookies) */
+    /** the server never sends the value back (passwords, keys, tokens) */
     val secret: LBool = false,
     /** the environment variable that sets it ("" for none) */
     val env: LString = "",
@@ -124,7 +124,7 @@ data class SchemaGroup(
     override fun checked(): SchemaGroup? = if (id.isEmpty()) null else this
 }
 
-/** A page under Settings → Server. A page with no cards (Auto-download, Contribute, Blocked) is drawn by its own code. */
+/** A page under Settings → Server. A page with no cards is drawn by the app's own code. */
 @Serializable
 data class SchemaSection(
     /** The page's id. */

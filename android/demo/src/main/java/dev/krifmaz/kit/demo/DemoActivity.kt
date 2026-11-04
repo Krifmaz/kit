@@ -4,177 +4,158 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
-import dev.krifmaz.kit.compose.KitApp
-import dev.krifmaz.kit.compose.R
-import dev.krifmaz.kit.compose.details.CopyIconButton
-import dev.krifmaz.kit.compose.details.DetailsDialog
-import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
+import coil3.ImageLoader
+import dev.krifmaz.kit.compose.bugs.BugReportScreen
+import dev.krifmaz.kit.compose.bugs.BugReportsApi
+import dev.krifmaz.kit.compose.bugs.BugReportsHost
+import dev.krifmaz.kit.compose.bugs.BugReportsScreen
+import dev.krifmaz.kit.compose.dialogs.ConfirmHost
+import dev.krifmaz.kit.compose.dialogs.rememberConfirms
+import dev.krifmaz.kit.compose.offline.OfflineBanner
 import dev.krifmaz.kit.compose.perf.KitPerf
 import dev.krifmaz.kit.compose.theme.KitTheme
-import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.ToastHost
-import dev.krifmaz.kit.compose.toasts.Toasts
+import dev.krifmaz.kit.compose.update.Updater
+import dev.krifmaz.kit.compose.whatsnew.ApiChangelogBackend
 import dev.krifmaz.kit.compose.whatsnew.ChangelogScreen
-import dev.krifmaz.kit.compose.whatsnew.WhatsNewPopup
 import dev.krifmaz.kit.compose.widgets.BackBar
-import dev.krifmaz.kit.compose.widgets.Badge
-import dev.krifmaz.kit.compose.widgets.CardBox
-import dev.krifmaz.kit.compose.widgets.ChoiceRow
-import dev.krifmaz.kit.compose.widgets.EmptyState
-import dev.krifmaz.kit.compose.widgets.Gutter
-import dev.krifmaz.kit.compose.widgets.KitButton
-import dev.krifmaz.kit.compose.widgets.KitField
-import dev.krifmaz.kit.compose.widgets.RowDivider
-import dev.krifmaz.kit.compose.widgets.SectionHead
-import dev.krifmaz.kit.compose.widgets.SmallButton
-import dev.krifmaz.kit.compose.widgets.Spinner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/** The demo: every kit-compose component on one scrolling screen, in the Encore theme. */
+/** The demo: every kit part, on one scrolling screen and the pages it opens. */
 class DemoActivity : ComponentActivity() {
-    /** Sets up the kit, the debug checks and the screen. */
+    /** Sets up the screen and the debug checks. */
     override fun onCreate(savedInstanceState: Bundle?) {
-        KitPerf.strictModeInDebug(BuildConfig.DEBUG)
         super.onCreate(savedInstanceState)
-        KitApp.init(name = "Kit demo", versionName = BuildConfig.VERSION_NAME, versionCode = BuildConfig.VERSION_CODE, userAgent = "KitDemo/${BuildConfig.VERSION_NAME}")
+        val app = application as DemoApp
         setContent {
-            KitTheme(theme = KitTheme.Encore) {
+            var theme by rememberSaveable { mutableStateOf(KitTheme.Encore.id) }
+            var accent by rememberSaveable { mutableStateOf("") }
+            KitTheme(theme = KitTheme.of(theme), accent = accent) {
                 Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-                    DemoApp()
+                    DemoRoot(app, DemoLook(theme, accent, { theme = it }, { accent = it }))
                     ToastHost(bottomPadding = 16.dp)
                 }
             }
         }
         KitPerf.jankStatsInDebug(this, BuildConfig.DEBUG)
     }
-}
 
-/** The demo's two pages: the components, and Settings → What's new. */
-@Composable
-private fun DemoApp() {
-    var changelog by remember { mutableStateOf(false) }
-    if (changelog) {
-        BackHandler { changelog = false }
-        Column(Modifier.fillMaxSize()) {
-            BackBar("What's new") { changelog = false }
-            ChangelogScreen(DemoChangelog)
-        }
-    } else {
-        Components(onChangelog = { changelog = true })
+    /** Back from "Install unknown apps": the updater goes on with an install. */
+    override fun onResume() {
+        super.onResume()
+        Updater.onResume(this)
     }
 }
 
-/** Every component, top to bottom. The list's resource id ("demo-list") is what the benchmarks scroll. */
-@OptIn(ExperimentalComposeUiApi::class)
+/**
+ * The theme picker's state.
+ *
+ * @property theme the theme's id ([KitTheme.id]).
+ * @property accent the accent's id, "" for the theme's own.
+ * @property setTheme picks a theme.
+ * @property setAccent picks an accent.
+ */
+class DemoLook(val theme: String, val accent: String, val setTheme: (String) -> Unit, val setAccent: (String) -> Unit)
+
+/** The demo's pages. */
+sealed interface Page {
+    /** Every part on one screen. */
+    data object Home : Page
+
+    /** Settings → What's new. */
+    data object Changelog : Page
+
+    /** The bug report list, opened from [from]. */
+    data class Bugs(val from: String) : Page
+
+    /** One bug report. */
+    data class Bug(val id: Long) : Page
+
+    /** The server's settings, drawn from its schema. */
+    data object Settings : Page
+
+    /** Diagnostics, with the app's crash reports. */
+    data object Diagnostics : Page
+}
+
+/** What the bug report screens need, from the demo's server and its pages. */
+class DemoBugHost(private val app: DemoApp, private val open: (Page) -> Unit, private val close: () -> Unit) : BugReportsHost {
+    override val bugReports: BugReportsApi get() = app.bugReports
+    override val imageLoader: ImageLoader get() = app.imageLoader
+
+    override fun url(path: String): String = app.server.kit.url(path)
+
+    override fun isAdmin(): Boolean = true
+
+    override fun openList(from: String) = open(Page.Bugs(from))
+
+    override fun openReport(id: Long) = open(Page.Bug(id))
+
+    override fun back() = close()
+}
+
+/** The page on top of the stack, the offline banner above it, and the confirm dialogs. */
 @Composable
-private fun Components(onChangelog: () -> Unit) {
-    val p = MaterialTheme.palette
-    var details by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    var whatsNew by remember { mutableStateOf(false) }
-    var tab by remember { mutableIntStateOf(0) }
-    var field by remember { mutableStateOf("") }
-    Column(
-        Modifier
-            .fillMaxSize()
-            .semantics { testTagsAsResourceId = true }
-            .testTag("demo-list")
-            .verticalScroll(rememberScrollState()),
-    ) {
-        SectionHead("Kit demo", subtitle = "Every kit-compose component, in the Encore theme")
-
-        SectionHead("Buttons and badges")
-        Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            KitButton("Primary", primary = true) { Toasts.show("Primary tapped") }
-            KitButton("Button") { Toasts.show("Button tapped") }
+private fun DemoRoot(app: DemoApp, look: DemoLook) {
+    val stack = remember { mutableStateListOf<Page>(Page.Home) }
+    val open: (Page) -> Unit = { stack.add(it) }
+    val close: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    val host = remember(app) { DemoBugHost(app, open, close) }
+    val changelog = remember(app) { ApiChangelogBackend(app.server.kit) }
+    val offline = remember(app) { DemoOffline(app.server) }
+    val confirms = rememberConfirms()
+    val scope = rememberCoroutineScope()
+    // offline mode's check: now, then every 30 seconds while offline (every minute otherwise)
+    LaunchedEffect(offline) {
+        while (true) {
+            offline.check()
+            delay(if (offline.active) 30_000 else 60_000)
         }
-        Row(Modifier.padding(Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallButton("Small") {}
-            SmallButton("Danger", danger = true) {}
-            Spinner()
-        }
-        Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Badge("muted")
-            Badge("ok", kind = "ok")
-            Badge("warn", kind = "warn")
-            Badge("err", kind = "err")
-            Badge("info", kind = "info")
-            Badge("accent", kind = "accent")
-        }
-        ChoiceRow(listOf("Albums", "Artists", "Songs"), tab, { tab = it })
-
-        SectionHead("Toasts")
-        Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallButton("Info") { Toasts.show("Saved") }
-            SmallButton("OK") { Toasts.show("Done", "ok") }
-            SmallButton("Error") { Toasts.show("The server answered 502 Bad Gateway – it may be restarting", "err") }
-            SmallButton("Undo") { Toasts.show("Moved to the Trash", action = "Undo", onAction = { Toasts.show("Restored", "ok") }) }
-        }
-
-        SectionHead("Details and dialogs")
-        Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SmallButton("Details") { details = true }
-            SmallButton("Confirm") { confirm = true }
-            SmallButton("What's new") { whatsNew = true }
-            SmallButton("Changelog", onClick = onChangelog)
-            CopyIconButton("Text to copy")
-        }
-
-        SectionHead("Card and field")
-        Column(Modifier.padding(horizontal = Gutter), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            CardBox {
-                Text("A card (the web's .card)", color = p.text)
-            }
-            KitField(field, { field = it }, placeholder = "A field (the web's .input)", modifier = Modifier.fillMaxWidth())
-        }
-        RowDivider(Modifier.padding(top = 16.dp))
-        EmptyState(R.drawable.kit_ic_cloud_off, "An empty state", "With a line below it")
-
-        // TODO(track C): update (UpdatesSection), bugs (bug report sheet, crash log), offline (banner, reasons),
-        // settings (SchemaForm, DiagnosticsScreen) — added once those packages land.
-        SectionHead("More", subtitle = "Updates, bug reports, offline and settings forms come next")
-        Box(Modifier.height(400.dp)) // room to scroll, for the benchmarks
     }
-
-    if (details) {
-        DetailsDialog("Details", "java.io.IOException: unexpected end of stream on http://192.168.1.10:8080/...\n\tat okhttp3...") { details = false }
-    }
-    if (confirm) {
-        ConfirmDialog("Delete this?", "It can't be undone.", "Delete", danger = true, onDismiss = { confirm = false }) { Toasts.show("Deleted", "ok") }
-    }
-    if (whatsNew) {
-        WhatsNewPopup(
-            releases = DemoChangelog.new().releases,
-            onPopupChange = { Toasts.show(if (it) "What's new will show after updates" else "What's new won't show after updates – it stays in Settings", "ok") },
-            onFullChangelog = {
-                whatsNew = false
-                onChangelog()
-            },
-            onDismiss = { whatsNew = false },
+    if (stack.size > 1) BackHandler(onBack = close)
+    Column(Modifier.fillMaxSize()) {
+        OfflineBanner(
+            active = offline.active,
+            trying = offline.trying,
+            title = "Offline",
+            line = "What you change waits on the phone · tap for details",
+            message = "The demo server isn't answering. What you change is kept on the phone and sent once it answers again.",
+            reason = offline.reason.orEmpty(),
+            status = offline.status,
+            onRetry = { scope.launch { offline.check() } },
         )
+        when (val page = stack.last()) {
+            Page.Home -> DemoHome(app, look, offline, confirms, changelog, host, open)
+
+            Page.Changelog -> Column(Modifier.fillMaxSize()) {
+                BackBar("What's new", close)
+                ChangelogScreen(changelog)
+            }
+
+            is Page.Bugs -> BugReportsScreen(host, page.from)
+
+            is Page.Bug -> BugReportScreen(host, page.id)
+
+            Page.Settings -> DemoSettings(app, close)
+
+            Page.Diagnostics -> DemoDiagnostics(app, close)
+        }
     }
+    ConfirmHost(confirms)
 }

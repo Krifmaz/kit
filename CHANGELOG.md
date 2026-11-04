@@ -5,6 +5,23 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- `android/kit-compose` is neutral: no Encore names, music words, routes or fixtures. `KitApp.init` takes the app's
+  `id` (preferences and export names; was the name in lower case) and `routes`, a `KitRoutes` with every server path
+  the kit calls (defaults `/api/health`, `/api/changelog*`, `/api/notices`, `/api/bug-reports`, `/api/diagnostics`,
+  `/api/settings/schema`, `/api/settings`, …), used by `BugReportsApi`, `SchemaApi`, `CrashLog`, `probeHealth` and
+  the new `ApiChangelogBackend`. `UpdateSource.ENCORE` is gone (the app sets `UpdateRules.source`), and
+  `UpdateRules.updatesPlace` names where Updates is. The offline outbox is generic (`OutAction(kind, key, data)`,
+  `OutMerge.Each`/`Latest`, the app's nouns in its words). Settings: `FieldBlock` replaces the VPN block, and
+  `neverShown` replaces the built-in WireGuard key. `KitLook.accent` `""` means the theme's own accent. `KitApi`
+  gains `put` (with a refusing default).
+
+### Added
+- `kit-compose` `dialogs` (`Confirm` with type-to-confirm, `ConfirmDialog`, `Confirms`/`ConfirmHost`), `notices`
+  (`NoticeBanners`, `rememberNotices`, `NoticeRules`) and `uploads` (`DropZone`, `UploadRules`, `FileLimits`).
+- `android/demo` uses every kit-compose feature against an in-memory server (`DemoBackend` behind an OkHttp
+  interceptor), with a settings schema of every field kind and unit tests (`DemoServerTest`) in CI.
+
+### Changed
 - Design tokens are neutral: `encore` is the default theme (`:root`), with `dark`, `oled` and `light`; each theme
   carries its own accent; accents `logo`/`encore` are now `cream`/`pastel`; Compose palettes are
   `KitPalettes.Encore/Dark/Oled/Light`; Iced tokens add `accent(theme)`. The Encore fixtures and per-platform
