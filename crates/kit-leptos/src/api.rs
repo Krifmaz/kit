@@ -98,33 +98,57 @@ pub async fn post_form(path: &str, form: web_sys::FormData) -> ApiResult {
     backend().post_form(path, form).await
 }
 
+/// Headers an app adds to a call, worked out per call from its method and path (a CSRF token, `If-Match`).
+pub type ExtraHeaders = Rc<dyn Fn(&str, &str) -> Vec<(String, String)>>;
+
 /// The `fetch` client for one app.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct HttpBackend {
     /// The app's id in lower case: the `X-Requested-With` header and the events' prefix.
     app: String,
     /// The prefix of every path (`/api`).
     base: String,
+    /// The app's own headers for each call (none by default).
+    extra: Option<ExtraHeaders>,
+}
+
+impl std::fmt::Debug for HttpBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpBackend").field("app", &self.app).field("base", &self.base).field("extra", &self.extra.is_some()).finish()
+    }
 }
 
 impl HttpBackend {
     /// The client for the app with id `app` (`kit-demo`: `X-Requested-With: kit-demo`, `kit-demo:server-down`,
     /// …), under `/api`.
     pub fn new(app: &str) -> Self {
-        HttpBackend { app: app.to_ascii_lowercase(), base: "/api".into() }
+        HttpBackend { app: app.to_ascii_lowercase(), base: "/api".into(), extra: None }
     }
 
     /// The client for the configured app ([`crate::config::get`]): its id, under its [`api`](crate::config::Paths::api)
     /// prefix.
     pub fn from_config() -> Self {
         let c = crate::config::get();
-        HttpBackend { app: c.app.id.to_ascii_lowercase(), base: c.paths.api.clone() }
+        HttpBackend { app: c.app.id.to_ascii_lowercase(), base: c.paths.api.clone(), extra: None }
     }
 
     /// The same client under another prefix (`/v1`).
     pub fn with_base(mut self, base: &str) -> Self {
         self.base = base.to_string();
         self
+    }
+
+    /// The same client with the app's own headers on every call: `headers(method, path)` gives them (for
+    /// example a CSRF token on everything but `GET`, or `If-Match` on a save). Called on every call, so a
+    /// header can change (a token after signing in).
+    pub fn with_headers(mut self, headers: impl Fn(&str, &str) -> Vec<(String, String)> + 'static) -> Self {
+        self.extra = Some(Rc::new(headers));
+        self
+    }
+
+    /// The app's own headers for this call.
+    fn extra_headers(&self, method: &str, path: &str) -> Vec<(String, String)> {
+        self.extra.as_ref().map(|f| f(method, path)).unwrap_or_default()
     }
 
     fn event(&self, what: &str) {
@@ -139,15 +163,16 @@ pub fn proxy_answer(status: u16, marked: bool, body: &str) -> bool {
     (status == 404 || status >= 500) && !marked && !serde_json::from_str::<Value>(body).is_ok_and(|v| v.is_object())
 }
 
-/// The sentence of a failed answer: the server's `detail` (a string, or the `msg` of each entry), else the
-/// status text, else "Request failed".
+/// The sentence of a failed answer: the server's `detail` (a string, or the `msg` of each entry), else its
+/// `message`, else its `error` (when they are text), else the status text, else "Request failed".
 pub fn error_message(data: &Value, status_text: &str) -> String {
+    let text = |k: &str| data.get(k).and_then(Value::as_str).filter(|s| !s.is_empty()).map(String::from);
     let msg = match data.get("detail") {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Array(a)) => {
             a.iter().map(|m| m.get("msg").and_then(Value::as_str).unwrap_or("").to_string()).collect::<Vec<_>>().join(", ")
         }
-        _ => String::new(),
+        _ => text("message").or_else(|| text("error")).unwrap_or_default(),
     };
     if !msg.is_empty() {
         msg
@@ -194,6 +219,9 @@ impl Backend for HttpBackend {
                 .method(m)
                 .credentials(web_sys::RequestCredentials::SameOrigin)
                 .header("X-Requested-With", &me.app);
+            for (k, v) in me.extra_headers(&method, &path) {
+                req = req.header(&k, &v);
+            }
             if body.is_some() {
                 req = req.header("Content-Type", "application/json");
             }
@@ -215,11 +243,14 @@ impl Backend for HttpBackend {
     fn post_form(&self, path: &str, form: web_sys::FormData) -> ApiFuture {
         let (me, path) = (self.clone(), path.to_string());
         Box::pin(async move {
-            let built = gloo_net::http::RequestBuilder::new(&format!("{}{path}", me.base))
+            let mut req = gloo_net::http::RequestBuilder::new(&format!("{}{path}", me.base))
                 .method(gloo_net::http::Method::POST)
                 .credentials(web_sys::RequestCredentials::SameOrigin)
-                .header("X-Requested-With", &me.app)
-                .body(form);
+                .header("X-Requested-With", &me.app);
+            for (k, v) in me.extra_headers("POST", &path) {
+                req = req.header(&k, &v);
+            }
+            let built = req.body(form);
             let Ok(r) = built else { return Err(ApiError::new("Bad request")) };
             match r.send().await {
                 Ok(res) => me.answer(res, path).await,
@@ -242,6 +273,12 @@ mod tests {
         assert_eq!(error_message(&json!({ "detail": "No such report" }), "Not Found"), "No such report");
         assert_eq!(error_message(&json!({ "detail": [{ "msg": "a" }, { "msg": "b" }] }), ""), "a, b");
         assert_eq!(error_message(&Value::Null, "Bad Gateway"), "Bad Gateway");
+        assert_eq!(error_message(&json!({ "error": "forbidden", "message": "Sign in first" }), "Forbidden"), "Sign in first");
+        assert_eq!(
+            error_message(&json!({ "error": "the dashboard was changed elsewhere" }), "Conflict"),
+            "the dashboard was changed elsewhere"
+        );
+        assert_eq!(error_message(&json!({ "error": 3 }), "Conflict"), "Conflict");
         assert_eq!(error_message(&Value::Null, ""), "Request failed");
         assert!(proxy_answer(502, false, "<html>"));
         assert!(!proxy_answer(502, true, "<html>"));
@@ -255,5 +292,9 @@ mod tests {
         assert_eq!((b.app.as_str(), b.base.as_str()), ("app", "/api"));
         let b = HttpBackend::new("Kit-Demo").with_base("/v1");
         assert_eq!((b.app.as_str(), b.base.as_str()), ("kit-demo", "/v1"));
+        assert!(b.extra_headers("POST", "/x").is_empty());
+        let b = b.with_headers(|m, p| if m == "GET" { vec![] } else { vec![("X-CSRF-Token".into(), format!("t{p}"))] });
+        assert!(b.extra_headers("GET", "/x").is_empty());
+        assert_eq!(b.extra_headers("PUT", "/x"), vec![("X-CSRF-Token".to_string(), "t/x".to_string())]);
     }
 }
