@@ -4,6 +4,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- `cleanup-branches.yml`: after every push to main, deletes branches whose pull request is merged and which have
+  no commits since.
+
 ### Changed
 - `crates/kit-rules` and `crates/kit-leptos` are neutral and configured per app: no Encore names, music concepts,
   routes or words. kit-rules gains `app::App { id, name, version }` (the id prefixes storage keys, events and
