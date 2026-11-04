@@ -15,6 +15,8 @@ Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
 - kit-leptos: `HttpBackend::with_headers(|method, path| …)` adds an app's own headers to every call (a CSRF token,
   `If-Match`); a failed answer's sentence also comes from a `message` or `error` text when there is no `detail`;
   `api::patch` sends `PATCH`.
+- kit-leptos: `crash::install` sends the web app's crash logs (panics, uncaught errors, unhandled
+  rejections) to the server's crash reports, keeping them until it can.
 
 ## v0.1.2 — 2026-11-04
 

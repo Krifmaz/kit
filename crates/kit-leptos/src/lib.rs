@@ -35,6 +35,7 @@ pub mod api;
 pub mod bug_report;
 pub mod clipboard;
 pub mod config;
+pub mod crash;
 pub mod details;
 pub mod diagnostics;
 pub mod dropzone;
