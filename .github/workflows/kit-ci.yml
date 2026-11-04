@@ -1,0 +1,115 @@
+name: kit-ci
+
+# The checks every pull request and every release of an app runs, taken from Encore's release.yml `test` job:
+# fmt (optional), clippy with -D warnings and the tests of each Rust workspace, the web app's WebAssembly check,
+# clippy and tests (the strings/parity tests among them), plus the app's own extra checks.
+#
+#   jobs:
+#     test:
+#       uses: Krifmaz/kit/.github/workflows/kit-ci.yml@v0.1.0
+#       with:
+#         rust-dirs: server
+#         wasm-dirs: web-rs
+#
+# The job is called `test`, so a caller's job `test` shows as the check "test / test", as Encore's always did.
+on:
+  workflow_call:
+    inputs:
+      rust-dirs:
+        description: "Rust workspaces (one folder per line): cargo test --workspace and clippy --all-targets in each"
+        type: string
+        required: false
+        default: "."
+      wasm-dirs:
+        description: "Web apps in Rust (one folder per line): wasm32 check and clippy, then cargo test"
+        type: string
+        required: false
+        default: ""
+      fmt:
+        description: "Also run cargo fmt --check in every folder above"
+        type: boolean
+        required: false
+        default: true
+      check:
+        description: "Extra checks that must pass (a bash script run at the repository root), e.g. a parity test"
+        type: string
+        required: false
+        default: ""
+      advisory-name:
+        description: "Name of the advisory step below"
+        type: string
+        required: false
+        default: "Advisory check"
+      advisory:
+        description: "A check that is shown but never fails the run (a bash script run at the repository root)"
+        type: string
+        required: false
+        default: ""
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ inputs.runs-on }}
+    env:
+      # line numbers in backtraces are all a test run needs; full debug info for every crate's test binary would
+      # fill the runner's disk (and the cache)
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      RUST_DIRS: ${{ inputs.rust-dirs }}
+      WASM_DIRS: ${{ inputs.wasm-dirs }}
+      FMT: ${{ inputs.fmt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ inputs.wasm-dirs != '' && 'wasm32-unknown-unknown' || '' }}
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            ${{ inputs.rust-dirs }}
+            ${{ inputs.wasm-dirs }}
+      - name: ${{ inputs.advisory-name }}
+        if: inputs.advisory != ''
+        continue-on-error: true
+        env:
+          SCRIPT: ${{ inputs.advisory }}
+        run: bash -c "$SCRIPT"
+      - name: Format
+        if: inputs.fmt
+        run: |
+          for d in $RUST_DIRS $WASM_DIRS; do
+            echo "::group::cargo fmt --check ($d)"
+            (cd "$d" && cargo fmt --all --check) || { echo "::error::$d is not formatted: run cargo fmt in $d"; exit 1; }
+            echo "::endgroup::"
+          done
+      - name: Tests and clippy (every crate of each workspace)
+        run: |
+          for d in $RUST_DIRS; do
+            echo "::group::cargo test --workspace ($d)"
+            (cd "$d" && cargo test --workspace --locked) || exit 1
+            echo "::endgroup::"
+            echo "::group::cargo clippy --workspace --all-targets ($d)"
+            (cd "$d" && cargo clippy --workspace --all-targets --locked -- -D warnings) || exit 1
+            echo "::endgroup::"
+          done
+      - name: Web apps (WebAssembly check, clippy and tests, the strings/parity tests among them)
+        if: inputs.wasm-dirs != ''
+        run: |
+          for d in $WASM_DIRS; do
+            echo "::group::web app $d"
+            (cd "$d" && cargo check --locked --target wasm32-unknown-unknown \
+              && cargo clippy --locked --target wasm32-unknown-unknown -- -D warnings \
+              && cargo test --locked) || exit 1
+            echo "::endgroup::"
+          done
+      - name: App checks
+        if: inputs.check != ''
+        env:
+          SCRIPT: ${{ inputs.check }}
+        run: bash -c "$SCRIPT"

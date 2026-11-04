@@ -1,8 +1,10 @@
 name: ci
 
-# The kit's own checks on every pull request and push to main: fmt, clippy, tests (the token tests prove the
-# generated themes equal Encore's), the web components and their demo built for wasm32, and that design/out is
-# up to date. Required to pass before a merge.
+# The kit's own checks on every pull request and push to main, run through the kit's shared kit-ci.yml (so every
+# change also proves it): fmt, clippy, tests (the token tests prove the generated themes equal Encore's), that
+# design/out is up to date and the contracts parse; the web components (kit-leptos) and their demo are checked
+# and linted for wasm32. `workflows` lints every workflow file with actionlint (and
+# shellcheck on their scripts). Required to pass before a merge.
 on:
   pull_request:
   push:
@@ -18,29 +20,27 @@ concurrency:
 
 jobs:
   rust:
+    uses: ./.github/workflows/kit-ci.yml
+    with:
+      rust-dirs: .
+      wasm-dirs: |
+        crates/kit-leptos
+        crates/kit-leptos/demo
+      fmt: true
+      check: |
+        set -e
+        echo "::group::Generated themes are up to date"
+        cargo run -p kit-tokens --locked -- --check
+        echo "::endgroup::"
+        echo "::group::Contracts parse"
+        python3 -c "import yaml; yaml.safe_load(open('contracts/openapi.yaml'))"
+        echo "::endgroup::"
+
+  workflows:
     runs-on: ubuntu-latest
-    env:
-      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: actionlint (with shellcheck)
+        uses: docker://rhysd/actionlint:1.7.7
         with:
-          components: clippy, rustfmt
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - name: Format
-        run: cargo fmt --all --check
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Tests
-        run: cargo test --workspace --locked
-      - name: Web components build for the browser (wasm32 check and clippy)
-        run: |
-          cargo check -p kit-leptos -p kit-leptos-demo --target wasm32-unknown-unknown --locked
-          cargo clippy -p kit-leptos -p kit-leptos-demo --target wasm32-unknown-unknown --locked -- -D warnings
-      - name: Demo app builds for the browser
-        run: cargo build -p kit-leptos-demo --target wasm32-unknown-unknown --locked
-      - name: Generated themes are up to date
-        run: cargo run -p kit-tokens --locked -- --check
-      - name: Contracts parse
-        run: python3 -c "import yaml; yaml.safe_load(open('contracts/openapi.yaml'))"
+          args: -color
