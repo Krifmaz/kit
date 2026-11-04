@@ -136,7 +136,7 @@ pub fn link<'a, M: Clone + 'a>(label: impl IntoFragment<'a>, on: M) -> El<'a, M>
     button(t(label).size(13).color(theme::look().accent)).padding([2, 4]).style(theme::btn(Btn::Ghost)).on_press(on).into()
 }
 
-/// A small muted link-looking button (the `clear`, `Sign out of Tidal`, reset links).
+/// A small muted link-looking button (the `clear`, `Sign out`, reset links).
 pub fn link_muted<'a, M: Clone + 'a>(label: impl IntoFragment<'a>, on: M) -> El<'a, M> {
     button(t(label).size(12.5).color(theme::look().muted)).padding([2, 4]).style(theme::btn(Btn::Ghost)).on_press(on).into()
 }

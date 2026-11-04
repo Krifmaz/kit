@@ -1,6 +1,6 @@
 [package]
 name = "kit-tokens"
-description = "Encore's design tokens (design/tokens.json) and the generator that turns them into CSS variables, a Compose theme, an Iced theme and Flutter ThemeData."
+description = "The kit's design tokens (design/tokens.json) and the generator that turns them into CSS variables, a Compose theme, an Iced theme and Flutter ThemeData."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

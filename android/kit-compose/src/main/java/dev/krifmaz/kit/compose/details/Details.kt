@@ -39,7 +39,7 @@ import kotlinx.coroutines.delay
 
 /**
  * The whole of a text a list cuts off: a dialog with the text wrapped and selectable, **Copy**
- * (the whole text) and Close. Used for log lines, transfer errors, torrent messages and app crashes. The toast
+ * (the whole text) and Close. Used for log lines, transfer errors, server messages and app crashes. The toast
  * "Copied to clipboard" (or "Copy failed – select and copy manually") shows above the dialog, as toasts show above
  * every sheet and dialog (Toasts.kt).
  */
