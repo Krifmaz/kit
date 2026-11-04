@@ -60,8 +60,11 @@ fun ServerSettingsPage(app: App, onBack: () -> Unit) {
         val s = state
         when {
             error.isNotEmpty() -> ErrorBox(error) { round += 1 }
+
             s == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
+
             s.schema.sections.isEmpty() -> Muted("This server has no settings to change here.", Modifier.padding(horizontal = Gutter))
+
             else -> {
                 val sections = s.schema.sections
                 if (sections.size > 1) ChoiceRow(sections.map { it.title }, page.coerceAtMost(sections.lastIndex), { page = it })

@@ -68,10 +68,12 @@ fun SignInPage(app: App, base: String, onBack: () -> Unit) {
                 when (val r = withContext(Dispatchers.IO) { app.server.login(username, password, if (needsCode) code else null) }) {
                     // the shell shows the app now; crash reports kept from before can go
                     is LoginResult.Success -> CrashLog.uploadPending(app, app)
+
                     is LoginResult.NeedsCode -> {
                         if (needsCode) error = r.message
                         needsCode = true
                     }
+
                     is LoginResult.Failed -> error = r.message
                 }
             } catch (e: CancellationException) {

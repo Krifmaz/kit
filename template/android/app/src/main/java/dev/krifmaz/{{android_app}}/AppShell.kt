@@ -66,14 +66,19 @@ fun AppShell(app: App) {
     if (stack.size > 1) BackHandler(onBack = back)
     when (val page = stack.last()) {
         Page.Home -> HomePage(app, base, bugs, open, onChangeServer = { app.settings.forget() })
+
         Page.Changelog ->
             Column(Modifier.fillMaxSize()) {
                 BackBar("What's new", back)
                 ChangelogScreen(app.changelog)
             }
+
         is Page.BugReports -> BugReportsScreen(bugs, from = page.from)
+
         is Page.BugReport -> BugReportScreen(bugs, page.id)
+
         Page.ServerSettings -> ServerSettingsPage(app, onBack = back)
+
         Page.Diagnostics -> DiagnosticsPage(app, onBack = back)
     }
 }
