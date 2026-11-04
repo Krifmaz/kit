@@ -5,6 +5,14 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Changed
+- `crates/kit-leptos` draws Encore's shell and Settings byte for byte (Encore's web app switched to it with no
+  DOM or pixel change): `html::raw`, `html::seq` and `html::opt` add an app's HTML, lists and optional parts
+  without Leptos' placeholders; the components keep Encore's attribute order and the white space between its
+  tags; toasts fade with Encore's inline styles; a modal stays open until it is closed even when its caller drops
+  the handle (`details::init` dialogs showed nothing); `modal::close_all` drops the dialogs a router wipes; the notice
+  banner leaves no placeholder in `#server-notice`; the settings card takes an app's HTML before and after its
+  fields and a `FieldBlock` (Encore's VPN block); `DiagHooks` gains `check_detail`, `copy`, `loaded` and
+  `quiet_errors` for Encore's own Diagnostics parts.
 - `kit-server-updates`: `pick_newest` takes the channel and picks the highest release it counts on both channels
   (a hotfix numbered below a newer full release can be GitHub's "Latest"), as Encore now does.
 

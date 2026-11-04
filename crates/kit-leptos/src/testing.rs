@@ -4,7 +4,8 @@
 //! elements without the whitespace between them and puts `class` last. Both give the browser the same document,
 //! so the tests compare a canonical form: elements with their attributes sorted (a class as its sorted words, an
 //! attribute without a value as `""`), text with entities decoded and runs of white space collapsed, white
-//! space alone between elements and comments (Leptos' `<!>` markers) left out.
+//! space alone between elements and comments (Leptos' `<!>` markers) left out, and the `<tbody>` a table's parser
+//! adds left out.
 
 /// One token of the canonical form.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,9 +149,13 @@ pub fn tokens(html: &str) -> Vec<Token> {
         i = j;
     }
     flush(&mut text, &mut out);
-    // `<x/>` written as `<x></x>` and the other way round: drop a close right after a void element's own close
+    // `<x/>` written as `<x></x>` and the other way round: drop a close right after a void element's own close.
+    // A plain `<tbody>` is left out: the browser's parser adds it around rows written straight into a `<table>`.
     let mut clean: Vec<Token> = Vec::with_capacity(out.len());
     for t in out {
+        if matches!(&t, Token::Open(n, a) if n == "tbody" && a.is_empty()) || matches!(&t, Token::Close(n) if n == "tbody") {
+            continue;
+        }
         if let Token::Close(n) = &t {
             if VOID.contains(&n.as_str()) && matches!(clean.last(), Some(Token::Close(m)) if m == n) {
                 continue;
@@ -201,5 +206,6 @@ mod tests {
         assert!(!same_html("<b>x</b>", "<b>y</b>"));
         assert!(!same_html("<b class=\"a\">x</b>", "<b>x</b>"));
         assert!(same_html(r#"<p style="margin:0; padding: 0">x</p>"#, r#"<p style="margin:0;padding:0;">x</p>"#));
+        assert!(same_html("<table><tr><td>x</td></tr></table>", "<table><tbody><tr><td>x</td></tr></tbody></table>"));
     }
 }

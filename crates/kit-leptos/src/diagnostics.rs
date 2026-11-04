@@ -9,7 +9,7 @@
 
 use crate::api;
 use crate::clipboard::copy_text;
-use crate::html::html;
+use crate::html::{html, opt, seq};
 use crate::icons::{chevron, icon};
 use crate::json::J;
 use kit_rules::diagnostics::{
@@ -45,6 +45,11 @@ pub type ReportLines = Arc<dyn Fn(&Value) -> Vec<Vec<String>> + Send + Sync>;
 /// Changes the diagnostics answer before it is drawn.
 pub type Adjust = Arc<dyn Fn(Value) -> Pin<Box<dyn Future<Output = Value>>> + Send + Sync>;
 
+/// Draws one check's detail line (Encore words a Soulseek session its own way).
+pub type Detail = Arc<dyn Fn(&Value) -> String + Send + Sync>;
+/// Runs with the checks' answer once it is drawn.
+pub type Loaded = Arc<dyn Fn(&Value) + Send + Sync>;
+
 /// What the app adds to the page.
 #[derive(Clone, Default)]
 pub struct DiagHooks {
@@ -54,21 +59,30 @@ pub struct DiagHooks {
     pub after_checks: Option<Section>,
     /// More lines for one check, under its detail (Encore's Soulseek session).
     pub check_extra: Option<Section>,
+    /// A check's detail line in place of its `detail` (Encore's Soulseek session in words).
+    pub check_detail: Option<Detail>,
     /// The app's sections of the copied report, before the settings (Encore's download folders and Server).
     pub report: Option<ReportLines>,
+    /// Copy report done by the app itself, with the last answer.
+    pub copy: Option<Loaded>,
     /// Changes the answer before it is drawn (Encore adds its VPN row from `/system/vpn`).
     pub adjust: Option<Adjust>,
+    /// Runs once an answer is drawn (Encore remembers the machine block for its Settings banner).
+    pub loaded: Option<Loaded>,
+    /// A failed run goes to the console and the page keeps "Checking…" (Encore's page), instead of an error box.
+    pub quiet_errors: bool,
 }
 
-/// One `.list-item` of a check group. From `diagnostics.rs` `check_item`.
+/// One `.list-item` of a check group, with the line breaks of Encore's template. From `diagnostics.rs`
+/// `check_item`.
 pub fn check_item(c: &Value, hooks: &DiagHooks) -> impl IntoView {
     let ok = truthy(c, "ok");
     let okc = if ok { "ok" } else { "err" };
-    let detail = or_empty(c, "detail");
+    let detail = hooks.check_detail.as_ref().map(|f| f(c)).unwrap_or_else(|| or_empty(c, "detail"));
     let status = http_status(c).map(|s| view! { <span class=format!("badge {okc}")>{format!("HTTP {s}")}</span> });
     let ms = c.get("ms").filter(|m| !m.is_null()).map(|_| view! { <span class="small faint">{format!("{} ms", js_str(c, "ms"))}</span> });
     let body = truthy(c, "body").then(|| {
-        view! { <details><summary class="small muted" style="cursor:pointer">{RAW_RESPONSE}</summary><div class="code diag-raw">{or_empty(c, "body")}</div></details> }
+        view! { <details><summary {..()} class="small muted" style="cursor:pointer">{RAW_RESPONSE}</summary><div class="code diag-raw">{or_empty(c, "body")}</div></details> }
     });
     // the cut-off request line opens the whole check, to read and copy
     let (title, whole) = if truthy(c, "request") { (Some(c.s("name")), Some(whole_text(c, &detail))) } else { (None, None) };
@@ -84,21 +98,32 @@ pub fn check_item(c: &Value, hooks: &DiagHooks) -> impl IntoView {
     let fix = c.get("fix").and_then(Value::as_str).filter(|f| !f.is_empty()).map(|f| view! { <div class="small">{f.to_string()}</div> });
     let extra = hooks.check_extra.as_ref().map(|f| f(c));
     view! {
-        <div class="list-item" style="align-items:flex-start">
-            <span class=format!("dot {}", level(c)) style="margin-top:7px"></span>
+        {"\n          "}
+        <div {..()} class="list-item" style="align-items:flex-start">
+            {"\n            "}
+            <span {..()} class=format!("dot {}", level(c)) style="margin-top:7px">{""}</span>
+            {"\n            "}
             <div class="grow">
-                <div class="row wrap"><b>{c.s("name")}</b>{status}{ms}</div>
+                {"\n              "}
+                <div class="row wrap"><b>{c.s("name")}</b>{opt(status)}{opt(ms)}</div>
+                {"\n              "}
                 <div class="small mono faint ellipsis" data-details=whole data-details-title=title on:click=open>{or_empty(c, "request")}</div>
-                <div class="small" style=format!("color:{}", if ok { "var(--muted)" } else { "var(--err)" })>{detail.clone()}</div>
-                {fix}
-                {extra}
-                {body}
+                {"\n              "}
+                <div {..()} class="small" style=format!("color:{}", if ok { "var(--muted)" } else { "var(--err)" })>{detail.clone()}</div>
+                {opt(fix)}
+                {"\n              "}
+                {opt(extra)}
+                {"\n              "}
+                {opt(body)}
+                {"\n            "}
             </div>
+            {"\n          "}
         </div>
     }
 }
 
-/// The checks' answer drawn: the summary, the groups, the settings table. From `diagnostics.rs` `run`.
+/// The checks' answer drawn: the summary, the groups, the settings table, with the line breaks of Encore's
+/// template. From `diagnostics.rs` `run`.
 #[component]
 pub fn DiagnosticsView(
     /// The app's name ("Encore 0.36.4 · running as uid …").
@@ -115,47 +140,57 @@ pub fn DiagnosticsView(
 ) -> impl IntoView {
     let checks = data.a("checks");
     let bad = kit_rules::diagnostics::bad_count(&checks);
-    let group_views: Vec<_> = groups(&checks)
-        .into_iter()
-        .map(|(title, g)| {
-            let items: Vec<_> = g.into_iter().map(|c| check_item(c, &hooks)).collect();
-            view! { <div class="section-head"><h2>{title}</h2></div><div class="card flat"><div class="list">{items}</div></div> }
-        })
-        .collect();
+    let group_views = seq(groups(&checks).into_iter().map(|(title, g)| {
+        let items = seq(g.into_iter().map(|c| check_item(c, &hooks)));
+        view! {
+            {"\n        "}<div class="section-head"><h2>{title}</h2></div>
+            {"\n        "}<div class="card flat"><div class="list">{items}</div></div>
+        }
+    }));
     let settings = data.a("settings");
-    let rows: Vec<_> = settings
-        .iter()
-        .map(|s| {
-            let source = if s.get("source").and_then(Value::as_str) == Some("env") {
-                view! { <span class="badge info">{format!("env {}", s.s("env"))}</span> }.into_any()
-            } else {
-                view! { <span class="badge">{saved_in(&app)}</span> }.into_any()
-            };
-            view! { <tr><td class="mono small">{s.s("key")}</td><td>{source}</td><td class="small mono ellipsis" style="max-width:360px">{js_str(s, "value")}</td></tr> }
-        })
-        .collect();
+    let rows = seq(settings.iter().map(|s| {
+        let source = if s.get("source").and_then(Value::as_str) == Some("env") {
+            view! { <span class="badge info">{format!("env {}", s.s("env"))}</span> }.into_any()
+        } else {
+            view! { <span class="badge">{saved_in(&app)}</span> }.into_any()
+        };
+        view! {
+            <tr><td class="mono small">{s.s("key")}</td>
+            {"\n          "}<td>{source}</td>
+            {"\n          "}<td {..()} class="small mono ellipsis" style="max-width:360px">{js_str(s, "value")}</td></tr>
+        }
+    }));
     let open = sources_open.unwrap_or_else(|| RwSignal::new(false));
     let (after_summary, after_checks) = (hooks.after_summary.as_ref().map(|f| f(&data)), hooks.after_checks.as_ref().map(|f| f(&data)));
     let [c1, c2, c3] = SOURCES_COLUMNS;
     view! {
-        <div class="card row" style="margin-bottom:16px">
+        {"\n      "}
+        <div {..()} class="card row" style="margin-bottom:16px">
+            {"\n        "}
             <span class={if bad > 0 { "badge err" } else { "badge ok" }}>{problems(bad)}</span>
+            {"\n        "}
             <span class="muted small">{summary_line(&app, &data.s("version"), &js_str(&data, "uid"), &date(data.f("time")))}</span>
+            {"\n      "}
         </div>
-        {after_summary}
-        {group_views}
-        {after_checks}
-        <details class="card settings-card diag-sources" style="margin-top:22px" open=open.get_untracked()
+        {"\n      "}{opt(after_summary)}
+        {"\n      "}{group_views}
+        {"\n      "}{opt(after_checks)}
+        {"\n      "}
+        <details {..()} class="card settings-card diag-sources" style="margin-top:22px" open=open.get_untracked()
             on:toggle=move |e| open.set(e.target().and_then(|t| wasm_bindgen::JsCast::dyn_into::<web_sys::Element>(t).ok()).is_some_and(|d| d.has_attribute("open")))>
-            <summary class="row" style="justify-content:space-between"><div><h2 style="margin:0">{SOURCES_TITLE}</h2><div class="small muted">{sources_line(&app, settings.len())}</div></div><span class="chev" {..html(chevron())}>{""}</span></summary>
-            <div class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>{c1}</th><th>{c2}</th><th>{c3}</th></tr></thead><tbody>{rows}</tbody></table></div>
+            {"\n        "}
+            <summary {..()} class="row" style="justify-content:space-between"><div><h2 {..()} style="margin:0">{SOURCES_TITLE}</h2><div class="small muted">{sources_line(&app, settings.len())}</div></div><span class="chev" {..html(chevron())}>{""}</span></summary>
+            {"\n        "}
+            <div {..()} class="table-wrap" style="margin-top:12px"><table class="table"><thead><tr><th>{c1}</th><th>{c2}</th><th>{c3}</th></tr></thead><tbody>
+                {"\n        "}{rows}{"\n      "}
+            </tbody></table></div>
         </details>
     }
 }
 
 /// The Diagnostics page: its heading, Copy report and Run checks, then the checks (run at once). `children` are
-/// drawn after the checks (Encore's Backups and App crashes); `top` above them (Encore's `#updates`). From
-/// `diagnostics.rs` `render` and `run`.
+/// drawn after the checks (Encore's Backups and App crashes, as an HTML fragment of its own); `top` in
+/// `#updates`. The line breaks are Encore's. From `diagnostics.rs` `render` and `run`.
 #[component]
 pub fn DiagnosticsPage(
     /// The app's name.
@@ -175,10 +210,10 @@ pub fn DiagnosticsPage(
     let error: RwSignal<Option<String>> = RwSignal::new(None);
     let running = RwSignal::new(false);
     let sources_open = RwSignal::new(false);
-    let adjust = hooks.adjust.clone();
+    let (adjust, loaded, quiet) = (hooks.adjust.clone(), hooks.loaded.clone(), hooks.quiet_errors);
     let run = move || {
         running.set(true);
-        let adjust = adjust.clone();
+        let (adjust, loaded) = (adjust.clone(), loaded.clone());
         crate::rt::spawn(async move {
             match api::get("/system/diagnostics").await {
                 Ok(mut d) => {
@@ -186,18 +221,28 @@ pub fn DiagnosticsPage(
                         d = f(d).await;
                     }
                     error.set(None);
+                    if let Some(f) = &loaded {
+                        f(&d);
+                    }
                     last.set(Some(d));
+                    running.set(false);
                 }
-                Err(e) => error.set(Some(e.message)),
+                Err(e) if quiet => web_sys::console::error_1(&e.message.into()),
+                Err(e) => {
+                    error.set(Some(e.message));
+                    running.set(false);
+                }
             }
-            running.set(false);
         });
     };
     run();
-    let report = hooks.report.clone();
+    let (report, own_copy) = (hooks.report.clone(), hooks.copy.clone());
     let app2 = app.clone();
     let copy = move |_| {
         if let Some(d) = last.get_untracked() {
+            if let Some(f) = &own_copy {
+                return f(&d);
+            }
             let extra = report.as_ref().map(|f| f(&d)).unwrap_or_default();
             copy_text(&report_text(&app2, &d, &extra));
         }
@@ -205,27 +250,33 @@ pub fn DiagnosticsPage(
     let app3 = app.clone();
     let diag = move || {
         if running.get() {
-            return view! { <div class="empty"><span class="spinner"></span><p class="muted">{CHECKING}</p></div> }.into_any();
+            return view! { <div class="empty"><span class="spinner">{""}</span><p class="muted">{CHECKING}</p></div> }.into_any();
         }
         if let Some(e) = error.get() {
             return view! { <div class="error-box">{e}</div> }.into_any();
         }
         match last.get() {
             Some(d) => view! { <DiagnosticsView app=app3.clone() data=d hooks=hooks.clone() sources_open=sources_open/> }.into_any(),
-            None => view! { <div class="empty"><span class="spinner"></span></div> }.into_any(),
+            None => view! { <div class="empty"><span class="spinner">{""}</span></div> }.into_any(),
         }
     };
     view! {
-        <div class="row wrap between" style="margin-bottom:18px">
+        {"\n    "}
+        <div {..()} class="row wrap between" style="margin-bottom:18px">
+            {"\n      "}
             <div><h1>{TITLE}</h1><div class="small muted">{intro(&app)}</div></div>
+            {"\n      "}
             <div class="row">
                 <button class="btn" id="copy" disabled=move || last.get().is_none() on:click={copy} {..html(format!("{}{COPY_REPORT}", icon("copy")))}>{""}</button>
                 <button class="btn primary" id="run" on:click=move |_| run() {..html(format!("{}{RUN_CHECKS}", icon("refresh")))}>{""}</button>
             </div>
+            {"\n    "}
         </div>
-        <div id="updates">{top}</div>
+        {"\n    "}
+        <div id="updates">{opt(top)}</div>
+        {"\n    "}
         <div id="diag">{diag}</div>
-        {children.map(|c| c())}
+        {children.map(|c| c()).unwrap_or_else(|| "".into_any())}
     }
 }
 
