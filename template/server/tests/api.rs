@@ -47,6 +47,12 @@ async fn health_names_the_version_and_the_web_build() {
     let (s, v, _) = call(&app, Request::get("/api/health").body(Body::empty()).unwrap()).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(v, json!({ "ok": true, "version": server::VERSION, "server": "rust", "web": "0123456789abcdef" }));
+    // every answer carries the app's mark, so the web app can tell a proxy's error page from it
+    let r = app.clone().oneshot(Request::get("/api/health").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(r.headers().get(format!("x-{}", server::NAME)).map(|v| v.to_str().unwrap()), Some("1"));
+    assert_eq!(r.headers().get(header::CACHE_CONTROL).map(|v| v.to_str().unwrap()), Some("no-store"));
+    assert!(server::hashed_asset("/t-web-0123456789abcdef_bg.wasm"));
+    assert!(!server::hashed_asset("/index.html"));
 }
 
 #[tokio::test]
@@ -74,7 +80,7 @@ async fn signing_in_gives_a_session_that_needs_the_csrf_header() {
     // a change through the cookie without X-Requested-With is refused, as in Encore
     let seen = |csrf: bool| {
         let b = Request::post("/api/changelog/seen").header(header::COOKIE, &cookie);
-        let b = if csrf { b.header("x-requested-with", server::TITLE.to_ascii_lowercase()) } else { b };
+        let b = if csrf { b.header("x-requested-with", server::NAME) } else { b };
         b.body(Body::empty()).unwrap()
     };
     let (s, v, _) = call(&app, seen(false)).await;

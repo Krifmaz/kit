@@ -28,11 +28,29 @@ pub fn app_name() -> String {
     rt::qs(r#"meta[name="application-name"]"#).and_then(|m| m.get_attribute("content")).unwrap_or_else(|| "App".into())
 }
 
+/// The project name (`NAME` without `-web`): the server's binary, the `X-Requested-With` value, the `x-<project>`
+/// mark on the server's answers and the prefix of the app's events (`<project>:server-down`). The name people
+/// see ([`app_name`]) may have spaces and capitals, which a header name may not.
+pub fn project() -> &'static str {
+    NAME.strip_suffix("-web").unwrap_or(NAME)
+}
+
 /// This page's web build: the hash in its script's name, `<project>-web-<hash>.js`.
 fn this_build() -> Option<String> {
     let head = rt::document()?.head()?.inner_html();
-    let project = NAME.strip_suffix("-web").unwrap_or(NAME);
-    kit_rules::update::build_in(&head, project)
+    kit_rules::update::build_in(&head, project())
+}
+
+/// The connection banner (kit-leptos `offline::watch_connection`, with the project name for the events and
+/// the app's name in the words): "Not connected" while offline, "The <app> server isn't answering" while the
+/// server is down.
+fn watch_connection(app: &str) {
+    use kit_rules::offline::mode::{server_down, NOT_CONNECTED};
+    let down = server_down(app);
+    rt::on_window("offline", |_| offline::conn_banner(true, NOT_CONNECTED));
+    rt::on_window("online", |_| offline::conn_banner(false, ""));
+    rt::on_window(&format!("{}:server-down", project()), move |_| offline::conn_banner(true, &down));
+    rt::on_window(&format!("{}:server-up", project()), |_| offline::conn_banner(false, ""));
 }
 
 /// The page the address names: its path (`/settings`) and query (`s=diagnostics`).
@@ -74,11 +92,11 @@ pub fn navigate(path: &str) {
 fn main() {
     console_error();
     let app = app_name();
-    api::set_backend(HttpBackend::new(&app));
+    api::set_backend(HttpBackend::new(project()));
     toasts::mount();
     details::init();
     dropzone::init();
-    offline::watch_connection(&app);
+    watch_connection(&app);
     let mut cfg = update::UpdateConfig::new(&app);
     cfg.build = this_build();
     update::start(cfg);

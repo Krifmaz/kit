@@ -44,7 +44,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 
 [build-dependencies]
-toml = "0.9"
 kit-server-settings = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}", default-features = false, features = ["toml"] }
 kit-server-changelog = { git = "https://github.com/Krifmaz/kit", tag = "{{kit_tag}}", default-features = false }
 

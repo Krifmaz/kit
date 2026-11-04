@@ -46,13 +46,10 @@ pub const VERSION: &str = match option_env!("APP_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
-/// The binary's name (`CARGO_PKG_NAME`): the session cookie's prefix and the web app's script name
-/// (`<name>-web-<hash>.js`).
+/// The binary's name (`CARGO_PKG_NAME`, the project name): the session cookie's prefix, the web app's script
+/// name (`<name>-web-<hash>.js`), the `X-Requested-With` value the web app sends and the `x-<name>` mark on every
+/// answer (Encore: `encore`).
 pub const NAME: &str = env!("CARGO_PKG_NAME");
-
-/// The app's name as people see it (settings.toml's default `app_name`, from build.rs). In lower case it is
-/// the value of the `X-Requested-With` header the web app sends (Encore: `encore`).
-pub const TITLE: &str = env!("APP_TITLE");
 
 /// The port from `APP_PORT`, 8080 when it is not set or not a number.
 pub fn port() -> u16 {
@@ -192,7 +189,44 @@ pub fn app(st: AppState) -> Router {
         .merge(auth::router())
         .with_state(st)
         .fallback_service(spa)
+        .layer(axum::middleware::from_fn(security_headers))
         .layer(tower_http::compression::CompressionLayer::new())
+}
+
+/// Middleware: the security headers, the `x-<name>` mark and the cache policy on every answer (Encore's
+/// `security_headers`).
+async fn security_headers(req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let mut resp = next.run(req).await;
+    let h = resp.headers_mut();
+    h.entry("x-content-type-options").or_insert(HeaderValue::from_static("nosniff"));
+    h.entry("x-frame-options").or_insert(HeaderValue::from_static("DENY"));
+    h.entry("referrer-policy").or_insert(HeaderValue::from_static("same-origin"));
+    // every answer says it is this app's: the web app tells a proxy's error page (a 502 while the server is
+    // down) from the server's own answers by it
+    if let Ok(name) = header::HeaderName::try_from(format!("x-{NAME}")) {
+        h.insert(name, HeaderValue::from_static("1"));
+    }
+    let cache = if path.starts_with("/api/") {
+        "no-store"
+    } else if hashed_asset(&path) {
+        // trunk names the build's files by their content
+        "public, max-age=31536000, immutable"
+    } else {
+        // index.html and the other files: cheap 304s, updates show at once
+        "no-cache"
+    };
+    h.entry(header::CACHE_CONTROL).or_insert(HeaderValue::from_static(cache));
+    resp
+}
+
+/// `/<name>-web-f92ab5b84b305a59_bg.wasm`: a file at the root whose name ends in a hash of its content (12 hex
+/// digits or more; trunk drops leading zeros), so it never changes under that name (Encore's `hashed_asset`).
+pub fn hashed_asset(path: &str) -> bool {
+    let Some(name) = path.strip_prefix('/') else { return false };
+    let stem = name.rsplit_once('.').map(|(s, _)| s).unwrap_or(name);
+    let stem = stem.strip_suffix("_bg").unwrap_or(stem);
+    !name.contains('/') && stem.rsplit_once('-').is_some_and(|(_, h)| h.len() >= 12 && h.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 /// Whether the server on `port` of this machine answers `/api/health` with `ok` within five seconds: the

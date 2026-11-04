@@ -1,6 +1,6 @@
 //! Signing in, from Encore's `server/crates/api/src/auth.rs` and `routes/auth.rs`, cut down to what every app
 //! needs: accounts with bcrypt passwords, an owner made at the first start, a web session cookie, the
-//! server's API key (`x-api-key`) and Encore's CSRF rule (`X-Requested-With: <app name in lower case>`). Encore's words throughout.
+//! server's API key (`x-api-key`) and Encore's CSRF rule (`X-Requested-With: <project name>`). Encore's words throughout.
 //!
 //! ```text
 //! POST /api/auth/login   {username, password} → the account, and the session cookie
@@ -188,7 +188,7 @@ fn ct_eq(a: &str, b: &str) -> bool {
 pub fn signed_in(st: &AppState, parts: &Parts) -> Result<Account> {
     let (mut row, cookie) = user_of(st, &parts.headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
     if cookie && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS) {
-        let ok = parts.headers.get("x-requested-with").and_then(|v| v.to_str().ok()) == Some(crate::TITLE.to_ascii_lowercase().as_str());
+        let ok = parts.headers.get("x-requested-with").and_then(|v| v.to_str().ok()) == Some(crate::NAME);
         if !ok {
             return Err(err(403, "Missing CSRF header"));
         }
