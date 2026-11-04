@@ -21,12 +21,12 @@ sealed interface LoginResult {
 }
 
 /**
- * The phone's sign-in as Encore's app does it (`EncoreApi.login`, `AuthScreens.kt`): the request body, the answer
+ * The phone's sign-in with the kit's rules: the request body, the answer
  * read into a [LoginResult], the phone's name and the words. Plain Kotlin, so the unit tests run it on the JVM;
  * [ServerApi.login] sends it.
  */
 object SignInRules {
-    /** The page's title ("Sign in to Encore"). */
+    /** The page's title ("Sign in to Notes"). */
     fun title(app: String): String = "Sign in to $app"
 
     /** The line above the code field when the account has two-step sign-in. */

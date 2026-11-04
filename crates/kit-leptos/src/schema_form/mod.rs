@@ -1,18 +1,9 @@
 //! The settings cards drawn from the server's schema, so a new setting needs no UI work.
 //!
-//! From Encore's `web-rs/src/settings/schema_form.rs` (`field_html`, `source_note`, `env_note`, `show_when`,
-//! `bind_show_when`, `fields_html`, `form_html`, `form_values`), `groups.rs` (`card_html`, `visible_cards`,
-//! `cards_html`, `bind_card`, `bind_clear`, `bind_secret_buttons`, `Hub::save`) and `settings/mod.rs`
-//! (`test_result`). One renderer draws every type: a switch for `bool`, a row of check boxes for `checks`, a
-//! drop-down for `select`, a text area, a password input that starts empty (with the eye and copy buttons when
-//! the server lets admins see saved secrets), and a text or number input for the rest. Under each field: its help
-//! line and where its value comes from (an environment variable locks it; a saved secret says so and can be
-//! cleared). A field with a `when` rule shows only while its select has the value. Fields marked `advanced` fold
-//! under "Show advanced". The markup is Encore's; the tests hold it to Encore's recorded fixture of every page.
-//!
-//! [`SettingsCards`] draws a page's cards and wires Save (`PUT /api/admin/settings`), Test
-//! (`POST /api/system/test/<test>` after a quiet save), clear and the eye and copy buttons
-//! (`GET /api/admin/settings/secret/<key>`); [`SchemaFields`] is the fields alone.
+//! [`SettingsCards`] draws a page's cards and wires Save (`PUT /api/settings`), Test (`POST
+//! /api/diagnostics/test/<test>` after a quiet save), clear and the eye and copy buttons
+//! (`GET /api/settings/secret/<key>`); [`SchemaFields`] is the fields alone. The paths are the configured ones
+//! ([`Paths`](crate::config::Paths)), the words the configured [`FormWords`].
 
 pub mod schema;
 
@@ -33,94 +24,227 @@ use web_sys::Element;
 
 pub use schema::{visible_cards, Schema, Section, When};
 
-/// What `GET /api/admin/settings` sends for a saved secret ("•••• (saved)"). From `schema_form.rs` `MASK`.
+/// A small neutral settings schema (General with an App and a Storage card, Mail with a card that has Test),
+/// for demos and tests: every field type, a `when` rule each way, an advanced field and a secret text area.
+pub const SAMPLE_SCHEMA: &str = include_str!("sample-schema.json");
+
+/// What `GET /api/settings` sends for a saved secret ("•••• (saved)").
 pub const MASK: &str = "••••";
-/// The fold of the advanced fields. From `schema_form.rs` `fields_html`.
+/// The fold of the advanced fields.
 pub const SHOW_ADVANCED: &str = "Show advanced";
-/// The card's Save. From `groups.rs` `card_html`.
+/// The card's Save.
 pub const SAVE: &str = "Save";
-/// The toast after Save. From `groups.rs` `Hub::save`.
+/// The toast after Save.
 pub const SAVED: &str = "Settings saved";
-/// The toast after a secret's clear. From `groups.rs` `bind_clear`.
+/// The toast after a secret's clear.
 pub const CLEARED: &str = "Cleared";
-/// The Test button when the card names no words. From `groups.rs` `card_html`.
+/// The Test button when the card names no words.
 pub const TEST_CONNECTION: &str = "Test connection";
-/// The line while Test runs. From `groups.rs` `bind_card`.
+/// The line while Test runs.
 pub const TESTING: &str = "Testing…";
-/// Test's result when it failed without a sentence. From `groups.rs` `bind_card`.
+/// Test's result when it failed without a sentence.
 pub const TEST_FAILED: &str = "Test failed";
-/// A test result that passed without a sentence. From `settings/mod.rs` `test_result`.
+/// A test result that passed without a sentence.
 pub const CONNECTED: &str = "Connected";
-/// A test result that failed without a sentence. From `settings/mod.rs` `test_result`.
+/// A test result that failed without a sentence.
 pub const FAILED: &str = "Failed";
-/// A secret text area's button, and the eye's title. From `schema_form.rs` `field_html` and `groups.rs`.
+/// A secret text area's button, and the eye's title.
 pub const SHOW_SAVED: &str = "Show saved";
-/// The eye's title while hidden. From `schema_form.rs` `field_html`.
+/// The eye's title while hidden.
 pub const SHOW: &str = "Show";
-/// The eye's title while shown. From `groups.rs` `bind_secret_buttons`.
+/// The eye's title while shown.
 pub const HIDE: &str = "Hide";
-/// The copy buttons of a secret. From `schema_form.rs` `field_html`.
+/// The copy buttons of a secret.
 pub const COPY: &str = kit_rules::toasts::COPY;
+/// The line under a value an environment variable sets, `{env}` its name.
+pub const ENV_NOTE: &str = "🔒 Set by {env} in the environment – change it there (the environment always wins)";
+/// The line under a saved secret, before its clear link.
+pub const SAVED_HIDDEN: &str = "Saved ✓ (hidden)";
+/// A saved secret's clear link.
+pub const CLEAR: &str = "clear";
+/// The line under a secret that is not set.
+pub const NOT_SET: &str = "Not set";
+/// After [`NOT_SET`] when an environment variable could set it, `{env}` its name.
+pub const OR_SET: &str = " – or set {env} in the environment";
+/// The line under a value another part of the app fills in, `{plugin}` its name.
+pub const PLUGIN_NOTE: &str = "🔗 Filled in by {plugin} – it changes this itself";
+/// The line under a default an environment variable could set, `{env}` its name.
+pub const DEFAULT_ENV: &str = "Default · env var {env}";
+/// A saved secret text area's placeholder.
+pub const PASTE_TO_REPLACE: &str = "Saved – paste to replace";
+/// A password field's placeholder while an environment variable sets it.
+pub const SET_BY_ENV: &str = "set by environment";
+/// A saved password's placeholder.
+pub const PASTE_NEW: &str = "saved – paste a new value to replace";
+/// A password's placeholder while none is saved.
+pub const NOT_SET_PLACEHOLDER: &str = "not set";
+
+/// The settings form's words. [`FormWords::DEFAULT`] holds the kit's; an app passes its own in
+/// [`Words::form`](crate::config::Words::form).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FormWords {
+    /// The fold with a card's advanced fields ([`SHOW_ADVANCED`]).
+    pub show_advanced: &'static str,
+    /// A card's save button ([`SAVE`]).
+    pub save: &'static str,
+    /// The toast once a card was saved ([`SAVED`]).
+    pub saved: &'static str,
+    /// The toast once a saved value was cleared ([`CLEARED`]).
+    pub cleared: &'static str,
+    /// A card's test button when the card names none ([`TEST_CONNECTION`]).
+    pub test_connection: &'static str,
+    /// The line while the test runs ([`TESTING`]).
+    pub testing: &'static str,
+    /// The line when the test call itself failed ([`TEST_FAILED`]).
+    pub test_failed: &'static str,
+    /// A test that passed without a sentence ([`CONNECTED`]).
+    pub connected: &'static str,
+    /// A test that failed without a sentence ([`FAILED`]).
+    pub failed: &'static str,
+    /// The button that shows a saved secret ([`SHOW_SAVED`]).
+    pub show_saved: &'static str,
+    /// The eye while hidden ([`SHOW`]).
+    pub show: &'static str,
+    /// The eye while shown ([`HIDE`]).
+    pub hide: &'static str,
+    /// The button that copies a secret ([`COPY`]).
+    pub copy: &'static str,
+    /// The line under a value an environment variable sets, with `{env}` ([`ENV_NOTE`]).
+    pub env_note: &'static str,
+    /// The line under a saved secret ([`SAVED_HIDDEN`]).
+    pub saved_hidden: &'static str,
+    /// Its clear link ([`CLEAR`]).
+    pub clear: &'static str,
+    /// The line under a secret that is not set ([`NOT_SET`]).
+    pub not_set: &'static str,
+    /// After it when an environment variable could set it, with `{env}` ([`OR_SET`]).
+    pub or_set: &'static str,
+    /// The line under a value another part of the app fills in, with `{plugin}` ([`PLUGIN_NOTE`]).
+    pub plugin_note: &'static str,
+    /// The line under a default an environment variable could set, with `{env}` ([`DEFAULT_ENV`]).
+    pub default_env: &'static str,
+    /// A saved secret text area's placeholder ([`PASTE_TO_REPLACE`]).
+    pub paste_to_replace: &'static str,
+    /// A password's placeholder while an environment variable sets it ([`SET_BY_ENV`]).
+    pub set_by_env: &'static str,
+    /// A saved password's placeholder ([`PASTE_NEW`]).
+    pub paste_new: &'static str,
+    /// A password's placeholder while none is saved ([`NOT_SET_PLACEHOLDER`]).
+    pub not_set_placeholder: &'static str,
+}
+
+impl FormWords {
+    /// The kit's words.
+    pub const DEFAULT: FormWords = FormWords {
+        show_advanced: SHOW_ADVANCED,
+        save: SAVE,
+        saved: SAVED,
+        cleared: CLEARED,
+        test_connection: TEST_CONNECTION,
+        testing: TESTING,
+        test_failed: TEST_FAILED,
+        connected: CONNECTED,
+        failed: FAILED,
+        show_saved: SHOW_SAVED,
+        show: SHOW,
+        hide: HIDE,
+        copy: COPY,
+        env_note: ENV_NOTE,
+        saved_hidden: SAVED_HIDDEN,
+        clear: CLEAR,
+        not_set: NOT_SET,
+        or_set: OR_SET,
+        plugin_note: PLUGIN_NOTE,
+        default_env: DEFAULT_ENV,
+        paste_to_replace: PASTE_TO_REPLACE,
+        set_by_env: SET_BY_ENV,
+        paste_new: PASTE_NEW,
+        not_set_placeholder: NOT_SET_PLACEHOLDER,
+    };
+}
+
+impl Default for FormWords {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+fn words() -> FormWords {
+    crate::config::get().words.form
+}
+
+/// `template` split at `{name}`: the words before and after it (all of it before when it has none).
+fn around<'a>(template: &'a str, name: &str) -> (&'a str, &'a str) {
+    template.split_once(name).unwrap_or((template, ""))
+}
+
+/// `template` with its `{name}` drawn by `inner`.
+fn with_part(template: &'static str, name: &str, inner: AnyView) -> AnyView {
+    let (a, b) = around(template, name);
+    view! { {a}{inner}{b} }.into_any()
+}
 
 fn is_masked(v: &str) -> bool {
     v.starts_with(MASK)
 }
 
-/// Whether an environment variable sets `key` (`meta`: the `_meta` of `GET /api/admin/settings`): the value is
-/// shown locked and Save leaves it out. From `schema_form.rs` `env_locked`.
+/// Whether an environment variable sets `key` (`meta`: the `_meta` of `GET /api/settings`): the value is
+/// shown locked and Save leaves it out.
 pub fn env_locked(meta: &Value, key: &str) -> bool {
     meta.o(key).s("source") == "env"
 }
 
-/// The note under a value an environment variable sets ("🔒 Set by ENCORE_… in your compose/env – change it
-/// there (environment always wins)"). From `schema_form.rs` `env_note`.
+/// The note under a value an environment variable sets ("🔒 Set by APP_NAME in the environment – change it there
+/// (the environment always wins)").
 #[component]
 pub fn EnvNote(
     /// The variable's name.
     #[prop(into)]
     env: String,
 ) -> impl IntoView {
-    view! { <small class="src env">"🔒 Set by "<span class="mono">{env}</span>" in your compose/env – change it there (environment always wins)"</small> }
+    let w = words();
+    view! { <small class="src env">{with_part(w.env_note, "{env}", view! { <span class="mono">{env}</span> }.into_any())}</small> }
 }
 
 /// The note under a field: set by an environment variable, a saved secret (with clear), a secret that is not
-/// set, a plugin's value, or the environment variable that would set it. From `schema_form.rs` `source_note`.
+/// set, a value another part of the app fills in, or the environment variable that would set it.
 fn source_note(f: &Field, v: &Value, meta: &Value) -> AnyView {
+    let w = words();
     let m = meta.o(&f.key);
     let secret = f.is_secret();
+    let mono = |s: String| view! { <span class="mono">{s}</span> }.into_any();
     if env_locked(meta, &f.key) {
         return view! { <EnvNote env=m.s("env")/> }.into_any();
     }
     if secret && truthy(v) {
-        return view! { <small class="src">"Saved ✓ (hidden) · "<a href="#" data-clear=f.key.clone()>"clear"</a></small> }.into_any();
+        return view! { <small class="src">{w.saved_hidden}" · "<a href="#" data-clear=f.key.clone()>{w.clear}</a></small> }.into_any();
     }
     if secret {
-        let env = m.truthy("env").then(|| view! { " – or set "<span class="mono">{m.s("env")}</span>" in your compose file" });
-        return view! { <small class="src">"Not set"{opt(env)}</small> }.into_any();
+        let env = m.truthy("env").then(|| with_part(w.or_set, "{env}", mono(m.s("env"))));
+        return view! { <small class="src">{w.not_set}{opt(env)}</small> }.into_any();
     }
     if m.s("source") == "plugin" {
-        return view! { <small class="src plugin">"🔗 Filled in by the "<b>{m.s("plugin")}</b>" plugin – it changes this itself"</small> }
-            .into_any();
+        let by = view! { <b>{m.s("plugin")}</b> }.into_any();
+        return view! { <small class="src plugin">{with_part(w.plugin_note, "{plugin}", by)}</small> }.into_any();
     }
     if m.s("source") == "ui" {
         return "".into_any();
     }
-    opt(m.truthy("env").then(|| view! { <small class="src faint">"Default · env var "<span class="mono">{m.s("env")}</span></small> }))
+    opt(m.truthy("env").then(|| view! { <small class="src faint">{with_part(w.default_env, "{env}", mono(m.s("env")))}</small> }))
 }
 
 /// The values of the `when` selects of a run of fields, as they change.
 pub type Selects = ArcRwSignal<HashMap<String, String>>;
 
-/// One field: `v` its value from `GET /api/admin/settings`, `meta` that answer's `_meta`, `reveal` whether the
-/// server lets admins see saved secrets. From `schema_form.rs` `field_html` and `show_when`: the same elements,
-/// attributes in the same order (a `when` rule's `data-when`, `data-when-in` or `data-when-not` and `hidden` before
-/// `class`) and the same text nodes, so the page is Encore's node for node.
+/// One field: `v` its value from `GET /api/settings`, `meta` that answer's `_meta`, `reveal` whether the
+/// server lets admins see saved secrets.
 pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Selects) -> AnyView {
+    let w = words();
     let key = f.key.clone();
     let locked = meta.o(&f.key).s("source") == "env";
     let readonly = !locked && meta.o(&f.key).s("source") == "plugin";
     let help = (opt(f.help.clone().map(|h| view! { <small>{h}</small> })), source_note(f, v, meta));
-    let cls = if f.full || f.kind == "textarea" { "field full" } else { "field " };
+    let cls = if f.full || f.kind == "textarea" { "field full" } else { "field" };
     let label = f.label.clone();
     // the `when` rule: shown while its select has the value (bind_show_when)
     let rule = f.when.clone();
@@ -152,14 +276,14 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
             .into_any()
         }
         "select" => {
-            // option values are text; a numeric setting (streamrip_quality = 2) compares as text
+            // option values are text; a numeric setting (quality = 2) compares as text
             let vs = js_string(v);
             let opts = seq(f.options.iter().map(|(val, lab)| view! { <option value=val.clone() selected=*val == vs>{lab.clone()}</option> }));
             let k2 = key.clone();
             let sel = selects.clone();
             let select = view! {
                 <select class="input" data-k=key.clone() id=format!("f-{key}") disabled=locked
-                    on:change=move |e| { let v = event_target_value(&e); sel.update(|m| { m.insert(k2.clone(), v); }); }>{"\n      "}{opts}</select>
+                    on:change=move |e| { let v = event_target_value(&e); sel.update(|m| { m.insert(k2.clone(), v); }); }>{opts}</select>
             }
             .attr("readonly", readonly.then_some(""));
             view! {
@@ -170,18 +294,18 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
             .into_any()
         }
         _ => {
-            // also for values set by environment variables (read-only, but viewable); never the WireGuard private key
-            let reveal = reveal && truthy(v) && f.key != "vpn_wireguard_config";
+            // also for values set by environment variables (read-only, but viewable)
+            let reveal = reveal && truthy(v);
             if f.kind == "textarea" {
                 let btns = reveal.then(|| {
                     view! {
                         <span {..()} class="row" style="gap:8px">
-                            <button {..()} type="button" class="btn sm" data-reveal=key.clone() {..html(format!("{EYE}{SHOW_SAVED}"))}>{""}</button>
-                            <button {..()} type="button" class="btn sm" data-copy=key.clone() {..html(format!("{}{COPY}", icon("copy")))}>{""}</button>
+                            <button {..()} type="button" class="btn sm" data-reveal=key.clone() {..html(format!("{EYE}{}", w.show_saved))}>{""}</button>
+                            <button {..()} type="button" class="btn sm" data-copy=key.clone() {..html(format!("{}{}", icon("copy"), w.copy))}>{""}</button>
                         </span>
                     }
                 });
-                let ph = if truthy(v) { "Saved – paste to replace" } else { "" };
+                let ph = if truthy(v) { w.paste_to_replace } else { "" };
                 return view! {
                     <label {..()} data-when=when_key data-when-in=when_in data-when-not=when_not hidden=hidden class=cls>
                         <span>{label}</span><textarea class="input mono" data-k=key.clone() disabled=locked readonly=readonly placeholder=ph>{""}</textarea>{opt(btns)}{help}
@@ -192,11 +316,11 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
             if f.kind == "password" {
                 // secrets are only sent to the browser when the eye or copy button is pressed: an empty input keeps the saved value
                 let ph = if locked {
-                    "set by environment"
+                    w.set_by_env
                 } else if truthy(v) {
-                    "saved – paste a new value to replace"
+                    w.paste_new
                 } else {
-                    "not set"
+                    w.not_set_placeholder
                 };
                 let input = view! {
                     <input class="input" type="password" data-k=key.clone() value="" disabled=locked readonly=readonly data-eye=reveal.then_some("1") autocomplete="new-password" placeholder=ph/>
@@ -204,8 +328,8 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
                 let wrapped = if reveal {
                     view! {
                         <span class="pw-wrap secret">{input}
-                            <button {..()} type="button" class="eye-btn" data-reveal=key.clone() title=SHOW aria-label={SHOW} {..html(EYE)}>{""}</button>
-                            <button {..()} type="button" class="eye-btn" data-copy=key.clone() title=COPY aria-label={COPY} {..html(icon("copy"))}>{""}</button>
+                            <button {..()} type="button" class="eye-btn" data-reveal=key.clone() title=w.show aria-label={w.show} {..html(EYE)}>{""}</button>
+                            <button {..()} type="button" class="eye-btn" data-copy=key.clone() title=w.copy aria-label={w.copy} {..html(icon("copy"))}>{""}</button>
                         </span>
                     }
                     .into_any()
@@ -227,26 +351,25 @@ pub fn field_view(f: &Field, v: &Value, meta: &Value, reveal: bool, selects: Sel
     }
 }
 
-/// Draws a run of fields as a block of the app's own (Encore's VPN for Soulseek around the `vpn_` fields).
+/// Draws a run of fields as a block of the app's own (a box with a heading around the `proxy_` fields).
 pub type Block = Arc<dyn Fn(AnyView) -> AnyView + Send + Sync>;
 
 /// A block of fields: those whose key starts with `prefix` are drawn by `draw`, in place of the first of them,
-/// and the fields after them in a grid of their own (`form-grid mt`). From `schema_form.rs` `grid_html`.
+/// and the fields after them in a grid of their own (`form-grid mt`).
 #[derive(Clone)]
 pub struct FieldBlock {
-    /// The key prefix of the block's fields (`vpn_`).
+    /// The key prefix of the block's fields (`proxy_`).
     pub prefix: String,
     /// Draws the block around its fields' grid cells.
     pub draw: Block,
 }
 
-/// The fields of a card with their values: a grid, and the advanced ones folded under "Show advanced". From
-/// `schema_form.rs` `form_html` / `fields_html` / `grid_html`.
+/// The fields of a card with their values: a grid, and the advanced ones folded under "Show advanced".
 #[component]
 pub fn SchemaFields(
     /// The fields to draw (those the values hold, [`visible_cards`]).
     fields: Vec<Field>,
-    /// `GET /api/admin/settings` (with `_meta`).
+    /// `GET /api/settings` (with `_meta`).
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -278,12 +401,12 @@ pub fn SchemaFields(
     };
     let folded = (!adv.is_empty()).then(|| {
         let inner = seq(adv.iter().map(|f| one(f)));
-        view! { <details class="adv-fields mt"><summary class="small muted">{SHOW_ADVANCED}</summary><div class="form-grid mt">{inner}</div></details> }
+        view! { <details class="adv-fields mt"><summary class="small muted">{words().show_advanced}</summary><div class="form-grid mt">{inner}</div></details> }
     });
     view! { {grid}{opt(folded)} }
 }
 
-/// A test result line: passed (✓) or failed (× and Copy). From `settings/mod.rs` `test_result`.
+/// A test result line: passed (✓) or failed (× and Copy).
 #[component]
 pub fn TestResult(
     /// `{ok, message}`.
@@ -295,9 +418,9 @@ pub fn TestResult(
         if truthy(m) {
             js_string(m)
         } else if ok {
-            CONNECTED.to_string()
+            words().connected.to_string()
         } else {
-            FAILED.to_string()
+            words().failed.to_string()
         }
     };
     let copy = (!ok).then(|| view! { <CopyButton text=msg.clone()/> });
@@ -326,19 +449,19 @@ pub type Extra = Arc<dyn Fn(&str) -> AnyView + Send + Sync>;
 /// What the app adds to its cards.
 #[derive(Clone)]
 pub struct CardHooks {
-    /// The card's extra blocks after its fields (Encore's Cadenza card has two), by card id.
+    /// The card's extra blocks after its fields (a preview, a list of the app's own), by card id.
     pub extra: Option<Extra>,
 }
 
 /// A card: a fold with the title, description and Test button in its summary, then the result line, the fields
-/// and Save. From `groups.rs` `card_html`, with its line breaks between the tags.
+/// and Save.
 #[component]
 pub fn SettingsCard(
     /// The card.
     group: Arc<Group>,
     /// Its fields that this server has.
     fields: Vec<Field>,
-    /// `GET /api/admin/settings`.
+    /// `GET /api/settings`.
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -355,7 +478,7 @@ pub fn SettingsCard(
     /// Test was pressed (the card's `<details>`).
     #[prop(optional, into)]
     on_test: Option<Callback<Element>>,
-    /// Drawn before the fields (Encore's YouTube sign-in block).
+    /// Drawn before the fields (a sign-in block of the app's own).
     #[prop(default = None)]
     before: Option<AnyView>,
     /// The card's extra blocks after its fields.
@@ -365,19 +488,20 @@ pub fn SettingsCard(
     #[prop(optional)]
     block: Option<FieldBlock>,
 ) -> impl IntoView {
+    let w = words();
     let node = NodeRef::<leptos::html::Details>::new();
     let el = move || node.get_untracked().map(|d| d.unchecked_into::<Element>());
     let out_view = out.map(|out| {
         move || match out.get() {
             Out::Empty => "".into_any(),
-            Out::Testing => view! { <div class="test-result"><span class="spinner">{""}</span><span>{TESTING}</span></div> }.into_any(),
+            Out::Testing => view! { <div class="test-result"><span class="spinner">{""}</span><span>{w.testing}</span></div> }.into_any(),
             Out::Results(rs) => seq(rs.into_iter().map(|r| view! { <TestResult result=r/> })),
         }
     });
     let desc = (!group.desc.is_empty())
         .then(|| view! { <div {..()} class="small muted" style="margin-top:4px;font-weight:400">{group.desc.clone()}</div> });
     let test = group.test.as_ref().map(|_| {
-        let label = group.test_label.clone().unwrap_or_else(|| TEST_CONNECTION.to_string());
+        let label = group.test_label.clone().unwrap_or_else(|| w.test_connection.to_string());
         view! {
             <button class="btn sm" data-test on:click=move |e| {
                 if let (Some(el), Some(f)) = (el(), on_test) { e.prevent_default(); f.run(el); }
@@ -386,33 +510,26 @@ pub fn SettingsCard(
     });
     view! {
         <details class="card settings-card" data-sec=group.id.clone() open=open node_ref=node>
-            {"\n      "}
             <summary {..()} class="row between" style="gap:10px;flex-wrap:nowrap;align-items:flex-start">
                 <div {..()} style="min-width:0"><h2>{group.title.clone()}</h2>{opt(desc)}</div>
-                {"\n        "}
                 <span {..()} class="row" style="gap:8px">{opt(test)}<span class="chev" {..html(chevron())}>{""}</span></span>
             </summary>
-            {"\n      "}
             <div {..()} style="height:14px">{""}</div>
-            {"\n      "}
             <div data-out>{opt(out_view)}</div>
-            {"\n      "}
             {opt(before)}
             <SchemaFields fields=fields values=values reveal=reveal block=block.unwrap_or_else(|| FieldBlock { prefix: "\u{0}".into(), draw: Arc::new(|v| v) })/>
             {opt(extra)}
-            {"\n      "}
             <div {..()} class="row mt" style="justify-content:flex-end">
                 <button class="btn primary" data-save on:click=move |_| { if let (Some(el), Some(f)) = (el(), on_save) { f.run(el); } }
-                    {..html(format!("{}{SAVE}", icon("check")))}>{""}</button>
+                    {..html(format!("{}{}", icon("check"), w.save))}>{""}</button>
             </div>
-            {"\n    "}
         </details>
     }
 }
 
 /// What Save sends for a card: every field of `g` found under `root`, except those an environment variable or a
 /// plugin sets, an empty secret (keeps the saved one) and a mask the server sent; `checks` as comma-separated
-/// values. From `schema_form.rs` `form_values`.
+/// values.
 pub fn form_values(g: &Group, root: &Element, meta: &Value) -> Map<String, Value> {
     let mut body = Map::new();
     for el in crate::rt::qsa_in(root, "[data-k]") {
@@ -460,14 +577,14 @@ fn set_value(el: &Element, v: &str) {
     }
 }
 
-/// A saved secret, asked for when the eye or copy button is pressed. From `groups.rs` `secret_of`.
+/// A saved secret, asked for when the eye or copy button is pressed.
 async fn secret_of(key: &str) -> Result<String, ApiError> {
     let enc: String = js_sys::encode_uri_component(key).into();
-    Ok(api::get(&format!("/admin/settings/secret/{enc}")).await?.s("value"))
+    let path = crate::config::Paths::fill(&crate::config::get().paths.settings_secret, &enc);
+    Ok(api::get(&path).await?.s("value"))
 }
 
-/// The eye and copy buttons of saved secrets in `card` (asked for from the server only when pressed). From
-/// `groups.rs` `bind_secret_buttons`.
+/// The eye and copy buttons of saved secrets in `card` (asked for from the server only when pressed).
 pub fn bind_secret_buttons(card: &Element) {
     for b in crate::rt::qsa_in(card, "[data-reveal]") {
         let (card, b2) = (card.clone(), b.clone());
@@ -507,11 +624,12 @@ pub fn bind_secret_buttons(card: &Element) {
                     }
                     let _ = input.remove_attribute("data-shown");
                 }
+                let w = words();
                 if b.class_list().contains("eye-btn") {
                     b.set_inner_html(if hidden { EYE_OFF } else { EYE });
-                    let _ = b.set_attribute("title", if hidden { HIDE } else { SHOW });
+                    let _ = b.set_attribute("title", if hidden { w.hide } else { w.show });
                 } else {
-                    b.set_inner_html(&if hidden { format!("{EYE_OFF}{HIDE}") } else { format!("{EYE}{SHOW_SAVED}") });
+                    b.set_inner_html(&if hidden { format!("{EYE_OFF}{}", w.hide) } else { format!("{EYE}{}", w.show_saved) });
                 }
             });
         });
@@ -544,13 +662,13 @@ pub fn bind_secret_buttons(card: &Element) {
 /// The cards of one settings page, wired to the server: Save, Test, clear and the secret buttons.
 ///
 /// `cards` are the page's [`visible_cards`]; a link may name the card to open (`focus`), else the first one
-/// opens (a page of one card has it open). After clear the values are asked for again and the cards drawn anew,
-/// as Encore does. From `groups.rs` `cards_html`, `bind_card` and `Hub::save`.
+/// opens (a page of one card has it open). After clear the values are asked for again and the cards drawn
+/// anew.
 #[component]
 pub fn SettingsCards(
     /// The page's cards with their fields.
     cards: Vec<(Arc<Group>, Vec<Field>)>,
-    /// `GET /api/admin/settings`.
+    /// `GET /api/settings`.
     values: Value,
     /// The server lets admins see saved secrets.
     #[prop(optional)]
@@ -601,9 +719,10 @@ pub fn SettingsCards(
                 }
                 line.set(Out::Testing);
                 crate::rt::spawn(async move {
-                    let failed = |e: ApiError| serde_json::json!({ "ok": false, "message": if e.message.is_empty() { TEST_FAILED.to_string() } else { e.message } });
+                    let failed = |e: ApiError| serde_json::json!({ "ok": false, "message": if e.message.is_empty() { words().test_failed.to_string() } else { e.message } });
+                    let test = crate::config::Paths::fill(&crate::config::get().paths.test, g.test.as_deref().unwrap_or(""));
                     let r = match save(&g, true, &card, values, line.clone()).await {
-                        Ok(()) => match api::post_empty(&format!("/system/test/{}", g.test.as_deref().unwrap_or(""))).await {
+                        Ok(()) => match api::post_empty(&test).await {
                             Ok(r) => r,
                             Err(e) => failed(e),
                         },
@@ -645,10 +764,10 @@ fn bind_page(values: ArcRwSignal<Value>, drawn: ArcRwSignal<u32>) {
                 crate::rt::spawn(async move {
                     let mut body = Map::new();
                     body.insert(key, Value::String(String::new()));
-                    match api::put("/admin/settings", Value::Object(body)).await {
+                    match api::put(&crate::config::get().paths.settings, Value::Object(body)).await {
                         Ok(v) => {
                             values.set(v);
-                            toast(CLEARED, "ok");
+                            toast(words().cleared, "ok");
                             drawn.update(|d| *d += 1);
                         }
                         Err(e) => web_sys::console::error_1(&e.message.into()),
@@ -659,13 +778,12 @@ fn bind_page(values: ArcRwSignal<Value>, drawn: ArcRwSignal<u32>) {
     }
 }
 
-/// Save of a card (and the quiet save before Test): `PUT /api/admin/settings` with what the card's fields hold;
+/// Save of a card (and the quiet save before Test): `PUT /api/settings` with what the card's fields hold;
 /// the answer becomes the values, and a folder the server cannot write to comes back as a warning under the card.
-/// From `groups.rs` `Hub::save`.
 async fn save(g: &Group, quiet: bool, card: &Element, values: ArcRwSignal<Value>, line: ArcRwSignal<Out>) -> Result<(), ApiError> {
     let meta = values.get_untracked().o("_meta");
     let body = form_values(g, card, &meta);
-    match api::put("/admin/settings", Value::Object(body)).await {
+    match api::put(&crate::config::get().paths.settings, Value::Object(body)).await {
         Ok(mut v) => {
             let warnings: Vec<String> = v
                 .g("_warnings")
@@ -677,7 +795,7 @@ async fn save(g: &Group, quiet: bool, card: &Element, values: ArcRwSignal<Value>
             }
             values.set(v);
             if !quiet {
-                toast(SAVED, "ok");
+                toast(words().saved, "ok");
             }
             if !warnings.is_empty() {
                 line.set(Out::Results(warnings.into_iter().map(|m| serde_json::json!({ "ok": false, "message": m })).collect()));

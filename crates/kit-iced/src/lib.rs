@@ -1,11 +1,11 @@
 //! # kit-iced
 //!
-//! Encore's desktop building blocks as [Iced](https://iced.rs) 0.14 components, extracted from Encore's
-//! desktop app (`clients/desktop`) and styled from the kit's design tokens (`design/out/iced_tokens.rs`).
+//! Desktop building blocks for any app as [Iced](https://iced.rs) 0.14 components, styled from the kit's
+//! design tokens (`design/out/iced_tokens.rs`). App names, words, routes and logos are the app's.
 //!
 //! | Module | What it gives an app |
 //! | --- | --- |
-//! | [`theme`] | Encore's palettes (every theme and accent), [`theme::encore`], and every widget style |
+//! | [`theme`] | the palettes (every theme and accent), [`theme::default_look`], and every widget style |
 //! | [`widgets`] | text styles, buttons, cards, fields, modal, badges, skeletons, icons, text area |
 //! | [`toast`] | toasts: errors stay with Copy, duplicates don't pile up, Undo, a cap on the stack |
 //! | [`details`] | the details dialog: any text in full, selectable, with Copy |
@@ -18,11 +18,13 @@
 //! | [`bug_report`] | the bug report sheet (kind, title, description, files) and report labels |
 //! | [`diagnostics`] | the diagnostics checks: status dot, name, message, fix, and a copyable report |
 //! | [`offline`] | the offline banner |
+//! | [`confirm`] | the confirm dialog: a question, Cancel and the action (red when it destroys something) |
 //!
 //! Components hold no network code: they keep their state, draw it and say what the app should do next,
 //! and the app makes the requests with its own client. That keeps them usable by any app.
 
 pub mod bug_report;
+pub mod confirm;
 pub mod details;
 pub mod diagnostics;
 pub mod drop_zone;

@@ -16,6 +16,7 @@ class KitThemeTest {
         assertEquals(Color(0xFFF0EAD6), p.text)
         assertEquals(Color(0xFFF0EAD6), p.accent)
         assertEquals(Color(0xFFD6C49A), p.accent2)
+        assertEquals(Color(0xFF16161F), p.onAccent)
         assertEquals(KitTheme.Encore, KitLook().theme)
     }
 

@@ -1,7 +1,7 @@
 # {{app_title}} for Android
 
 The phone app: Jetpack Compose on [kit-compose](https://github.com/Krifmaz/kit/tree/{{kit_tag}}/android/kit-compose)
-({{kit_tag}}), in the Encore theme. A Gradle build of its own; the rest of the repository is Rust.
+({{kit_tag}}), in the kit's default theme. A Gradle build of its own; the rest of the repository is Rust.
 
 | Module | What it is |
 | --- | --- |

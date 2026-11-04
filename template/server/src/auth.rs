@@ -1,6 +1,6 @@
-//! Signing in, from Encore's `server/crates/api/src/auth.rs` and `routes/auth.rs`, cut down to what every app
+//! Signing in, cut down to what every app
 //! needs: accounts with bcrypt passwords, an owner made at the first start, a web session cookie, the
-//! server's API key (`x-api-key`) and Encore's CSRF rule (`X-Requested-With: <project name>`). Encore's words throughout.
+//! server's API key (`x-api-key`) and the CSRF rule (`X-Requested-With: <project name>`). The kit's words throughout.
 //!
 //! ```text
 //! POST /api/auth/login   {username, password} → the account, and the session cookie
@@ -24,17 +24,17 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// The session cookie's name: `<app>_session` (Encore: `encore_session`).
+/// The session cookie's name: `<app>_session` (`notes_session` for `notes`).
 pub fn cookie_name() -> String {
     format!("{}_session", crate::NAME.replace('-', "_"))
 }
 
-/// Seconds since 1970, as Encore keeps times.
+/// Seconds since 1970, how the tables keep times.
 pub fn now() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
 }
 
-/// `bytes` random bytes as URL-safe base64 (Encore's `random_token`).
+/// `bytes` random bytes as URL-safe base64.
 pub fn random_token(bytes: usize) -> String {
     use base64::Engine;
     use rand::Rng;
@@ -43,7 +43,7 @@ pub fn random_token(bytes: usize) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b)
 }
 
-/// How long an app token lasts after its last use: a year (Encore's default `app_session_days`).
+/// How long an app token lasts after its last use: a year.
 pub const APP_SESSION_SECS: f64 = 365.0 * 86400.0;
 
 /// The `sessions.token` of an app token: its SHA-256, so the database never holds a usable token.
@@ -60,7 +60,7 @@ pub fn bearer(headers: &HeaderMap) -> Option<String> {
     (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then(|| token.to_string())
 }
 
-/// The account and session tables (Encore's columns that sign-in, What's new and bug reports read).
+/// The account and session tables (the columns that sign-in, What's new and bug reports read).
 pub fn migrate(db: &SqliteDb) -> anyhow::Result<()> {
     db.execute_batch(
         "CREATE TABLE IF NOT EXISTS users (
@@ -97,7 +97,7 @@ pub fn verify_password(pw: &str, hashed: &str) -> bool {
 }
 
 /// A username of 3 to 32 letters, digits, `_`, `-` and `.`, and a password of 8 characters or more; 400
-/// otherwise (Encore's `validate_credentials`).
+/// otherwise.
 pub fn validate_credentials(username: &str, password: &str) -> Result<()> {
     let ok_name = (3..=32).contains(&username.chars().count()) && username.chars().all(|c| c.is_alphanumeric() || "_-.".contains(c));
     if !ok_name {
@@ -147,7 +147,7 @@ pub fn ensure_owner(st: &AppState, user: Option<String>, password: Option<String
     Ok(())
 }
 
-/// Events per key in a sliding window (Encore's `RateLimiter`): sign-in tries per address, bug reports per
+/// Events per key in a sliding window: sign-in tries per address, bug reports per
 /// account.
 #[derive(Default)]
 pub struct Limits {
@@ -184,7 +184,7 @@ fn ct_eq(a: &str, b: &str) -> bool {
 }
 
 /// The signed-in account of a request: the API key (as the owner), an app token, else the session cookie. A cookie
-/// request that changes something must carry `X-Requested-With: <app>` (CSRF), as Encore's.
+/// request that changes something must carry `X-Requested-With: <app>` (CSRF).
 pub fn signed_in(st: &AppState, parts: &Parts) -> Result<Account> {
     let (mut row, cookie) = user_of(st, &parts.headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
     if cookie && !matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS) {
@@ -254,7 +254,7 @@ pub struct Login {
     pub app: Option<AppDevice>,
 }
 
-/// The phone that signs in (Encore's `AppDevice`).
+/// The phone or computer that signs in.
 #[derive(Deserialize)]
 pub struct AppDevice {
     /// the app's own id for this install

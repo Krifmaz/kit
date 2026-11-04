@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Which server the app talks to and who is signed in, kept in the preferences file "server": the base URL ("" until
- * the first connect), the app token from signing in (sent as `Authorization: Bearer`, as Encore's app does) and
+ * the first connect), the app token from signing in (sent as `Authorization: Bearer`) and
  * this phone's id (sent with the sign-in and with crash reports).
  */
 class ServerSettings(context: Context) {
@@ -173,7 +173,7 @@ class ServerApi(private val settings: ServerSettings) {
     fun me(): Me = Me.of(getObject("/api/auth/me"))
 
     /**
-     * Finds the server for what was typed (Encore's `probe`): tries each [ServerAddress.candidates] address's
+     * Finds the server for what was typed : tries each [ServerAddress.candidates] address's
      * `/api/health` and gives the first that answers as a server, in OkHttp's form. Throws with the words to show.
      */
     fun probe(input: String): String {

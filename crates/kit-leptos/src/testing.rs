@@ -1,8 +1,8 @@
 //! Markup tests: HTML compared as the browser builds it, not byte for byte.
 //!
-//! Encore's web app writes HTML strings with indentation and its own attribute order; Leptos renders the same
-//! elements without the whitespace between them and puts `class` last. Both give the browser the same document,
-//! so the tests compare a canonical form: elements with their attributes sorted (a class as its sorted words, an
+//! The expected markup in a test is written by hand, with indentation and in any attribute order; Leptos renders
+//! the same elements without the whitespace between them and puts `class` last. Both give the browser the same
+//! document, so the tests compare a canonical form: elements with their attributes sorted (a class as its sorted words, an
 //! attribute without a value as `""`), text with entities decoded and runs of white space collapsed, white
 //! space alone between elements and comments (Leptos' `<!>` markers) left out, and the `<tbody>` a table's parser
 //! adds left out.

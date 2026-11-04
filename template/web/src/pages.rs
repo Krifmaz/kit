@@ -1,6 +1,5 @@
 //! The app's pages: sign-in, Home, Bug reports and Settings (the server's settings form, Diagnostics and
-//! What's new). Words and markup are Encore's (`web-rs/src/pages/auth.rs`, `pages/bugreports.rs`), so
-//! Encore's stylesheet draws them.
+//! What's new). Words and markup are the kit's, so the kit's stylesheet (static/css/app.css) draws them.
 
 use crate::{app_name, navigate};
 use kit_leptos::api;
@@ -17,7 +16,7 @@ use serde_json::{json, Value};
 use std::rc::Rc;
 
 /// The data folder notice: `GET /api/storage`, Check again posts `/api/storage/check` (the server's
-/// `checks.rs`). Check again's words are Encore's for its downloads folders, said of the data folder.
+/// `checks.rs`). Check again's words name the data folder.
 pub fn data_notice() -> NoticeSource {
     NoticeSource {
         path: "/storage".into(),
@@ -28,6 +27,7 @@ pub fn data_notice() -> NoticeSource {
             checking: "Still checking the data folder",
             fixed: "The data folder can be written",
         },
+        words_for: Vec::new(),
         after_check: None,
     }
 }
@@ -37,7 +37,7 @@ fn s(v: &Value, k: &str) -> String {
     v.get(k).and_then(Value::as_str).unwrap_or("").to_string()
 }
 
-/// The sign-in page (Encore's `auth.rs` login form, without sign-up and mail links).
+/// The sign-in page (username and password).
 #[component]
 pub fn SignIn() -> impl IntoView {
     let (error, set_error) = signal(None::<String>);
@@ -106,7 +106,7 @@ pub fn Home() -> impl IntoView {
     }
 }
 
-/// One report of the list (Encore's `report_row`, without kind and status badges).
+/// One report of the list (title, author and replies).
 fn report_row(r: &Value) -> impl IntoView {
     let n = r.get("message_count").and_then(Value::as_i64).unwrap_or(0);
     let count = match n {
