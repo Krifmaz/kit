@@ -15,6 +15,10 @@ What every kit server crate shares, so each one can be added to any app in a few
 - **`version`** — version numbers compared by their numeric parts; `base("1.4.0.17")` is `1.4.0`.
 - **`SqliteDb`** (feature `sqlite`) — a SQLite database (JSON rows and parameters through the `Db` trait,
   `p![…]`, `RowExt`) with `migrate`, for the SQLite stores and for apps without a database layer of their own.
+- **On the app's own SQLite** — every SQLite store (`SqlitePrefs`, `SqliteSettings`, `SqliteNotices`,
+  `SqliteReports`, `SqliteSuite`) takes any `Db`, so an app with its own SQLite layer keeps the kit's `kit_*`
+  tables in its own database on its own connections. `Migrations::run(&db)` makes them; that `Db` must run a
+  batch and the write after it on one connection (one write connection does).
 - **`pg::PgDb`** (feature `postgres`) — a Postgres pool with the same JSON rows (`$1` parameters) and `migrate`,
   on sqlx's core and Postgres driver (so it sits next to rusqlite; TLS is the app's sqlx feature).
 - **`testing::TestHost`** (feature `testing`) — an app state for tests: SQLite in memory, fixed accounts

@@ -3,7 +3,8 @@
 //! `kit_suite_keys` tables; an app may implement the trait on its own storage.
 
 use kit_rules::suite::Manifest;
-use kit_server_core::{async_trait, p, Db, Migrations, Result, Row, RowExt, SqliteDb};
+use kit_server_core::{async_trait, p, Db, Migrations, Result, Row, RowExt, SharedDb};
+use std::sync::Arc;
 
 /// An app this one links to.
 #[derive(Clone, Debug, PartialEq)]
@@ -198,15 +199,15 @@ fn manifest_text(m: &Option<Manifest>) -> serde_json::Value {
 /// The links and keys in SQLite.
 #[derive(Clone)]
 pub struct SqliteSuite {
-    /// the database
-    db: SqliteDb,
+    /// the database: the kit's `SqliteDb` or the app's own SQLite `Db`
+    db: SharedDb,
 }
 
 impl SqliteSuite {
-    /// The links and keys on `db`, their tables made or brought up to date.
-    pub fn new(db: SqliteDb) -> Result<SqliteSuite> {
-        db.migrate(&SQLITE)?;
-        Ok(SqliteSuite { db })
+    /// The links and keys on `db` (the kit's `SqliteDb` or the app's own SQLite database), their tables made or brought up to date.
+    pub fn new(db: impl Db + 'static) -> Result<SqliteSuite> {
+        SQLITE.run(&db)?;
+        Ok(SqliteSuite { db: Arc::new(db) })
     }
 }
 
@@ -459,7 +460,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_keeps_the_contract() {
-        suite_contract(&SqliteSuite::new(SqliteDb::memory()).unwrap()).await;
+        suite_contract(&SqliteSuite::new(kit_server_core::SqliteDb::memory()).unwrap()).await;
     }
 
     #[cfg(feature = "postgres")]

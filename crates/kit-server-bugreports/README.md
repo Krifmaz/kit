@@ -30,7 +30,7 @@ Two ready implementations keep them in tables of their own, made by `kit_server_
 
 | Feature | What |
 | --- | --- |
-| `sqlite` (default) | `SqliteReports::new(db: SqliteDb) -> Result<_>`, on `kit_server_core::SqliteDb` |
+| `sqlite` (default) | `SqliteReports::new(db: impl Db) -> Result<_>`, on `kit_server_core::SqliteDb` or the app's own SQLite `Db` |
 | `postgres` | `PgReports::new(db: PgDb).await -> Result<_>`, on `kit_server_core::pg::PgDb` (BIGSERIAL ids, DOUBLE PRECISION times, BOOLEAN flags) |
 | `testing` | `store::reports_contract` and `store::crash_contract`: what an app's own store must do, as async test functions |
 
