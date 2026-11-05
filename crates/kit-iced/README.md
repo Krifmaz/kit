@@ -11,7 +11,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | Module | What it gives an app |
 | --- | --- |
 | `theme` | every palette (themes × accents × background), `theme::default_look()`, `set`/`look`, every widget style (`btn(Btn::Primary)`, `input`, `card`, `modal`, `toast`, `warn_box`, `badge` …) |
-| `widgets` | text styles (`h1`–`h3`, `muted`, `small`), buttons, cards, `field`, `modal`, badges, skeletons, tabs/segments, the icon set, the app's `Logo`, text area, links |
+| `widgets` | text styles (`h1`–`h3`, `muted`, `small`), buttons, cards, `field`, `modal`, badges, skeletons, tabs/segments, the icon set and the app's own icons (`AppIcon`), the app's `Logo`, text area, links |
 | `toast` | `Toasts<A>`: errors stay with Copy, a repeated error does not pile up, Undo toasts, 3 errors / 5 toasts (kit-rules' desktop policy); `view` |
 | `details` | the details dialog: any text in full, selectable, with Copy, an optional action and links |
 | `whats_new` | `Popup` (after an update) and `Changelog` (the full page), with the release notes renderer |
