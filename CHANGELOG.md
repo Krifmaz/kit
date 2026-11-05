@@ -14,6 +14,13 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
 
+## v0.3.1 — 2026-11-05
+
+### Fixed
+- Postgres stores: a statement run with a null where a later call passes a number (a bug report file's
+  `message_id`, for one) no longer fails now and then with "invalid byte sequence for encoding UTF8: 0x00";
+  statements with a null parameter are no longer kept prepared on the connection.
+
 ## v0.3.0 — 2026-11-05
 
 Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
