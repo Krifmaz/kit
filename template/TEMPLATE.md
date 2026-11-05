@@ -52,3 +52,7 @@ line (`package {{android_package}}`) and the benchmarks' package name; they must
 folders are `dev/krifmaz/{{android_app}}` (cargo-generate turns a `/` inside a placeholder into `_`). The desktop
 app's names come from `desktop/app.json` (templated) and Cargo.toml's `repository`; `scripts/desktop-package.sh`
 is templated.
+
+The Cargo manifests are kept as `Cargo.toml.liquid` (cargo-generate renders them and drops the `.liquid`). As
+`Cargo.toml`, their `{{project-name}}` package names would be read by Cargo in every app that takes the kit as a git
+dependency, which prints three `invalid character` errors on each build.

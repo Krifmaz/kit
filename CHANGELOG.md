@@ -11,6 +11,18 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
   own, so changes waiting on a phone survive the switch to the kit's outbox.
 
+### Fixed
+- Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
+  dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
+  app is the same; the template needs cargo-generate 0.23.4 or later.
+
+## v0.3.1 — 2026-11-05
+
+### Fixed
+- Postgres stores: a statement run with a null where a later call passes a number (a bug report file's
+  `message_id`, for one) no longer fails now and then with "invalid byte sequence for encoding UTF8: 0x00";
+  statements with a null parameter are no longer kept prepared on the connection.
+
 ## v0.3.0 — 2026-11-05
 
 Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
