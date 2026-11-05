@@ -4,6 +4,21 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.7.0 — 2026-11-05
+
+Notes: [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
+
+### Added
+- `kit-server-selfupdate`: Update now for an app's server running in Docker, over the mounted Docker socket.
+  `probe` says in plain words whether it can work here; `start::start_update` pulls the new image and starts a
+  helper container of it; `swap` is the helper (`<binary> self-update-helper`), which swaps the server's
+  container with the same settings, rolls back when the new one does not keep running, goes forward when the
+  new one had begun migrating its database, and removes the old image; `report` is the step-by-step record of
+  the last update, read back from the helper's log. The app's name, image, program, schema, exit codes and
+  migration check come in as an `App`.
+
+## v0.6.1 — 2026-11-05
+
 ### Added
 - kit-server-core: `Migrations::run(&dyn Db)` makes and updates the kit's `kit_*` tables on any SQLite `Db`
   (`SqliteDb::migrate` now uses it), and `SharedDb` (`Arc<dyn Db>`).

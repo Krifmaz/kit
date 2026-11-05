@@ -1,0 +1,29 @@
+[package]
+name = "kit-server-selfupdate"
+description = "Update now for a kit app's server in Docker: the new image pulled over the Docker socket, a helper container of it swapping the server's container (with roll-back), and the step-by-step record of the last update."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kit-server-core.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+urlencoding.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+
+[lints]
+workspace = true

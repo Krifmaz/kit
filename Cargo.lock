@@ -2827,6 +2827,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kit-server-selfupdate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "kit-server-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+]
+
+[[package]]
 name = "kit-server-settings"
 version = "0.1.0"
 dependencies = [

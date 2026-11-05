@@ -25,6 +25,13 @@ urlencoding = "2"
 # kit-server-settings: reads settings.toml
 toml = { version = "0.8.23", default-features = false, features = ["parse", "preserve_order"] }
 futures-util = "0.3.34"
+# kit-server-selfupdate: a Docker Engine client on the unix socket (HTTP/1.1 through hyper)
+anyhow = "1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+tokio-util = { version = "0.7.20", features = ["io"] }
+libc = "0.2"
 sha2 = "0.10"
 # kit-server-signup: invite and verification tokens
 getrandom = "0.3"
