@@ -168,6 +168,13 @@ pub fn proxy_answer(status: u16, marked: bool, body: &str) -> bool {
     (status == 404 || status >= 500) && !marked && !serde_json::from_str::<Value>(body).is_ok_and(|v| v.is_object())
 }
 
+/// Whether an answer means the server is down (the connection banner): a proxy's own answer, or an unmarked
+/// 502–504. A 502–504 the server itself sends (marked with `x-<app id>`) is an error of one call, such as an
+/// upstream the server asked failing, and the server is up.
+pub fn server_down(status: u16, marked: bool, body: &str) -> bool {
+    proxy_answer(status, marked, body) || (!marked && (502..=504).contains(&status))
+}
+
 /// The sentence of a failed answer: the server's `detail` (a string, or the `msg` of each entry), else its
 /// `message`, else its `error` (when they are text), else the status text, else "Request failed".
 pub fn error_message(data: &Value, status_text: &str) -> String {
@@ -192,8 +199,9 @@ impl HttpBackend {
     async fn answer(self, res: gloo_net::http::Response, path: String) -> ApiResult {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        let proxy = proxy_answer(status, res.headers().get(&format!("x-{}", self.app)).is_some(), &text);
-        self.event(if proxy || (502..=504).contains(&status) { "server-down" } else { "server-up" });
+        let marked = res.headers().get(&format!("x-{}", self.app)).is_some();
+        let proxy = proxy_answer(status, marked, &text);
+        self.event(if server_down(status, marked, &text) { "server-down" } else { "server-up" });
         if proxy {
             return Err(ApiError::new(NOT_CONNECTED));
         }
@@ -289,6 +297,16 @@ mod tests {
         assert!(!proxy_answer(502, true, "<html>"));
         assert!(!proxy_answer(500, false, r#"{"detail":"x"}"#));
         assert!(!proxy_answer(400, false, "<html>"));
+    }
+
+    #[test]
+    fn only_an_unreachable_server_is_down() {
+        assert!(server_down(502, false, "<html>"));
+        assert!(server_down(503, false, r#"{"error":"x"}"#));
+        assert!(!server_down(502, true, r#"{"error":"upstream failed"}"#));
+        assert!(!server_down(504, true, ""));
+        assert!(!server_down(500, true, r#"{"error":"x"}"#));
+        assert!(!server_down(200, true, "{}"));
     }
 
     #[test]

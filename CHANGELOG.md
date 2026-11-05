@@ -4,6 +4,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Fixed
+- kit-leptos: the connection banner ("The server isn't answering") shows only when the server can't be reached:
+  a proxy's own page or an unmarked 502–504. A 502–504 the server itself sends (marked `x-<app id>`) is one
+  call's error and no longer raises it; `api::server_down` says which.
+
 ## v0.2.0 — 2026-11-04
 
 Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
