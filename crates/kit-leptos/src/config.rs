@@ -17,6 +17,7 @@
 //! assert_eq!(config::get().app.key("update.tried"), "kit-demo.update.tried");
 //! ```
 
+pub use crate::crash::CrashWords;
 pub use crate::schema_form::FormWords;
 use kit_rules::app::App;
 use kit_rules::bugs::BugWords;
@@ -147,6 +148,8 @@ pub struct Words {
     pub form: FormWords,
     /// The command palette.
     pub palette: PaletteWords,
+    /// The banner after a panic.
+    pub crash: CrashWords,
 }
 
 /// One app's configuration.
