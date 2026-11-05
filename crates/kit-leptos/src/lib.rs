@@ -21,10 +21,11 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`palette`] | the command palette (Ctrl+K / ⌘K): the app's commands and the ones it loads on opening |
 //! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
-//! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`details::show`], [`clipboard::copy_text`])
+//! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`palette::open`], [`details::show`], [`clipboard::copy_text`])
 //! work from any code, Leptos or hand-written. Server calls go through [`api`], whose backend an app can replace
 //! ([`api::set_backend`]).
 
@@ -47,6 +48,7 @@ pub mod json;
 pub mod modal;
 pub mod notice;
 pub mod offline;
+pub mod palette;
 pub mod rt;
 pub mod schema_form;
 pub mod suite;
@@ -63,6 +65,7 @@ pub mod prelude {
     pub use crate::config::AppConfig;
     pub use crate::details::show as show_details;
     pub use crate::modal::{confirm, confirm_dialog, open as open_modal, ConfirmDialog, ModalOpts, ModalRoot};
+    pub use crate::palette::{open as open_palette, Command, Palette};
     pub use crate::toasts::{toast, toast_action, Toasts};
     pub use kit_rules::app::App;
     pub use kit_rules::dialogs::Confirm;
