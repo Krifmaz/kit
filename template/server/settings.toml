@@ -33,6 +33,14 @@ type = "number"
 unit = "days"
 min = 1
 
+[keys.public_url]
+env = "APP_PUBLIC_URL"
+default = ""
+group = "general"
+label = "Server address"
+help = "The address people open (https://app.example.com), put before invite and confirmation links. Empty: each app puts its own address before them."
+type = "text"
+
 [keys.api_key]
 env = "APP_API_KEY"
 default = ""

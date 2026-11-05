@@ -75,6 +75,12 @@ field and what Send says is missing.
 first, then the app's own kinds: `groups`, `groups_with`), a check's level and HTTP badge, the summary and
 sources lines and the copied report (`report_text`).
 
+**`signup`** — who may make an account (`contracts/signup.md`): `WHO` (Closed, Invite only, Open with their
+lines), `Policy` (the public setting: `sign_in_line`, `form`, `email_required`, `ManagedBy` when another app
+keeps the accounts), the sign-up form's checks (`check_form`, `sign_up_body`), `token_from` (the token in a
+pasted link), `full_link`, the admin's `Settings` (`from_json`/`to_json`), `InviteForm`, `InviteRow` (`title`,
+`uses_line`, `expiry_line`, `can_revoke`), `PendingRow`, `day`, and `SignupWords`.
+
 **`suite`** — linked apps (`contracts/suite.md`): the `Manifest` every app serves (sections, deep links,
 search, sign-on; `problems()` says what keeps it from being linked), `sidebar(apps, local, prefs)` (every
 section in the person's order, hidden ones marked), `visible`, `move_item`, `toggle_hidden`, `prefs_of` (back to

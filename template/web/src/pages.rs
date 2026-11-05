@@ -1,4 +1,4 @@
-//! The app's pages: sign-in, Home, Bug reports and Settings (the server's settings form, Diagnostics and
+//! The app's pages: sign-in, Home, Bug reports and Settings (the server's settings form, Sign-up, Diagnostics and
 //! What's new). Words and markup are the kit's, so the kit's stylesheet (static/css/app.css) draws them.
 
 use crate::{app_name, navigate};
@@ -73,6 +73,7 @@ pub fn SignIn() -> impl IntoView {
                     <label class="field"><span>"Password"</span><input class="input" type="password" name="password" autocomplete="current-password" required node_ref=password/></label>
                     <button class="btn primary" type="submit" style="padding:12px" disabled=busy>"Sign in"</button>
                 </form>
+                <kit_leptos::signup::SignInLine sign_up_href="#/sign-up"/>
             </div>
         </div>
     }
@@ -167,7 +168,11 @@ pub fn Settings(page: String) -> impl IntoView {
                 Some(Ok((schema, _))) => schema.sections.iter().map(|s| (s.id.clone(), s.title.clone())).collect(),
                 _ => vec![],
             };
-            let fixed = [("diagnostics".to_string(), "Diagnostics".to_string()), ("whats-new".to_string(), "What's new".to_string())];
+            let fixed = [
+                ("sign-up".to_string(), "Sign-up".to_string()),
+                ("diagnostics".to_string(), "Diagnostics".to_string()),
+                ("whats-new".to_string(), "What's new".to_string()),
+            ];
             sections
                 .into_iter()
                 .chain(fixed)
@@ -181,6 +186,7 @@ pub fn Settings(page: String) -> impl IntoView {
     let body = {
         let page = page.clone();
         move || match page.as_str() {
+            "sign-up" => view! { <kit_leptos::signup::SignupAdmin/> }.into_any(),
             "diagnostics" => view! { <DiagnosticsPage app=app.clone()/> }.into_any(),
             "whats-new" => view! { <ChangelogPage app=app.clone()/> }.into_any(),
             id => match data.get() {

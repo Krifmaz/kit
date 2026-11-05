@@ -55,6 +55,8 @@ pub enum Stage {
     Connect,
     /// Asking for a username and password.
     SignIn,
+    /// Making an account: an invite link, or open sign-up.
+    SignUp,
     /// Signed in: the sidebar and the pages.
     Shell,
 }
@@ -119,6 +121,14 @@ pub enum Message {
     SignedIn(Result<signin::LoginResult, ApiError>),
     /// Use a different account (forgets the code step) or go back to the connect page.
     SignInBack,
+    /// The sign-in page's Create an account: the sign-up page.
+    OpenSignUp,
+    /// The sign-up page (Back to sign in comes as `SignUpBack`).
+    SignUp(kit_iced::signup::SignUpMsg),
+    /// The sign-up page's Back to sign in.
+    SignUpBack,
+    /// The admin's sign-up page.
+    SignupAdmin(kit_iced::signup::AdminMsg),
     /// Ask before signing out or changing the server.
     Ask(Confirm),
     /// The confirm dialog's OK or Cancel (or its X, the backdrop, Escape).
@@ -280,6 +290,10 @@ pub struct App {
     pub form: Form,
     /// The Diagnostics page.
     pub diagnostics: diagnostics::State,
+    /// The sign-up page.
+    pub signup: kit_iced::signup::SignUp,
+    /// The admin's sign-up page.
+    pub signup_admin: kit_iced::signup::Admin,
     /// The updater.
     pub phase: Phase,
     /// The newer release found.
@@ -342,6 +356,8 @@ impl App {
             settings_tab: String::new(),
             form: Form::new(),
             diagnostics: diagnostics::State::default(),
+            signup: kit_iced::signup::SignUp::default(),
+            signup_admin: kit_iced::signup::Admin::default(),
             phase: Phase::Idle,
             found: None,
             told: String::new(),
@@ -508,6 +524,10 @@ impl App {
                     self.get(paths::SETTINGS_SCHEMA, Message::Schema)
                 }
             },
+            Page::Signup => {
+                let out = self.signup_admin.open(self.client.base());
+                self.signup_out(out, true)
+            }
             Page::Diagnostics => {
                 self.diagnostics.open();
                 self.get(paths::DIAGNOSTICS, Message::Checked)
@@ -516,6 +536,39 @@ impl App {
                 self.changelog.reset();
                 self.get(paths::CHANGELOG, Message::ChangelogLoaded)
             }
+        }
+    }
+
+    /// Does what a sign-up page asks: sends its requests (each answer goes back to the page: the admin's when
+    /// `admin`), copies, or shows a toast.
+    fn signup_out(&mut self, out: kit_iced::signup::Out, admin: bool) -> Task<Message> {
+        use kit_iced::signup::{AdminMsg, Out, SignUpMsg};
+        match out {
+            Out::None => Task::none(),
+            Out::Copy(text) => self.copy(text),
+            Out::Toast(text, err) => {
+                self.toasts.push(text, if err { ToastKind::Err } else { ToastKind::Ok });
+                Task::none()
+            }
+            Out::Send(reqs) => Task::batch(reqs.into_iter().map(|r| {
+                let c = self.client.clone();
+                let kind = r.kind;
+                let call = async move {
+                    match r.method {
+                        "GET" => c.get(r.path).await,
+                        "PUT" => c.put(r.path, r.body).await,
+                        _ => c.post(r.path, r.body).await,
+                    }
+                };
+                ask(call, move |res| {
+                    let res = res.map_err(|e| e.message);
+                    if admin {
+                        Message::SignupAdmin(AdminMsg::Answer(kind, res))
+                    } else {
+                        Message::SignUp(SignUpMsg::Answer(kind, res))
+                    }
+                })
+            })),
         }
     }
 
@@ -619,6 +672,26 @@ impl App {
                 } else if crate::store::server_override().is_none() {
                     self.stage = Stage::Connect;
                 }
+            }
+            Message::OpenSignUp => {
+                self.error.clear();
+                self.stage = Stage::SignUp;
+                let out = self.signup.open("");
+                return self.signup_out(out, false);
+            }
+            Message::SignUp(m) => {
+                let out = self.signup.update(m);
+                return self.signup_out(out, false);
+            }
+            Message::SignUpBack => {
+                if self.signup.done.is_some() {
+                    self.username = self.signup.username.clone();
+                }
+                self.stage = Stage::SignIn;
+            }
+            Message::SignupAdmin(m) => {
+                let out = self.signup_admin.update(m);
+                return self.signup_out(out, true);
             }
             Message::Ask(c) => self.confirm = Some(c.dialog()),
             Message::Dialog(m) => {

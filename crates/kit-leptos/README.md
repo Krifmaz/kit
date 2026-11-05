@@ -94,6 +94,7 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 | `schema_form` | `Schema::from_json`, `visible_cards`, `<SettingsCards cards values reveal focus hooks/>`, `<SettingsCard …/>`, `<SchemaFields/>`, `form_values`, `FormWords`, `SAMPLE_SCHEMA` |
 | `bug_report` | `open(SheetOpts::from_config(page))` or `SheetOpts::new(app, page, version)` |
 | `diagnostics` | `<DiagnosticsPage hooks/>`, `<DiagnosticsView data/>` (`app` optional), `DiagHooks` for an app's own blocks |
+| `signup` | `<SignInLine sign_up_href/>` (under the sign-in form: "Create an account", the invite hint, or where accounts are managed), `<SignUpPage app invite sign_in_href/>`, `<VerifyPage app token sign_in_href/>` and `<SignupAdmin/>` (who can sign up, waiting sign-ups, invites with the link shown once) on `paths.signup` |
 | `crash` | `install()` catches panics, uncaught errors and unhandled rejections and posts them to `paths.crash_reports` (`/crash-reports`), keeping them in `localStorage` until the server takes them; `report(kind, summary, text)`, `flush()` |
 | `offline` | `show_banner(grace_ended, on_retry)`, `set_trying`, `conn_banner(on, text)`, `watch_connection()`, `<OfflineBanner/>`, `<ConnBanner/>` |
 | `api` | `get`/`post`/`post_empty`/`put`/`patch`/`del`/`post_form`, `Backend`, `HttpBackend` (`from_config`, `new(id)`, `with_base`, `with_headers(|method, path| …)` for the app's own headers, such as a CSRF token) |

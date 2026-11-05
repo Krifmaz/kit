@@ -25,6 +25,7 @@
 //! | [`uploads`] | the accept checks shared by the file picker and drag & drop, and upload limits |
 //! | [`bugs`] | bug reports: kinds, statuses, the New report sheet's words and checks |
 //! | [`diagnostics`] | the Diagnostics page's groups, words and copied report |
+//! | [`signup`] | who can sign up, the sign-up form's checks, invite and waiting sign-up rows |
 //! | [`suite`] | linked apps: manifests, the shared sidebar's order and hidden entries, deep links, search groups |
 
 pub mod app;
@@ -35,6 +36,7 @@ pub mod diagnostics;
 pub mod dialogs;
 pub mod notices;
 pub mod offline;
+pub mod signup;
 pub mod suite;
 pub mod toasts;
 pub mod update;

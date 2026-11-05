@@ -137,6 +137,7 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
             if (me?.admin != false) {
                 EntryRow("Server settings", "The server's settings, as the web app has them") { open(Page.ServerSettings) }
                 EntryRow("Diagnostics", "Checks of the server and the phone app's crash reports") { open(Page.Diagnostics) }
+                EntryRow("Sign-up", "Who can sign up, invites and accounts waiting") { open(Page.Signup) }
             }
             EntryRow("Sign out", "Sign in again, as someone else or after a password change") { askSignOut = true }
             BugReportsEntry(bugs)

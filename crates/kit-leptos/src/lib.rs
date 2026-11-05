@@ -21,6 +21,7 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`signup`] | the sign-in page's sign-up line, the sign-up and confirmation pages, the admin's sign-up page |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
 //! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`details::show`], [`clipboard::copy_text`])
@@ -47,6 +48,7 @@ pub mod notice;
 pub mod offline;
 pub mod rt;
 pub mod schema_form;
+pub mod signup;
 pub mod toasts;
 pub mod update;
 pub mod whats_new;
