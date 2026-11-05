@@ -73,6 +73,8 @@ pub struct Details<P> {
     pub act: Option<Act>,
     /// The links and the main button.
     pub links: Links<P>,
+    /// The icon on the main button of the [`Links`], when it has one ([`Details::with_button_icon`]).
+    pub button_icon: Option<Icon>,
     content: Content,
 }
 
@@ -106,12 +108,18 @@ impl<P: Clone> Details<P> {
     /// A dialog showing `text` under `title`.
     pub fn new(title: String, text: String, lead: Option<Lead>, act: Option<Act>) -> Details<P> {
         let content = Content::with_text(&text);
-        Details { title, text, lead, act, links: Links::default(), content }
+        Details { title, text, lead, act, links: Links::default(), button_icon: None, content }
     }
 
     /// The same dialog with [`Links`].
     pub fn with_links(mut self, links: Links<P>) -> Details<P> {
         self.links = links;
+        self
+    }
+
+    /// The same dialog with `icon` on the main button of its [`Links`] (e.g. [`Icon::Play`] on "Play").
+    pub fn with_button_icon(mut self, icon: Icon) -> Details<P> {
+        self.button_icon = Some(icon);
         self
     }
 
@@ -181,7 +189,11 @@ pub fn view<P: Clone>(d: &Details<P>) -> El<'_, Msg<P>> {
     .spacing(10)
     .align_y(Alignment::Center);
     if let Some((label, page)) = &d.links.button {
-        footer = footer.push(btn(label.clone(), Btn::Primary, Some(Msg::Open(page.clone()))));
+        let open = Some(Msg::Open(page.clone()));
+        footer = footer.push(match d.button_icon {
+            Some(i) => btn_icon(i, label.clone(), Btn::Primary, open),
+            None => btn(label.clone(), Btn::Primary, open),
+        });
     }
     if let Some(a) = &d.act {
         footer = footer.push(btn(a.label.clone(), Btn::Primary, Some(Msg::Act)));
@@ -245,8 +257,16 @@ mod tests {
         };
         let mut d: Details<u8> = Details::new("Import".into(), "done".into(), None, None).with_links(links);
         assert_eq!(d.update(Msg::Open(3)), Some(Out::Open(3)));
+        {
+            let mut ui = iced_test::simulator(view(&d));
+            assert!(ui.find("Report.pdf").is_ok() && ui.find("Documents").is_ok());
+            assert!(ui.click("Open").is_ok());
+        }
+        // the main button can carry an icon and still opens its page
+        let d = d.with_button_icon(Icon::Play);
+        assert_eq!(d.button_icon, Some(Icon::Play));
         let mut ui = iced_test::simulator(view(&d));
-        assert!(ui.find("Report.pdf").is_ok() && ui.find("Documents").is_ok());
         assert!(ui.click("Open").is_ok());
+        assert_eq!(ui.into_messages().filter(|m| matches!(m, Msg::Open(3))).count(), 1);
     }
 }

@@ -62,7 +62,7 @@ fn the_sidebar_opens_every_page() {
 #[test]
 fn appearance_shows_every_button_icon_and_badge_and_switches_theme() {
     let mut demo = on(Page::Appearance);
-    for word in ["Primary", "Danger", "Ghost", "Play", "Accent", "Skeletons", "Logo", "home", "bug", "video", "A card", "Err"] {
+    for word in ["Primary", "Danger", "Ghost", "Play", "Accent", "Skeletons", "Logo", "home", "bug", "video", "star", "A card", "Err"] {
         assert!(shows(&demo, word), "{word}");
     }
     assert!(demo.palette().dark);

@@ -27,6 +27,12 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// An icon of the demo app's own, beside the kit's set: an app adds icons this way.
+pub const APP_ICON: Icon = Icon::App(kit_iced::widgets::AppIcon::stroke(
+    "star",
+    r#"<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>"#,
+));
+
 /// The imaginary app's name, in every sentence the components build.
 pub const APP: &str = "Demo";
 /// The version the (fake) server runs.
@@ -1107,7 +1113,8 @@ impl Demo {
             badges = badges.push(w::badge(name, kind));
         }
         let mut icons = row![].spacing(10);
-        for i in Icon::ALL {
+        // the kit's set, then an app's own icon (AppIcon) drawn the same way
+        for i in Icon::ALL.into_iter().chain([APP_ICON]) {
             icons = icons.push(
                 column![w::icon(i, 20.0, self.palette.text), w::small_muted(i.name())].spacing(4).align_x(Alignment::Center).width(64),
             );
