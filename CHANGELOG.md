@@ -12,6 +12,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   it in the page.
 - kit-rules `offline::outbox::retry_later(status)`: which failed calls wait to be sent again and which are dropped.
 
+### Fixed
+- `kit-release` publish: a run whose commit is no longer the default branch's head, where a newer commit changed
+  `.github/workflows`, skips the release with a notice instead of failing with HTTP 403 ("Resource not accessible
+  by integration"): `GITHUB_TOKEN` can't tag such a commit, and the newer commit's run releases its changes too.
+
 ## v0.7.0 — 2026-11-05
 
 Notes: [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
