@@ -14,6 +14,13 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
 
+## v0.3.2 — 2026-11-05
+
+### Fixed
+- Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
+  dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
+  app is the same; the template needs cargo-generate 0.23.4 or later.
+
 ## v0.3.1 — 2026-11-05
 
 ### Fixed
