@@ -184,6 +184,11 @@ details.settings-card[open] .chev svg { transform: rotate(180deg); }
   .toast { max-width: none; }
 }
 details.adv-fields > summary { cursor: pointer; width: max-content; }
+/* drag and drop (kit_leptos::dropzone): every drop place on screen while files are dragged over the window, and
+   the one under the pointer */
+.drop-ready { outline: 2px dashed rgba(var(--accent-rgb), .55); outline-offset: 3px; border-radius: 10px; transition: outline-color .12s, background-color .12s; }
+.drop-over { outline: 2px solid var(--accent); background-color: rgba(var(--accent-rgb), .12); }
+
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(.97) translateY(6px); } }
 @keyframes shimmer { to { background-position: -200% 0; } }
