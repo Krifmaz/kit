@@ -10,6 +10,13 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   out from it. The kit's palettes stay the default.
 - kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
   own, so changes waiting on a phone survive the switch to the kit's outbox.
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+
+### Changed
+- kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git

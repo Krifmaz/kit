@@ -1,5 +1,6 @@
 //! The kit's icon set (the same names and paths as kit-leptos), as SVG handles tinted to the theme,
-//! and the app's logo in the accent gradient ([`Logo`]).
+//! an app's own icons on top of it ([`AppIcon`], drawn by every widget that takes an [`Icon`]), and
+//! the app's logo in the accent gradient ([`Logo`]).
 
 use super::El;
 use crate::theme;
@@ -47,10 +48,43 @@ pub enum Icon {
     Bug,
     /// A video (save a video from a link).
     Video,
+    /// One of the app's own icons (not in [`Icon::ALL`]).
+    App(AppIcon),
+}
+
+/// An icon an app adds to the kit's set: its own SVG shapes in the kit's 24×24 box, drawn like the
+/// kit's icons (a 2 px round stroke, or filled), so it fits beside them. Keep them as consts:
+///
+/// ```
+/// use kit_iced::widgets::{AppIcon, Icon};
+/// const STAR: Icon = Icon::App(AppIcon::stroke("star", r#"<path d="m12 3 3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 10l6-1z"/>"#));
+/// assert_eq!(STAR.name(), "star");
+/// assert!(STAR.svg().contains("stroke-width"));
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AppIcon {
+    /// The icon's name (for logs and tests; the app keeps names unique).
+    pub name: &'static str,
+    /// The SVG elements inside the 24×24 view box (`<path d="…"/>`, `<circle …/>`).
+    pub body: &'static str,
+    /// Filled with the colour (transport shapes) instead of stroked.
+    pub filled: bool,
+}
+
+impl AppIcon {
+    /// An icon drawn with the kit's 2 px round stroke.
+    pub const fn stroke(name: &'static str, body: &'static str) -> AppIcon {
+        AppIcon { name, body, filled: false }
+    }
+
+    /// An icon filled with the colour (like the kit's Play and Pause).
+    pub const fn filled(name: &'static str, body: &'static str) -> AppIcon {
+        AppIcon { name, body, filled: true }
+    }
 }
 
 impl Icon {
-    /// Every icon.
+    /// Every icon of the kit's own set (an app's [`Icon::App`] icons are its own).
     pub const ALL: [Icon; 34] = [
         Icon::Home,
         Icon::Search,
@@ -125,17 +159,22 @@ impl Icon {
             Icon::List => "list",
             Icon::Devices => "devices",
             Icon::Bug => "bug",
+            Icon::App(a) => a.name,
         }
     }
 
-    /// The icon of a web name, for tables that carry icon names (the bar actions).
+    /// The kit icon of a web name, for tables that carry icon names (the bar actions); an app's own
+    /// icons are not looked up by name.
     pub fn by_name(name: &str) -> Option<Icon> {
         Icon::ALL.into_iter().find(|i| i.name() == name)
     }
 
     /// Filled shapes (the transport) are drawn with `fill`, the rest with a 2px stroke.
     fn filled(self) -> bool {
-        matches!(self, Icon::Play | Icon::Pause)
+        match self {
+            Icon::App(a) => a.filled,
+            _ => matches!(self, Icon::Play | Icon::Pause),
+        }
     }
 
     fn body(self) -> &'static str {
@@ -198,6 +237,7 @@ impl Icon {
             Icon::Bug => {
                 r##"<path d="M9 7V6a3 3 0 0 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6z"/><path d="M12 20v-9M6 13H2M22 13h-4M3 21c0-2.1 1.7-3.9 3.8-4M20.2 17c2.1.1 3.8 1.9 3.8 4M3 5c0 2.1 1.6 3.8 3.5 4M21 5c0 2.1-1.6 3.8-3.5 4M8 2l1.9 1.9M16 2l-1.9 1.9"/>"##
             }
+            Icon::App(a) => a.body,
         }
     }
 
@@ -219,8 +259,13 @@ fn handles() -> &'static HashMap<Icon, Handle> {
     H.get_or_init(|| Icon::ALL.into_iter().map(|i| (i, Handle::from_memory(i.svg().into_bytes()))).collect())
 }
 
-/// The handle of an icon (shared, cheap to clone).
+/// The handle of an icon (shared, cheap to clone). An app's own icons are made once, on first use.
 pub fn handle(i: Icon) -> Handle {
+    if let Icon::App(a) = i {
+        static APP: Mutex<Option<HashMap<AppIcon, Handle>>> = Mutex::new(None);
+        let mut g = APP.lock().unwrap_or_else(|e| e.into_inner());
+        return g.get_or_insert_with(HashMap::new).entry(a).or_insert_with(|| Handle::from_memory(i.svg().into_bytes())).clone();
+    }
     handles()[&i].clone()
 }
 
@@ -298,6 +343,19 @@ mod tests {
         }
         assert_eq!(Icon::by_name("devices"), Some(Icon::Devices));
         assert_eq!(Icon::by_name("nothing"), None);
+    }
+
+    #[test]
+    fn an_apps_own_icons_draw_like_the_kits() {
+        const RING: Icon = Icon::App(AppIcon::stroke("ring", r#"<circle cx="12" cy="12" r="9"/>"#));
+        const DOT: Icon = Icon::App(AppIcon::filled("dot", r#"<circle cx="12" cy="12" r="4"/>"#));
+        assert_eq!((RING.name(), DOT.name()), ("ring", "dot"));
+        assert!(RING.svg().contains(r#"stroke-width="2""#) && RING.svg().contains(r#"r="9""#));
+        assert!(DOT.svg().contains(r##"fill="#000""##) && !DOT.svg().contains("stroke-width"));
+        assert_eq!(handle(RING), handle(RING), "made once and shared");
+        assert_eq!(Icon::by_name("ring"), None, "only the kit's icons are found by name");
+        assert!(!Icon::ALL.contains(&RING));
+        let _ = icon::<()>(DOT, 16.0, Color::WHITE);
     }
 
     #[test]
