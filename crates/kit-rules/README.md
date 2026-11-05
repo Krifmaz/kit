@@ -75,6 +75,12 @@ field and what Send says is missing.
 first, then the app's own kinds: `groups`, `groups_with`), a check's level and HTTP badge, the summary and
 sources lines and the copied report (`report_text`).
 
+**`suite`** — linked apps (`contracts/suite.md`): the `Manifest` every app serves (sections, deep links,
+search, sign-on; `problems()` says what keeps it from being linked), `sidebar(apps, local, prefs)` (every
+section in the person's order, hidden ones marked), `visible`, `move_item`, `toggle_hidden`, `prefs_of` (back to
+the `SidebarPrefs` kept under `suite_sidebar`), `fill` for deep-link patterns, `join` and `normalize_base` for
+addresses, `SearchHit` / `SearchGroup` for one search across apps, and `SuiteWords`.
+
 ## Checks
 
 ```sh
