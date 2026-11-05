@@ -5,6 +5,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+- kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
+  own, so changes waiting on a phone survive the switch to the kit's outbox.
 - `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
 - kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
