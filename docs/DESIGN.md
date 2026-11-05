@@ -204,7 +204,7 @@ Apps call them in a few lines; the kit itself only tags.
 | `kit-ci.yml` | fmt, clippy, tests, web checks and parity on every PR. |
 | `kit-release.yml` | On every push to main: next vX.Y.Z (PATCH by default, MINOR/MAJOR from `docs/releases/<version>.md`), a normal release (never pre-release, rc, beta or edge), notes, SHA256SUMS. |
 | `kit-docker.yml` | Multi-arch GHCR image `:<version>` and `:latest`. |
-| `kit-android.yml` | Signed APK with Baseline Profile (signing secrets passed by the caller). |
+| `kit-android.yml` | Signed APK with Baseline Profile (signing secrets passed by the caller); a web front end (`web-dir`) built first. |
 | `kit-desktop.yml` | Windows, Linux and macOS installers. |
 
 Everything app-specific (names, paths, build commands, assets) is an input.

@@ -4,6 +4,8 @@ name: kit-android
 # Gradle (the version the wrapper properties name), runs the unit tests, checks the signature, the native libraries
 # the APK must carry, their 16 KB page alignment and (optionally) the Baseline Profile, and uploads the APK as the
 # artifact kit-app-android (file <app-name>-android-<version>.apk), which kit-release attaches to the release.
+# An app whose screens are a web front end (Capacitor, Cordova) names its folder as web-dir: it is built with
+# `npm ci` and web-build (e.g. `npx nuxt generate && npx cap sync android`) before Gradle.
 #
 # Signing: the permanent release key, passed by the caller as secrets (a called workflow sees no other secrets):
 #   android-keystore-base64 (base64 -w0 release.jks), android-keystore-password, android-key-alias,
@@ -95,6 +97,21 @@ on:
         type: boolean
         required: false
         default: false
+      web-dir:
+        description: "A web front end the APK carries (a Capacitor or Cordova app): its folder, built before Gradle (empty: none)"
+        type: string
+        required: false
+        default: ""
+      web-build:
+        description: "The commands that build web-dir and copy it into the Gradle project, run in web-dir after npm ci"
+        type: string
+        required: false
+        default: "npm run build"
+      node-version:
+        description: "Node.js for web-dir"
+        type: string
+        required: false
+        default: "22"
       java-version:
         type: string
         required: false
@@ -161,6 +178,22 @@ jobs:
         env:
           RUST_DIR: ${{ inputs.rust-dir }}
         run: cargo test --manifest-path "$RUST_DIR/Cargo.toml"
+      # A web front end inside the APK (Capacitor, Cordova): its packages from the lockfile, then its build, which
+      # copies the built files into the Gradle project
+      - uses: actions/setup-node@v4
+        if: inputs.web-dir != ''
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.web-dir }}/package-lock.json
+      - name: Web front end
+        if: inputs.web-dir != ''
+        working-directory: ${{ inputs.web-dir }}
+        env:
+          WEB_BUILD: ${{ inputs.web-build }}
+        run: |
+          npm ci --no-audit --no-fund
+          bash -euo pipefail -c "$WEB_BUILD"
       - name: Gradle version
         # run the Gradle the wrapper properties name, so bumping the wrapper bumps CI too
         id: gradle
