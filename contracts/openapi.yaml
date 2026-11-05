@@ -5,7 +5,7 @@ info:
   license: { name: MIT }
   description: >
     The endpoints every kit server speaks. Every path is a default an app can move (each crate's `XPaths`). The prose files next to this one
-    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md)
+    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md, suite.md)
     say what the fields mean. Apps may add fields; clients ignore fields they do not know.
 components:
   schemas:
@@ -71,6 +71,70 @@ components:
         detail: { type: string }
         status: { type: string, enum: [ok, warn, fail] }
         fix: { type: string }
+    SuiteSection:
+      type: object
+      required: [id, title, path]
+      properties: { id: { type: string, pattern: "^[a-z0-9-]{1,64}$" }, title: { type: string }, icon: { type: string, description: SVG path data in a 24x24 box }, path: { type: string } }
+    SuiteManifest:
+      type: object
+      required: [kit_suite, id, name, base_url, sections]
+      properties:
+        kit_suite: { type: integer, const: 1 }
+        id: { type: string, pattern: "^[a-z0-9-]{1,64}$" }
+        name: { type: string }
+        icon: { type: string }
+        version: { type: string }
+        base_url: { type: string }
+        sections: { type: array, items: { $ref: "#/components/schemas/SuiteSection" } }
+        deep_links: { type: object, additionalProperties: { type: string } }
+        search: { type: [string, "null"] }
+        sso: { type: [object, "null"], properties: { issuer: { type: string } } }
+    SuiteLink:
+      type: object
+      properties:
+        id: { type: integer }
+        base_url: { type: string }
+        name: { type: string }
+        account_source: { type: boolean }
+        manifest: { $ref: "#/components/schemas/SuiteManifest" }
+        error: { type: [string, "null"] }
+        ok: { type: boolean }
+        checked_at: { type: number }
+        created_at: { type: number }
+    SuiteKey:
+      type: object
+      properties: { id: { type: string }, name: { type: string }, redirect_url: { type: [string, "null"] }, created_at: { type: number }, last_used_at: { type: number }, key: { type: string, description: only in the answer that made it } }
+    SidebarItem:
+      type: object
+      properties:
+        key: { type: string }
+        app: { type: string }
+        app_name: { type: string }
+        section: { type: string }
+        title: { type: string }
+        icon: { type: string }
+        url: { type: string }
+        path: { type: string }
+        hidden: { type: boolean }
+        local: { type: boolean }
+    Sidebar:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/SidebarItem" } }
+        apps: { type: array, items: { type: object, properties: { id: { type: string }, name: { type: string }, icon: { type: string }, base_url: { type: string }, local: { type: boolean }, error: { type: [string, "null"] } } } }
+    SearchHit:
+      type: object
+      required: [title, url]
+      properties: { title: { type: string }, subtitle: { type: [string, "null"] }, url: { type: string }, section: { type: [string, "null"] }, icon: { type: [string, "null"] } }
+    SearchGroup:
+      type: object
+      properties:
+        app: { type: string }
+        app_name: { type: string }
+        icon: { type: string }
+        local: { type: boolean }
+        results: { type: array, items: { $ref: "#/components/schemas/SearchHit" } }
+        error: { type: [string, "null"] }
 paths:
   /api/health:
     get:
@@ -327,3 +391,106 @@ paths:
     post:
       summary: Restart gracefully, exit code 75 (admin)
       responses: { "202": { description: restarting, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/kit/manifest:
+    get:
+      summary: What this app is (public); see suite.md
+      responses: { "200": { description: the manifest, content: { application/json: { schema: { $ref: "#/components/schemas/SuiteManifest" } } } } }
+  /api/kit/suite/ping:
+    get:
+      summary: Whether a key works (Authorization Bearer key)
+      responses: { "200": { description: this app, content: { application/json: { schema: { type: object, properties: { id: { type: string }, name: { type: string }, key: { type: string } } } } } }, "401": { description: wrong or revoked key } }
+  /api/kit/search:
+    get:
+      summary: This app's own search (signed in, or a linked app with a key)
+      parameters: [{ name: q, in: query, required: true, schema: { type: string, maxLength: 200 } }, { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50 } }]
+      responses: { "200": { description: hits, content: { application/json: { schema: { type: object, properties: { results: { type: array, items: { $ref: "#/components/schemas/SearchHit" } } } } } } } }
+  /api/kit/suite/links:
+    get:
+      summary: Every linked app (admin)
+      responses: { "200": { description: links, content: { application/json: { schema: { type: object, properties: { links: { type: array, items: { $ref: "#/components/schemas/SuiteLink" } } } } } } } }
+    post:
+      summary: Link an app by address and key (admin)
+      requestBody: { content: { application/json: { schema: { type: object, required: [url, key], properties: { url: { type: string }, key: { type: string }, account_source: { type: boolean } } } } } }
+      responses: { "200": { description: the link, content: { application/json: { schema: { $ref: "#/components/schemas/SuiteLink" } } } }, "400": { description: can't be linked (the reason) }, "409": { description: linked already } }
+  /api/kit/suite/links/{id}:
+    patch:
+      summary: Make a link the account source (or not), or give it a new key (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody: { content: { application/json: { schema: { type: object, properties: { account_source: { type: boolean }, key: { type: string } } } } } }
+      responses: { "200": { description: the link, content: { application/json: { schema: { $ref: "#/components/schemas/SuiteLink" } } } } }
+    delete:
+      summary: Remove a link (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: removed, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/kit/suite/links/{id}/refresh:
+    post:
+      summary: Read the linked app's manifest again (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: the link, content: { application/json: { schema: { $ref: "#/components/schemas/SuiteLink" } } } } }
+  /api/kit/suite/keys:
+    get:
+      summary: Every key this app made for other apps (admin)
+      responses: { "200": { description: keys, content: { application/json: { schema: { type: object, properties: { keys: { type: array, items: { $ref: "#/components/schemas/SuiteKey" } } } } } } } }
+    post:
+      summary: Make a key for another app (admin); the whole key is in this answer only
+      requestBody: { content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string }, redirect_url: { type: string } } } } } }
+      responses: { "200": { description: the key, content: { application/json: { schema: { $ref: "#/components/schemas/SuiteKey" } } } } }
+  /api/kit/suite/keys/{id}:
+    delete:
+      summary: Revoke a key (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses: { "200": { description: revoked, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/kit/suite/sidebar:
+    get:
+      summary: The person's shared sidebar
+      responses: { "200": { description: the sidebar, content: { application/json: { schema: { $ref: "#/components/schemas/Sidebar" } } } } }
+    put:
+      summary: Keep the person's order and hidden entries
+      requestBody: { content: { application/json: { schema: { type: object, properties: { order: { type: array, items: { type: string } }, hidden: { type: array, items: { type: string } } } } } } }
+      responses: { "200": { description: the sidebar, content: { application/json: { schema: { $ref: "#/components/schemas/Sidebar" } } } } }
+  /api/kit/suite/search:
+    get:
+      summary: Search this app and every linked app at once
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, maxLength: 200 } }
+        - { name: scope, in: query, schema: { type: string, enum: [all, self, others] } }
+        - { name: apps, in: query, schema: { type: string, description: comma-separated app ids } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50 } }
+      responses: { "200": { description: one group per app, content: { application/json: { schema: { type: object, properties: { query: { type: string }, groups: { type: array, items: { $ref: "#/components/schemas/SearchGroup" } } } } } } } }
+  /api/kit/sso:
+    get:
+      summary: Whether people sign in through an account source (public)
+      responses: { "200": { description: sign-on, content: { application/json: { schema: { type: object, properties: { enabled: { type: boolean }, source: { type: [object, "null"] }, start: { type: [string, "null"] } } } } } } }
+  /api/kit/sso/start:
+    get:
+      summary: Off to the account source to sign in
+      parameters: [{ name: next, in: query, schema: { type: string } }]
+      responses: { "303": { description: to the account source's authorization endpoint } }
+  /api/kit/sso/callback:
+    get:
+      summary: The account source's answer; the app's session, or the sign-in page with sso_error
+      parameters: [{ name: code, in: query, schema: { type: string } }, { name: state, in: query, schema: { type: string } }]
+      responses: { "303": { description: to next, or to the sign-in page } }
+  /.well-known/openid-configuration:
+    get:
+      summary: The account source's OIDC discovery document (404 unless it is one)
+      responses: { "200": { description: discovery, content: { application/json: { schema: { type: object } } } } }
+  /api/kit/oidc/authorize:
+    get:
+      summary: OIDC authorization (code flow); the client is a key's id
+      parameters:
+        - { name: response_type, in: query, required: true, schema: { type: string, const: code } }
+        - { name: client_id, in: query, required: true, schema: { type: string } }
+        - { name: redirect_uri, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: nonce, in: query, schema: { type: string } }
+      responses: { "303": { description: back with code and state, or to the sign-in page }, "400": { description: unknown client or redirect } }
+  /api/kit/oidc/token:
+    post:
+      summary: A code for tokens (client_secret_post or client_secret_basic)
+      requestBody: { content: { application/x-www-form-urlencoded: { schema: { type: object, properties: { grant_type: { type: string }, code: { type: string }, redirect_uri: { type: string }, client_id: { type: string }, client_secret: { type: string } } } } } }
+      responses: { "200": { description: tokens, content: { application/json: { schema: { type: object, properties: { access_token: { type: string }, token_type: { type: string }, expires_in: { type: integer }, id_token: { type: string } } } } } }, "400": { description: invalid_grant }, "401": { description: invalid_client } }
+  /api/kit/oidc/userinfo:
+    get:
+      summary: The claims for an access token
+      responses: { "200": { description: claims, content: { application/json: { schema: { type: object } } } } }

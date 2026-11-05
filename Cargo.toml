@@ -27,6 +27,12 @@ toml = { version = "0.8.23", default-features = false, features = ["parse", "pre
 futures-util = "0.3.34"
 sha2 = "0.10"
 kit-server-core = { path = "crates/kit-server-core" }
+kit-rules = { path = "crates/kit-rules" }
+# kit-server-suite: asks linked apps (rustls on ring, so no C toolchain beyond cc is needed), signs ID tokens
+reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls", "charset", "http2"] }
+hmac = "0.12"
+base64 = "0.22"
+rand = "0.9"
 # the storage traits are async, so an app can keep the kit's data on an async database (Postgres through sqlx)
 async-trait = "0.1.89"
 # feature `postgres` of the server crates: the Postgres stores, on sqlx's core and Postgres driver (not the `sqlx`

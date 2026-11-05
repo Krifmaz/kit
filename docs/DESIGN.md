@@ -73,6 +73,7 @@ Krifmaz/kit
 │   ├── kit-server-diagnostics   checks with status, message and fix
 │   ├── kit-server-settings      schema → API → validation
 │   ├── kit-server-updates       release feed (full release vs hotfix)
+│   ├── kit-server-suite         linked apps: manifest, shared sidebar, single sign-on, search
 │   ├── kit-rules                toasts, changelog, update detection, offline, uploads
 │   ├── kit-leptos               web components (+ demo)
 │   └── kit-iced                 desktop components (+ demo)
@@ -134,11 +135,12 @@ Every feature exists on web (kit-leptos), Android (kit-compose) and desktop (kit
 | Offline mode | Stays usable from cached data, says why it's offline (no network, DNS, refused, timeout, HTTPS, proxy 502–504), queues the app's actions to send later. |
 | Drag & drop | Every upload accepts dropped files with the same checks as the file picker. |
 | Settings from a schema | The server describes its settings; every client draws the forms. |
+| Suite | Apps link to each other by address and key; one sidebar shows every linked app's sections (each person hides, shows and reorders them); one sign-in through the app that keeps the accounts (OIDC); one search across apps and "related in …" cross-links. |
 
 ## 7. Contracts
 
 `contracts/` holds OpenAPI 3.1 (`openapi.yaml`) and prose for: health, changelog/what's-new, notices, bug
-reports, diagnostics, settings schema and update feed. Default paths are neutral (`/api/health`,
+reports, diagnostics, settings schema, update feed and suite. Default paths are neutral (`/api/health`,
 `/api/changelog/*`, `/api/notices`, `/api/bug-reports`, `/api/diagnostics`, `/api/settings/schema`…); an app
 may mount them elsewhere. **Rule:** a contract change is a kit release with a changelog entry; a breaking one
 raises MAJOR.
@@ -158,6 +160,7 @@ storage hooks the app provides).
 | kit-server-diagnostics | Check registry with status, message and fix. |
 | kit-server-settings | Schema loading from the app's settings file, settings API, validation. |
 | kit-server-updates | Release feed for in-app updates (the app's repo and asset names). |
+| kit-server-suite | The app's manifest, links and keys, the shared sidebar, single sign-on (OIDC provider and relying party), search across linked apps. |
 
 ## 9. kit-rules
 

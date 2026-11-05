@@ -4,15 +4,32 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.3.0 — 2026-11-05
+## v0.4.0 — 2026-11-05
 
-Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
+Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 
 ### Added
 - `kit-icons` (design/icons): an app's glyph (one 24 × 24 SVG in `currentColor` and `{accent-2}`) becomes its whole
   icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
+
+## v0.3.0 — 2026-11-05
+
+Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
+
+### Added
+- Suite (`contracts/suite.md`): apps on the kit link to each other, share one sidebar, one sign-in and one search.
+  - `kit-server-suite`: `GET /api/kit/manifest` (the app's id, name, icon, sections with icons, base URL, deep-link
+    patterns, search endpoint, sign-on), keys for other apps (`/api/kit/suite/keys`, shown once, kept hashed) and
+    links to them by address and key (`/api/kit/suite/links`), the person's shared sidebar
+    (`GET`/`PUT /api/kit/suite/sidebar`), the app's own search for linked apps (`/api/kit/search`) and one search
+    across every linked app (`/api/kit/suite/search`, `scope=others` for cross-links). Single sign-on: an account
+    source is an OpenID Connect provider (`/.well-known/openid-configuration`, `/api/kit/oidc/*`), and linked apps
+    sign people in through it (`/api/kit/sso*`, `SuiteHost::sso_sign_in`). Links and keys in `kit_suite_links` and
+    `kit_suite_keys` on SQLite (`SqliteSuite`) or Postgres (`PgSuite`).
+  - kit-rules `suite`: the manifest, the sidebar in each person's order with hidden entries, deep-link patterns,
+    search groups and the suite's words.
 
 ## v0.2.2 — 2026-11-05
 

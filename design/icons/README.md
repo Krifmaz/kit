@@ -3,7 +3,7 @@
 An app's icon set from one glyph, on the kit's tile in the theme's colours (DESIGN.md §5 "App icons").
 
 ```sh
-cargo install --git https://github.com/Krifmaz/kit --tag v0.3.0 kit-icons
+cargo install --git https://github.com/Krifmaz/kit --tag v0.4.0 kit-icons
 kit-icons web/icon.svg web/public/icons --name "My App"            # write the set
 kit-icons web/icon.svg web/public/icons --name "My App" --check    # exit 1 when it is out of date
 ```
