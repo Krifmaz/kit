@@ -1,5 +1,6 @@
 //! Two of these apps running side by side and linked (kit-server-suite): one is the account source, the other
-//! shows both apps' pages in its sidebar, searches both, and signs people in with their account from the first.
+//! shows both apps' pages in its sidebar, searches both, signs people in with their account from the first, and
+//! shows the first's sign-up setting read-only.
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -105,6 +106,14 @@ async fn two_linked_apps_share_the_sidebar_search_and_sign_in() {
     assert_eq!(groups.len(), 2, "{found}");
     assert_eq!(groups[1]["app_name"], "ONE");
     assert_eq!(groups[1]["results"][0]["url"], format!("{}/#/bug-reports", source.base));
+
+    // sign-up: the source's setting applies to the linked app too, shown read-only there
+    let (s, _) = owner(&c, &source, reqwest::Method::PUT, "/api/signup/settings", Some(json!({ "who": "open" }))).await;
+    assert_eq!(s, 200);
+    let (_, p) = owner(&c, &linked, reqwest::Method::GET, "/api/signup", None).await;
+    assert_eq!((p["who"].as_str(), p["managed_by"]["name"].as_str()), (Some("open"), Some("ONE")), "{p}");
+    let (s, v) = owner(&c, &linked, reqwest::Method::PUT, "/api/signup/settings", Some(json!({ "who": "closed" }))).await;
+    assert_eq!((s, v["managed_by"]["url"].as_str()), (409, Some(source.base.as_str())), "{v}");
 
     // sign in at the source, then into the other app through it: a new account there, an admin like at the source
     let r =

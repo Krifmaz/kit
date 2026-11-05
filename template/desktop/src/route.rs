@@ -14,6 +14,8 @@ pub enum Page {
     Report(i64),
     /// The server's settings form (admins), and This computer (the look and updates).
     Settings,
+    /// Who can sign up, invites and waiting sign-ups (admins).
+    Signup,
     /// The server's checks (admins).
     Diagnostics,
     /// Every release's notes.
@@ -28,7 +30,7 @@ impl Page {
     pub const OWN: [Page; 2] = [Page::Home, Page::BugReports];
 
     /// The sidebar's pages under the shared sidebar, in order.
-    pub const NAV: [Page; 4] = [Page::Search, Page::Settings, Page::Diagnostics, Page::WhatsNew];
+    pub const NAV: [Page; 5] = [Page::Search, Page::Settings, Page::Signup, Page::Diagnostics, Page::WhatsNew];
 
     /// The page's name in the sidebar and its heading.
     pub fn title(self) -> &'static str {
@@ -36,6 +38,7 @@ impl Page {
             Page::Home => "Home",
             Page::BugReports | Page::Report(_) => "Bug reports",
             Page::Settings => "Settings",
+            Page::Signup => "Sign-up",
             Page::Diagnostics => "Diagnostics",
             Page::WhatsNew => "What's new",
             Page::Search => "Search",
@@ -48,6 +51,7 @@ impl Page {
             Page::Home => Icon::Home,
             Page::BugReports | Page::Report(_) => Icon::Bug,
             Page::Settings => Icon::Settings,
+            Page::Signup => Icon::Ticket,
             Page::Diagnostics => Icon::Activity,
             Page::WhatsNew => Icon::Spark,
             Page::Search => Icon::Search,
@@ -56,7 +60,7 @@ impl Page {
 
     /// Only admins open it (the server says no to anyone else).
     pub fn admin_only(self) -> bool {
-        matches!(self, Page::Settings | Page::Diagnostics)
+        matches!(self, Page::Settings | Page::Signup | Page::Diagnostics)
     }
 
     /// The sidebar entry this page lights up (a report lights up Bug reports).
@@ -74,6 +78,7 @@ impl Page {
             Page::BugReports => "#/bug-reports".into(),
             Page::Report(id) => format!("#/bug-reports/{id}"),
             Page::Settings => "#/settings".into(),
+            Page::Signup => "#/settings?s=sign-up".into(),
             Page::Diagnostics => "#/settings?s=diagnostics".into(),
             Page::WhatsNew => "#/settings?s=whats-new".into(),
             Page::Search => "#/search".into(),
@@ -92,6 +97,7 @@ impl Page {
             ("/bug-reports", _) => Some(Page::BugReports),
             ("/search", _) => Some(Page::Search),
             ("/settings", "diagnostics") => Some(Page::Diagnostics),
+            ("/settings", "sign-up") => Some(Page::Signup),
             ("/settings", "whats-new") => Some(Page::WhatsNew),
             ("/settings", _) => Some(Page::Settings),
             (rest, _) => rest.strip_prefix("/bug-reports/").and_then(|id| id.parse().ok()).map(Page::Report),
@@ -125,8 +131,8 @@ mod tests {
     #[test]
     fn the_sidebar() {
         assert_eq!(Page::OWN.map(Page::title), ["Home", "Bug reports"]);
-        assert_eq!(Page::NAV.map(Page::title), ["Search", "Settings", "Diagnostics", "What's new"]);
-        assert!(Page::Settings.admin_only() && Page::Diagnostics.admin_only() && !Page::WhatsNew.admin_only());
+        assert_eq!(Page::NAV.map(Page::title), ["Search", "Settings", "Sign-up", "Diagnostics", "What's new"]);
+        assert!(Page::Settings.admin_only() && Page::Signup.admin_only() && Page::Diagnostics.admin_only() && !Page::WhatsNew.admin_only());
         assert_eq!(Page::Report(3).nav(), Page::BugReports);
     }
 }

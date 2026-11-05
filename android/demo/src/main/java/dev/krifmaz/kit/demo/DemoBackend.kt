@@ -103,6 +103,7 @@ class DemoBackend(
     private var nextId = 1L
     private var popup = true
     private var seen = false
+    private val signup = DemoSignup(routes.signup, now)
 
     private class Message(val id: Long, val username: String, val admin: Boolean, val body: String, val at: Double, val files: List<Pair<Long, DemoUpload>>)
 
@@ -174,6 +175,8 @@ class DemoBackend(
             p.startsWith(routes.bugReports) -> bugs(r, p.removePrefix(routes.bugReports).trim('/'))
 
             p == routes.clientCrash -> crashes(r)
+
+            p == routes.signup || p.startsWith(routes.signup + "/") -> signup.route(r)
 
             p == routes.diagnostics && m == "GET" -> DemoAnswer.json(diagnostics())
 

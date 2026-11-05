@@ -33,7 +33,7 @@ web-sys = { version = "0.3", features = [
   "Event", "EventTarget", "EventInit", "ErrorEvent", "PromiseRejectionEvent", "KeyboardEvent", "MouseEvent", "MessageEvent", "CustomEvent", "CustomEventInit",
   "Navigator", "Clipboard", "Screen", "Selection", "Storage", "Location", "History",
   "File", "FileList", "Blob", "DataTransfer", "DataTransferItem", "DataTransferItemList", "FormData", "Url",
-  "AbortController", "AbortSignal", "RequestCache", "RequestCredentials", "Headers",
+  "AbortController", "AbortSignal", "RequestCache", "RequestCredentials", "RequestInit", "Headers",
   "ServiceWorker", "ServiceWorkerContainer", "ServiceWorkerRegistration", "ServiceWorkerState",
   "MutationObserver", "MutationObserverInit", "ScrollIntoViewOptions", "ScrollLogicalPosition", "HtmlTemplateElement", "DocumentFragment", "console",
 ] }

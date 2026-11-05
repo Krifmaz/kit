@@ -26,6 +26,7 @@
 //! | [`bugs`] | bug reports: kinds, statuses, the New report sheet's words and checks |
 //! | [`diagnostics`] | the Diagnostics page's groups, words and copied report |
 //! | [`palette`] | the command palette: what shows for a query and in which order, moving the selection, Ctrl+K |
+//! | [`signup`] | who can sign up, the sign-up form's checks, invite and waiting sign-up rows |
 //! | [`suite`] | linked apps: manifests, the shared sidebar's order and hidden entries, deep links, search groups |
 
 pub mod app;
@@ -37,6 +38,7 @@ pub mod dialogs;
 pub mod notices;
 pub mod offline;
 pub mod palette;
+pub mod signup;
 pub mod suite;
 pub mod toasts;
 pub mod update;

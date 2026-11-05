@@ -12,6 +12,7 @@ are pointed at the same paths.
 | [Bug reports](bug-reports.md) | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports | bug report sheets |
 | [Diagnostics](diagnostics.md) | `GET /api/diagnostics`, `POST /api/diagnostics/{id}/test` | kit-server-diagnostics | diagnostics pages |
 | [Settings schema](settings-schema.md) | `GET /api/settings/schema`, `GET`/`PUT /api/settings`, `GET /api/settings/secret/{key}` | kit-server-settings | schema forms |
+| [Sign-up](signup.md) | `GET`/`POST /api/signup`, `POST /api/signup/invite`, `POST /api/signup/verify`, `/api/signup/settings`, `/api/signup/invites/*`, `/api/signup/pending/*` | kit-server-signup | kit-rules `signup` |
 | [Suite](suite.md) | `GET /api/kit/manifest`, `/api/kit/suite/*` (links, keys, sidebar, search), `/api/kit/search`, `/api/kit/sso/*`, OIDC (`/.well-known/openid-configuration`, `/api/kit/oidc/*`) | kit-server-suite | kit-rules `suite` |
 | [Update feed](update-feed.md) | GitHub releases of the app; `GET`/`POST /api/update`, `POST /api/restart` | kit-server-updates | in-app updaters |
 

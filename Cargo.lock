@@ -2828,6 +2828,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kit-server-selfupdate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "kit-server-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+]
+
+[[package]]
 name = "kit-server-settings"
 version = "0.1.0"
 dependencies = [
@@ -2836,6 +2856,23 @@ dependencies = [
  "serde_json",
  "tokio",
  "toml 0.8.23",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "kit-server-signup"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "getrandom 0.3.4",
+ "kit-server-core",
+ "kit-server-suite",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
  "tower",
  "tracing",
 ]

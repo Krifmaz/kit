@@ -12,6 +12,59 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   it in the page.
 - kit-rules `offline::outbox::retry_later(status)`: which failed calls wait to be sent again and which are dropped.
 
+## v0.7.0 — 2026-11-05
+
+Notes: [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
+
+### Added
+- `kit-server-selfupdate`: Update now for an app's server running in Docker, over the mounted Docker socket.
+  `probe` says in plain words whether it can work here; `start::start_update` pulls the new image and starts a
+  helper container of it; `swap` is the helper (`<binary> self-update-helper`), which swaps the server's
+  container with the same settings, rolls back when the new one does not keep running, goes forward when the
+  new one had begun migrating its database, and removes the old image; `report` is the step-by-step record of
+  the last update, read back from the helper's log. The app's name, image, program, schema, exit codes and
+  migration check come in as an `App`.
+
+## v0.6.1 — 2026-11-05
+
+### Added
+- The app-shell service worker: kit-server-health `worker_router(Worker::new(app, web))` serves `/sw.js`, made for
+  the web build the server serves. The web app opens with no connection (the page and its files are kept per
+  build; the API never is), and each new build arrives as a new worker that kit-rules `update::Flow` lets take over.
+  The template serves and registers it, and its browser walk reloads offline.
+- kit-server-core: `Migrations::run(&dyn Db)` makes and updates the kit's `kit_*` tables on any SQLite `Db`
+  (`SqliteDb::migrate` now uses it), and `SharedDb` (`Arc<dyn Db>`).
+- kit-leptos `crash`: a panic puts a banner over the page (what stopped it, where, and Reload; `CrashWords` in
+  `Words::crash`, an empty sentence turns it off) and posts its log at once with a plain `fetch`, since after a
+  panic the app's tasks may never run again. The log still waits in the pending list until the server has it; the
+  server keeps the same key once. The log's text now carries the JavaScript stack and the page.
+
+### Changed
+- The SQLite stores (`SqlitePrefs`, `SqliteSettings`, `SqliteNotices`, `SqliteReports`, `SqliteSuite`, `SqliteSignup`) take any
+  `Db` (`new(db: impl Db + 'static)`), not only `SqliteDb`: an app with its own SQLite layer keeps the kit's
+  tables in its own database, on its own connections. Code that passes a `SqliteDb` is unchanged.
+
+## v0.6.0 — 2026-11-05
+
+Notes: [docs/releases/0.6.0.md](docs/releases/0.6.0.md).
+
+### Added
+- Sign-up (`contracts/signup.md`): who may make an account.
+  - `kit-server-signup`: the admin setting "Who can sign up" (Closed, Invite only by default, Open); invite links
+    (one-time or multi-use, expiry, most uses, the role and presets the account gets, revoke, who used each;
+    the link shown once, kept as its SHA-256); open sign-up with limits per address and per day, an optional
+    email confirmation (`Mailer`, `LogMailer` by default) and an optional admin approval; the app makes,
+    switches on and removes accounts through `SignupHost`. Under single sign-on the account source's setting
+    applies and is shown read-only (`SignupHost::account_source`; `suite_account_source` with feature `suite`).
+    Data in `kit_signup_settings`, `kit_invites`, `kit_invite_uses` and `kit_signup_requests` on SQLite
+    (`SqliteSignup`) or Postgres (`PgSignup`).
+  - kit-rules `signup`; kit-leptos `signup` (`SignInLine`, `SignUpPage`, `VerifyPage`, `SignupAdmin`); kit-iced
+    `signup` (`SignUp`, `Admin`); kit-compose `signup` (`SignInLine`, `SignUpScreen`, `SignupAdminScreen`,
+    `SignupRules`), with `KitRoutes.signup` and kit-leptos `Paths::signup`.
+  - The template: sign-up on the web, desktop and Android sign-in pages, a Sign-up admin page on each, and the
+    server's accounts made through the hooks (`public_url` setting for the links). The Android demo has the
+    admin page on its in-app server.
+
 ## v0.5.0 — 2026-11-05
 
 Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
@@ -21,6 +74,12 @@ Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
   icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
+
+## v0.4.1 — 2026-11-05
+
+### Fixed
+- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
+  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 
 ## v0.4.0 — 2026-11-05
 
@@ -78,8 +137,6 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
-- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
-  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
   dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
   app is the same; the template needs cargo-generate 0.23.4 or later.

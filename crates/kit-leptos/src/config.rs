@@ -17,6 +17,7 @@
 //! assert_eq!(config::get().app.key("update.tried"), "kit-demo.update.tried");
 //! ```
 
+pub use crate::crash::CrashWords;
 pub use crate::schema_form::FormWords;
 use kit_rules::app::App;
 use kit_rules::bugs::BugWords;
@@ -67,6 +68,9 @@ pub struct Paths {
     pub settings_schema: String,
     /// A saved secret, shown on request (`/settings/secret/{key}`).
     pub settings_secret: String,
+    /// The sign-up routes' base (`/signup`): `GET` the policy, `POST` a sign-up, `/invite`, `/verify`, `/settings`,
+    /// `/invites`, `/pending`.
+    pub signup: String,
     /// The service worker's script, from the site's root (`/sw.js`).
     pub worker: String,
 }
@@ -90,6 +94,7 @@ impl Default for Paths {
             settings: "/settings".into(),
             settings_schema: "/settings/schema".into(),
             settings_secret: "/settings/secret/{key}".into(),
+            signup: "/signup".into(),
             worker: "/sw.js".into(),
         }
     }
@@ -143,6 +148,8 @@ pub struct Words {
     pub form: FormWords,
     /// The command palette.
     pub palette: PaletteWords,
+    /// The banner after a panic.
+    pub crash: CrashWords,
 }
 
 /// One app's configuration.

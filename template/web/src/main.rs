@@ -2,13 +2,14 @@
 //!
 //! | Where | What |
 //! | --- | --- |
-//! | everywhere | the command palette (Ctrl+K, ⌘K or the sidebar's search button), toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build |
+//! | everywhere | the command palette (Ctrl+K, ⌘K or the sidebar's search button), toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build, opening with no connection (the server's service worker at `/sw.js`) |
 //! | after signing in | the What's new popup, once per release |
 //! | `#/` | Home: the app's own start page (a bug report button to begin with) |
 //! | the sidebar | the shared sidebar: this app's pages and every linked app's, in each person's order (Edit sidebar) |
 //! | `#/search` | one search across this app and every linked app |
 //! | `#/bug-reports` | the account's bug reports and the New report sheet |
-//! | `#/settings?s=<page>` | the server settings form from the server's schema, Diagnostics and What's new |
+//! | `#/settings?s=<page>` | the server settings form from the server's schema, Sign-up (who can sign up, invites, waiting sign-ups), Diagnostics and What's new |
+//! | signed out: `#/sign-up?invite=<token>`, `#/sign-up/verify?token=<token>` | the sign-up page and the email confirmation page; anything else is the sign-in page |
 //!
 //! The app's own pages go next to [`Home`], one component each, with a link in [`Shell`].
 
@@ -113,6 +114,8 @@ fn main() {
     let mut cfg = update::UpdateConfig::new(&app);
     cfg.build = this_build();
     update::start(cfg);
+    // the app-shell worker (https or localhost only; elsewhere the browser has none and this does nothing)
+    update::register_worker("/sw.js");
     rt::spawn(async move {
         let me = api::get("/auth/me").await.ok();
         let Some(root) = rt::by_id("app").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) else { return };
@@ -126,9 +129,26 @@ fn main() {
                 notice::mount();
                 whats_new::start(Rc::new(navigate));
             }
-            None => leptos::mount::mount_to(root, pages::SignIn).forget(),
+            None => leptos::mount::mount_to(root, SignedOut).forget(),
         }
     });
+}
+
+/// Signed out: the sign-in page, or the sign-up and email confirmation pages their links open.
+#[component]
+fn SignedOut() -> impl IntoView {
+    let (route, set_route) = signal(current_route());
+    rt::on_window("hashchange", move |_| set_route.set(current_route()));
+    move || {
+        let r = route.get();
+        match r.path.as_str() {
+            "/sign-up" => view! { <kit_leptos::signup::SignUpPage app=app_name() invite=r.param("invite") sign_in_href="#/"/> }.into_any(),
+            "/sign-up/verify" => {
+                view! { <kit_leptos::signup::VerifyPage app=app_name() token=r.param("token") sign_in_href="#/"/> }.into_any()
+            }
+            _ => view! { <pages::SignIn/> }.into_any(),
+        }
+    }
 }
 
 /// The page on screen, as its hash (`#/bug-reports`).
@@ -147,6 +167,7 @@ fn commands() -> Palette {
         go("Home", "/", ""),
         go("Bug reports", "/bug-reports", "bug"),
         go("Settings", "/settings?s=general", "settings"),
+        go("Sign-up", "/settings?s=sign-up", ""),
         go("Diagnostics", "/settings?s=diagnostics", "alert"),
         go("What's new", "/settings?s=whats-new", ""),
     ])

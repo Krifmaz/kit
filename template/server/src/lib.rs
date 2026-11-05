@@ -2,12 +2,13 @@
 //!
 //! | Route | From |
 //! | --- | --- |
-//! | `GET /api/health` | kit-server-health |
+//! | `GET /api/health`, `GET /sw.js` (the app-shell service worker of this web build) | kit-server-health |
 //! | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` (What's new), `/api/auth/prefs` (the popup switch) | kit-server-changelog |
 //! | `/api/notices`, `/api/notices/check`, `/api/notices/{id}`, `/api/notices/{id}/check` | kit-server-notices |
 //! | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports |
 //! | `/api/diagnostics`, `/api/diagnostics/{id}/test` | kit-server-diagnostics |
 //! | `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` | kit-server-settings |
+//! | `/api/signup`, `/api/signup/invite`, `/api/signup/verify`, `/api/signup/settings`, `/api/signup/invites/*`, `/api/signup/pending/*` | kit-server-signup |
 //! | `/api/kit/manifest`, `/api/kit/suite/*`, `/api/kit/search`, `/api/kit/sso/*`, OIDC (`/.well-known/openid-configuration`, `/api/kit/oidc/*`) | kit-server-suite ([`suite`]) |
 //! | `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` | [`auth`] |
 //!
@@ -77,8 +78,10 @@ pub struct AppState {
     pub changelog: Arc<Changelog>,
     /// The notices (kept: the data folder notice holds its last probe).
     pub notices: kit_server_notices::Notices<AppState>,
-    /// Sign-in and bug report limits per address or account.
+    /// Sign-in, sign-up and bug report limits per address or account.
     pub limits: Arc<auth::Limits>,
+    /// Who can sign up, the invites and the sign-ups that wait, in the kit's `kit_signup_*` and `kit_invite*` tables.
+    pub signup: kit_server_signup::SqliteSignup,
     /// Suite: this app's manifest, its links to other apps and single sign-on ([`suite`]).
     pub suite: kit_server_suite::Suite,
     /// The links to other apps and the keys made for them, in the kit's `kit_suite_*` tables.
@@ -110,6 +113,7 @@ impl AppState {
         let prefs = SqlitePrefs::new(db.clone()).map_err(kit)?;
         let reports = kit_server_bugreports::SqliteReports::new(db.clone()).map_err(kit)?;
         let saved = SqliteSettings::new(db.clone()).map_err(kit)?;
+        let signup = kit_server_signup::SqliteSignup::new(db.clone()).map_err(kit)?;
         let notices = checks::notices().keep_in(Arc::new(kit_server_notices::SqliteNotices::new(db.clone()).map_err(kit)?));
         notices.restore().await.map_err(kit)?;
         let settings =
@@ -128,6 +132,7 @@ impl AppState {
             changelog,
             notices,
             limits: Arc::new(auth::Limits::default()),
+            signup,
             suite,
             links,
         })
@@ -200,6 +205,71 @@ impl kit_server_notices::NoticesHost for AppState {
     }
 }
 
+/// The roles a sign-up may give: the app's own (`user`, `admin`); the owner's is never offered.
+pub fn signup_roles() -> Vec<kit_server_signup::Choice> {
+    vec![kit_server_signup::Choice::new("user", "Member"), kit_server_signup::Choice::new("admin", "Admin")]
+}
+
+/// The demo's presets: what a new account starts with, kept in its preferences (`presets`). An app names its own
+/// (folders a new account sees, what it may do …).
+pub fn signup_presets() -> Vec<kit_server_signup::Choice> {
+    vec![kit_server_signup::Choice::new("shared", "Shared space"), kit_server_signup::Choice::new("uploads", "May upload files")]
+}
+
+impl kit_server_signup::SignupHost for AppState {
+    fn signup(&self) -> &dyn kit_server_signup::SignupStore {
+        &self.signup
+    }
+
+    fn app_name(&self) -> String {
+        AppState::app_name(self)
+    }
+
+    fn roles(&self) -> Vec<kit_server_signup::Choice> {
+        signup_roles()
+    }
+
+    fn presets(&self) -> Vec<kit_server_signup::Choice> {
+        signup_presets()
+    }
+
+    async fn create_account(&self, a: kit_server_signup::NewAccount) -> kit_server_core::Result<i64> {
+        let pw = a.password.clone();
+        let hash = tokio::task::spawn_blocking(move || auth::hash_password(&pw)).await.unwrap_or_default();
+        let id = auth::insert_user(&self.db, &a.username, &a.password, &hash, &a.role, &a.email, !a.enabled)?;
+        if !a.presets.is_empty() {
+            self.prefs.save_prefs(id, &serde_json::json!({ "presets": a.presets })).await?;
+        }
+        Ok(id)
+    }
+
+    async fn enable_account(&self, id: i64) -> kit_server_core::Result<()> {
+        use kit_server_core::Db;
+        self.db.execute("UPDATE users SET disabled=0 WHERE id=?", kit_server_core::p![id])?;
+        Ok(())
+    }
+
+    async fn remove_account(&self, id: i64) -> kit_server_core::Result<()> {
+        use kit_server_core::Db;
+        self.db.execute("DELETE FROM sessions WHERE user_id=?", kit_server_core::p![id])?;
+        self.db.execute("DELETE FROM users WHERE id=? AND role<>'owner'", kit_server_core::p![id])?;
+        Ok(())
+    }
+
+    fn limited(&self, key: &str, limit: usize, window_secs: f64) -> bool {
+        self.limits.limited(key, limit, window_secs, true)
+    }
+
+    fn base_url(&self) -> String {
+        self.settings.str("public_url")
+    }
+
+    /// Linked to an account source: its sign-up setting applies here, shown read-only.
+    async fn account_source(&self) -> Option<kit_server_signup::AccountSource> {
+        kit_server_signup::suite_account_source(&self.suite, &self.links, "/api/signup").await
+    }
+}
+
 impl kit_server_diagnostics::Diagnostics for AppState {
     fn diagnostics(&self) -> kit_server_diagnostics::Registry<AppState> {
         checks::diagnostics()
@@ -217,7 +287,8 @@ pub fn app(st: AppState) -> Router {
     kit_server_notices::spawn_rechecks(st.clone());
     kit_server_suite::spawn_refresh(st.clone(), std::time::Duration::from_secs(15 * 60));
     Router::new()
-        .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web)))
+        .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web.clone())))
+        .merge(kit_server_health::worker_router(kit_server_health::Worker::new(NAME, web)))
         .merge(kit_server_changelog::router())
         .merge(kit_server_changelog::prefs_router("/api/auth/prefs"))
         .merge(kit_server_notices::router())
@@ -225,6 +296,7 @@ pub fn app(st: AppState) -> Router {
         .merge(kit_server_bugreports::crash::router())
         .merge(kit_server_diagnostics::router())
         .merge(kit_server_settings::router())
+        .merge(kit_server_signup::router())
         .merge(kit_server_suite::router())
         .merge(auth::router())
         .with_state(st)

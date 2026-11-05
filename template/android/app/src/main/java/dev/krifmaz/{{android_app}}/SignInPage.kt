@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -28,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import dev.krifmaz.kit.compose.KitApp
 import dev.krifmaz.kit.compose.bugs.CrashLog
 import dev.krifmaz.kit.compose.settings.TextLink
+import dev.krifmaz.kit.compose.signup.SignInLine
+import dev.krifmaz.kit.compose.signup.SignUpScreen
 import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.widgets.Gutter
 import dev.krifmaz.kit.compose.widgets.KitButton
@@ -42,7 +45,8 @@ import dev.krifmaz.kit.compose.R as KitR
  * Signing in to the connected server, with the kit's sign-in rules: Username and
  * Password, then the authenticator code when the account has two-step sign-in. The server's answer (for example
  * "Invalid username or password") shows in full with Copy. The app token it gives is kept ([ServerApi.login]);
- * the app comes back here whenever the server stops taking it.
+ * the app comes back here whenever the server stops taking it. Under the form, the kit's sign-up line
+ * ([SignInLine]: "Create an account" when the server's setting allows it) opens [SignUpScreen].
  *
  * @param app the app (its server).
  * @param base the server's address, under the title.
@@ -58,6 +62,12 @@ fun SignInPage(app: App, base: String, onBack: () -> Unit) {
     var needsCode by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
+    var signingUp by remember { mutableStateOf(false) }
+    val links = LocalUriHandler.current
+    if (signingUp) {
+        SignUpScreen(app.server.kit, invite = "", onBack = { signingUp = false })
+        return
+    }
 
     fun submit() {
         if (busy || username.isBlank() || password.isEmpty() || (needsCode && code.length < 6)) return
@@ -139,5 +149,6 @@ fun SignInPage(app: App, base: String, onBack: () -> Unit) {
                 error = ""
             }
         }
+        if (!needsCode) SignInLine(app.server.kit, onSignUp = { signingUp = true }, openUrl = links::openUri)
     }
 }

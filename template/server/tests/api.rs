@@ -201,6 +201,20 @@ async fn the_web_app_is_served_for_every_other_path() {
 }
 
 #[tokio::test]
+async fn the_service_worker_keeps_this_builds_shell() {
+    let (app, _, _) = server("worker").await;
+    let r = app.clone().oneshot(Request::get("/sw.js").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    assert!(r.headers()[header::CONTENT_TYPE].to_str().unwrap().starts_with("text/javascript"));
+    assert_eq!(r.headers()[header::CACHE_CONTROL], "no-cache");
+    let b = axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap();
+    let text = String::from_utf8_lossy(&b);
+    // made for the build in the tests' web folder
+    let settings = json!({ "api": "/api/", "app": server::NAME, "build": "0123456789abcdef" });
+    assert!(text.starts_with(&format!("self.KIT_SW = {settings};")), "{text}");
+}
+
+#[tokio::test]
 async fn the_health_check_command_asks_a_running_server() {
     let (app, _, _) = server("healthcheck").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -239,4 +253,70 @@ async fn a_phone_signs_in_with_an_app_token_and_keeps_its_prefs() {
     assert_eq!(s, StatusCode::OK);
     let (s, _, _) = call(&app, with("GET", "/api/auth/me", None)).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
+}
+
+/// A JSON request with no account (the sign-up page).
+fn anyone(method: &str, path: &str, body: Value) -> Request<Body> {
+    Request::builder().method(method).uri(path).header(header::CONTENT_TYPE, "application/json").body(Body::from(body.to_string())).unwrap()
+}
+
+/// Signs `username` in; the status and the answer.
+async fn login(app: &Router, username: &str, password: &str) -> (StatusCode, Value) {
+    let (s, v, _) = call(app, anyone("POST", "/api/auth/login", json!({ "username": username, "password": password }))).await;
+    (s, v)
+}
+
+#[tokio::test]
+async fn people_sign_up_with_an_invite_or_openly_as_the_admin_set() {
+    let (app, st, _) = server("signup").await;
+    // invite only by default: an invite with a role and a preset makes an account that signs in at once
+    let (s, v, _) = call(&app, Request::get("/api/signup").body(Body::empty()).unwrap()).await;
+    assert_eq!((s, v["who"].as_str()), (StatusCode::OK, Some("invite")));
+    let (s, v, _) = call(
+        &app,
+        admin("POST", "/api/signup/invites", Some(json!({ "note": "team", "role": "admin", "presets": ["uploads"], "max_uses": 2 }))),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+    let token = v["token"].as_str().unwrap().to_string();
+    assert!(v["link"].as_str().unwrap().ends_with(&format!("/#/sign-up?invite={token}")));
+    let (s, _, _) = call(&app, anyone("POST", "/api/signup", json!({ "username": "ana", "password": "password1" }))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "no invite");
+    let (s, v, _) = call(&app, anyone("POST", "/api/signup", json!({ "username": "ana", "password": "password1", "invite": token }))).await;
+    assert_eq!((s, v["status"].as_str()), (StatusCode::OK, Some("active")));
+    let (s, me) = login(&app, "ana", "password1").await;
+    assert_eq!((s, me["role"].as_str(), me["is_admin"].as_bool()), (StatusCode::OK, Some("admin"), Some(true)));
+    assert_eq!(me["prefs"]["presets"], json!(["uploads"]));
+    let (s, _, _) = call(&app, anyone("POST", "/api/signup", json!({ "username": "ANA", "password": "password1", "invite": token }))).await;
+    assert_eq!(s, StatusCode::CONFLICT, "a taken name, in any case, gives the use back");
+    let (_, v, _) = call(&app, admin("GET", "/api/signup/invites", None)).await;
+    assert_eq!((v["invites"][0]["uses"].as_i64(), v["invites"][0]["used_by"][0]["username"].as_str()), (Some(1), Some("ana")));
+
+    // open with approval: the account waits, and signing in says why
+    let set = json!({ "who": "open", "approval": true });
+    assert_eq!(call(&app, admin("PUT", "/api/signup/settings", Some(set))).await.0, StatusCode::OK);
+    let (s, v, _) =
+        call(&app, anyone("POST", "/api/signup", json!({ "username": "bob", "password": "password1", "email": "bob@example.com" }))).await;
+    assert_eq!((s, v["status"].as_str()), (StatusCode::OK, Some("approval")), "{v}");
+    let (s, v) = login(&app, "bob", "password1").await;
+    assert_eq!((s, v["detail"].as_str()), (StatusCode::FORBIDDEN, Some(kit_server_signup::Words::default().waiting_approval.as_str())));
+    let (_, v, _) = call(&app, admin("GET", "/api/signup/pending", None)).await;
+    let id = v["pending"][0]["id"].as_i64().unwrap();
+    assert_eq!(call(&app, admin("POST", &format!("/api/signup/pending/{id}/approve"), None)).await.0, StatusCode::OK);
+    let (s, me) = login(&app, "bob", "password1").await;
+    assert_eq!((s, me["role"].as_str(), me["email"].as_str()), (StatusCode::OK, Some("user"), Some("bob@example.com")));
+
+    // a rejected sign-up's account is gone
+    let (_, v, _) = call(&app, anyone("POST", "/api/signup", json!({ "username": "cyd", "password": "password1" }))).await;
+    assert_eq!(v["status"], "approval");
+    let (_, v, _) = call(&app, admin("GET", "/api/signup/pending", None)).await;
+    let id = v["pending"][0]["id"].as_i64().unwrap();
+    assert_eq!(call(&app, admin("POST", &format!("/api/signup/pending/{id}/reject"), None)).await.0, StatusCode::OK);
+    use kit_server_core::Db;
+    assert!(st.db.one("SELECT id FROM users WHERE username='cy'", kit_server_core::p![]).unwrap().is_none());
+
+    // closed
+    call(&app, admin("PUT", "/api/signup/settings", Some(json!({ "who": "closed" })))).await;
+    let (s, _, _) = call(&app, anyone("POST", "/api/signup", json!({ "username": "dee", "password": "password1" }))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
 }
