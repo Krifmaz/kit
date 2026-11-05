@@ -15,6 +15,7 @@ use kit_leptos::html::esc;
 use kit_leptos::icons::icon;
 use kit_leptos::modal::{self, ConfirmDialog};
 use kit_leptos::notice::{self, NoticeSource};
+use kit_leptos::outbox::{Sent, Store};
 use kit_leptos::schema_form::schema::{visible_cards, Schema};
 use kit_leptos::schema_form::{SettingsCards, SAMPLE_SCHEMA};
 use kit_leptos::toasts::{self, error_toast_html, toast, toast_action};
@@ -24,6 +25,7 @@ use kit_leptos::{bug_report, details, dropzone, offline, rt};
 use kit_rules::app::App;
 use kit_rules::dialogs::Confirm;
 use kit_rules::notices::CheckWords;
+use kit_rules::offline::outbox::Action;
 use kit_rules::update::Health;
 use leptos::prelude::*;
 use serde_json::{json, Value};
@@ -55,6 +57,59 @@ thread_local! {
     static BUILD: RefCell<String> = RefCell::new("demo-1".into());
     /// The demo's switch that holds the page.
     static HOLD: Cell<bool> = const { Cell::new(true) };
+    /// The fake server can't be reached (the outbox keeps what is done meanwhile).
+    static DOWN: Cell<bool> = const { Cell::new(false) };
+    /// The stars the fake server has.
+    static STARS: RefCell<Vec<i64>> = const { RefCell::new(Vec::new()) };
+    /// The demo's outbox.
+    static OUTBOX: RefCell<Option<Store<DemoAction>>> = const { RefCell::new(None) };
+}
+
+/// The demo's signed-in user.
+const USER: i64 = 1;
+
+/// The demo's actions: a thing starred or not (only the last tap counts), a note (each one counts).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum DemoAction {
+    Star { item: i64, on: bool },
+    Note { text: String, at: u64 },
+}
+
+impl Action for DemoAction {
+    fn key(&self) -> String {
+        match self {
+            DemoAction::Star { item, on } => format!("star:{item}:{on}"),
+            DemoAction::Note { at, .. } => format!("note@{at}"),
+        }
+    }
+    fn subject(&self) -> Option<String> {
+        match self {
+            DemoAction::Star { item, .. } => Some(format!("star:{item}")),
+            DemoAction::Note { .. } => None,
+        }
+    }
+    fn kind(&self) -> &str {
+        match self {
+            DemoAction::Star { .. } => "star",
+            DemoAction::Note { .. } => "note",
+        }
+    }
+}
+
+/// The demo's outbox: sent to the fake server's `POST /sync`.
+fn outbox() -> Store<DemoAction> {
+    OUTBOX.with(|o| {
+        o.borrow_mut()
+            .get_or_insert_with(|| {
+                Store::open("changes", |actions: Vec<DemoAction>| {
+                    Box::pin(async move { kit_leptos::api::post("/sync", json!({ "actions": actions })).await.map(|_| ()) })
+                })
+                .noun("star", "star", "stars")
+                .noun("note", "note", "notes")
+            })
+            .clone()
+    })
 }
 
 /// Answers every call with fake data.
@@ -156,6 +211,21 @@ impl Backend for Fake {
                     { "app": "other", "app_name": "Other demo", "icon": OTHER_ICON, "local": false, "results": [{ "title": "A related item", "subtitle": "Items", "url": "#items/1" }] },
                     { "app": "down", "app_name": "Third demo", "icon": OTHER_ICON, "local": false, "results": [], "error": "http://third.test can't be reached. Check the address and that the app is running." }
                 ] })),
+                _ if DOWN.with(Cell::get) => Err(ApiError::new(kit_leptos::api::NOT_CONNECTED)),
+                ("POST", "/sync") => {
+                    for a in body.and_then(|b| serde_json::from_value::<Vec<DemoAction>>(b["actions"].clone()).ok()).unwrap_or_default() {
+                        if let DemoAction::Star { item, on } = a {
+                            STARS.with(|s| {
+                                let mut s = s.borrow_mut();
+                                s.retain(|i| *i != item);
+                                if on {
+                                    s.push(item);
+                                }
+                            });
+                        }
+                    }
+                    Ok(json!({ "ok": true }))
+                }
                 ("GET", "/notices") => Ok(notices()),
                 ("POST", "/notices/check") => {
                     CHECKS.with(|c| c.set(c.get() + 1));
@@ -312,6 +382,57 @@ fn Banners() -> impl IntoView {
     }
 }
 
+/// The outbox: stars and notes made while the fake server can't be reached wait, and go once it is back.
+#[component]
+fn OutboxDemo() -> impl IntoView {
+    let o = outbox();
+    let waiting = o.waiting();
+    let down = RwSignal::new(DOWN.with(Cell::get));
+    let star = move |item: i64| {
+        // starred now: the last star still waiting, else what the server has
+        let waiting = outbox().snapshot().actions.iter().rev().find_map(|a| match a {
+            DemoAction::Star { item: i, on } if *i == item => Some(*on),
+            _ => None,
+        });
+        let on = !waiting.unwrap_or_else(|| STARS.with(|s| s.borrow().contains(&item)));
+        rt::spawn(async move {
+            match outbox().send_or_keep(USER, DemoAction::Star { item, on }).await {
+                Sent::Now => toast(&format!("Thing {item} {}", if on { "starred" } else { "unstarred" }), "ok"),
+                Sent::Kept => {
+                    toast(&format!("Thing {item} {} – it goes when the server is back", if on { "starred" } else { "unstarred" }), "info")
+                }
+                Sent::Refused(e) => toast(&e.message, "err"),
+            }
+        });
+    };
+    view! {
+        <div class="row wrap">
+            <button class="btn" id="outbox-server" on:click=move |_| {
+                let now = !DOWN.with(Cell::get);
+                DOWN.with(|d| d.set(now));
+                down.set(now);
+                if !now {
+                    rt::dispatch(&format!("{}:server-up", config::get().app.id.to_ascii_lowercase()));
+                }
+            }>{move || if down.get() { "Bring the server back" } else { "Take the server away" }}</button>
+            {button("Star thing 1", move || star(1))}
+            {button("Star thing 2", move || star(2))}
+            {button("Add a note", || {
+                rt::spawn(async {
+                    let note = DemoAction::Note { text: "A note".into(), at: rt::now_ms() };
+                    if outbox().send_or_keep(USER, note).await == Sent::Kept {
+                        toast("Note kept – it goes when the server is back", "info");
+                    }
+                });
+            })}
+        </div>
+        <p class="small muted" id="outbox-waiting">{move || {
+            let n = waiting.get();
+            if n == 0 { "Nothing waits.".to_string() } else { format!("Waiting: {}", outbox().waiting_text()) }
+        }}</p>
+    }
+}
+
 /// Offline mode's Retry: tries for a moment, the server still does not answer.
 fn retry() {
     offline::set_trying(true);
@@ -350,6 +471,7 @@ fn Demo() -> impl IntoView {
         <section><h2>"Dialogs and the bug report sheet"</h2><DialogButtons/></section>
         <section><h2>"Self-update"</h2><UpdateButtons/></section>
         <section><h2>"Offline and connection banners"</h2><Banners/></section>
+        <section><h2>"Outbox"</h2><OutboxDemo/></section>
         <section>
             <h2>"Drop zone"</h2>
             <DropZone input="demo-files" class="card">
@@ -528,6 +650,25 @@ async fn check() {
     out.push(("offline mode takes the connection banner away".to_string(), rt::qs("body > #conn-banner").is_none(), String::new()));
     same("offline banner", rt::qs("body > #offline-banner"), &want::offline(c.words.offline.banner), &mut out);
     same("notice banner", rt::qs("#server-notice .notice-banner"), &want::notice("storage", NOTICE), &mut out);
+    // the outbox: kept while the server can't be reached, sent once it is back
+    let o = outbox();
+    o.clear();
+    DOWN.with(|d| d.set(true));
+    let kept = o.send_or_keep(USER, DemoAction::Star { item: 3, on: true }).await;
+    let still = o.flush(&USER).await;
+    out.push((
+        "the outbox keeps a star while the server can't be reached".to_string(),
+        kept == Sent::Kept && o.len() == 1 && still.nothing_sent(),
+        format!(" ({kept:?}, {} waiting)", o.len()),
+    ));
+    DOWN.with(|d| d.set(false));
+    let done = o.flush(&USER).await;
+    let starred = STARS.with(|s| s.borrow().contains(&3));
+    out.push((
+        "the outbox sends it once the server is back".to_string(),
+        o.is_empty() && starred && o.back_online_text(&done.sent) == "Back online – 1 star sent",
+        format!(" ({} waiting, starred: {starred}, {:?})", o.len(), o.back_online_text(&done.sent)),
+    ));
     let pass = out.iter().all(|(_, ok, _)| *ok);
     let text: String = out.iter().map(|(n, ok, why)| format!("{} {n}{why}\n", if *ok { "PASS" } else { "FAIL" })).collect();
     if let Some(pre) = rt::by_id("kit-check") {
@@ -564,6 +705,7 @@ fn main() {
         })
     });
     update::start(up);
+    outbox().watch(|| Some(USER));
     if let Some(el) = rt::by_id("demo").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
         leptos::mount::mount_to(el, Demo).forget();
     }

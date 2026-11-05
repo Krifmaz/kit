@@ -21,6 +21,7 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`outbox`] | the outbox store: actions kept on the device per account, sent once the server is back |
 //! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
@@ -47,6 +48,7 @@ pub mod json;
 pub mod modal;
 pub mod notice;
 pub mod offline;
+pub mod outbox;
 pub mod rt;
 pub mod schema_form;
 pub mod suite;

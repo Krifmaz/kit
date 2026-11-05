@@ -4,6 +4,14 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- kit-leptos `outbox`: the web outbox store on kit-rules' `Outbox`. An app's actions are kept per account in
+  `localStorage`, sent now or kept when the server can't take them (`send_or_keep`), sent in order and in chunks
+  once it answers again (`flush`, `watch` on `online` and `<id>:server-up`), with "Back online – 3 stars sent",
+  a `waiting()` signal for a badge and the no-room warning said once. The demo has an Outbox section and checks
+  it in the page.
+- kit-rules `offline::outbox::retry_later(status)`: which failed calls wait to be sent again and which are dropped.
+
 ## v0.5.0 — 2026-11-05
 
 Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).

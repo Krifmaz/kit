@@ -61,7 +61,7 @@ answering 502–504); `mode`: when offline mode opens (`decide`), the 30 days of
 not confirmed (`at_boot`), the app's offline pages (`route_path`), retries, `counts_text` and `OfflineWords`;
 `outbox`: `Outbox<A, O>`, the per-account outbox of the app's own actions (`A: Action` says each action's key,
 subject and kind): kept once, the last state per subject wins, in order, capped, sent in chunks, forgotten once
-sent.
+sent; `retry_later(status)` says which failed calls wait (no answer, 401/403/408/429, 5xx) and which are dropped.
 
 **`uploads`** — the accept checks shared by the file picker and drag & drop (`accepts`, `choose`,
 `refused_message`), the desktop's ending-only `Accept` and per-file `DropZone`, and `FileLimits` (the bug
