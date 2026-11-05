@@ -5,10 +5,17 @@
 //!
 //! ```
 //! let web = kit_server_health::web_build(std::path::Path::new("static"), "demo-web-");
-//! let health = kit_server_health::Health::new("1.4.0", web);
-//! let app: axum::Router = axum::Router::new().merge(kit_server_health::router(health));
+//! let health = kit_server_health::Health::new("1.4.0", web.clone());
+//! let app: axum::Router = axum::Router::new()
+//!     .merge(kit_server_health::router(health))
+//!     .merge(kit_server_health::worker_router(kit_server_health::Worker::new("demo", web)));
 //! ```
+//!
+//! [`worker_router`] serves the app-shell service worker at `/sw.js`, made for the web build the server serves,
+//! so the web app opens with no connection and each new build arrives as a new worker (kit-leptos
+//! `update::register_worker`).
 
+use axum::http::header;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::{json, Map, Value};
@@ -67,6 +74,46 @@ pub fn router<S: Clone + Send + Sync + 'static>(health: Health) -> Router<S> {
 pub fn router_with<S: Clone + Send + Sync + 'static>(health: Health, paths: HealthPaths) -> Router<S> {
     let body = health.json();
     Router::new().route(&paths.health, get(move || async move { Json(body) }))
+}
+
+/// The kit's app-shell service worker, before the server writes its settings above it.
+pub const SERVICE_WORKER_JS: &str = include_str!("sw.js");
+
+/// The app-shell service worker an app serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Worker {
+    /// the app's id (lower case): its caches are `<id>-shell-<build>` and it answers `<id>:version`, as kit-rules
+    /// `update::Flow` expects
+    pub app: String,
+    /// the web build it keeps ([`web_build`]); `None` keeps `dev`
+    pub build: Option<String>,
+    /// the API's prefix, which the worker never touches (default `/api/`)
+    pub api: String,
+    /// where it is served (default `/sw.js`; a worker controls the pages under its own folder)
+    pub path: String,
+}
+
+impl Worker {
+    /// The worker of the app `app` for the web build `build`, at `/sw.js`, leaving `/api/` alone.
+    pub fn new(app: impl Into<String>, build: Option<String>) -> Worker {
+        Worker { app: app.into().to_ascii_lowercase(), build, api: "/api/".into(), path: "/sw.js".into() }
+    }
+
+    /// The worker's script: its settings, then [`SERVICE_WORKER_JS`].
+    pub fn script(&self) -> String {
+        let cfg = json!({ "app": self.app, "build": self.build.as_deref().unwrap_or("dev"), "api": self.api });
+        format!("self.KIT_SW = {cfg};\n{SERVICE_WORKER_JS}")
+    }
+}
+
+/// The service worker's route: `GET <path>` with its script, never cached by the browser, so it notices a new
+/// build at once.
+pub fn worker_router<S: Clone + Send + Sync + 'static>(worker: Worker) -> Router<S> {
+    let body = worker.script();
+    Router::new().route(
+        &worker.path,
+        get(move || async move { ([(header::CONTENT_TYPE, "text/javascript; charset=utf-8"), (header::CACHE_CONTROL, "no-cache")], body) }),
+    )
 }
 
 /// The build id of the web app in `static_dir`: the content hash in the name of trunk's script,
@@ -136,6 +183,26 @@ mod tests {
         // an extra field never overrides the contract's own
         assert_eq!(v, json!({ "ok": true, "version": "1.4.0", "server": "rust", "web": "3f9a0c1b2d4e", "name": "Demo" }));
         assert_eq!(Health::new("1.0.0", None).json()["web"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn the_worker_is_made_for_the_build() {
+        let app: Router = worker_router(Worker::new("Kit-Demo", Some("3f9a0c1b2d4e".into())));
+        let r = app.clone().oneshot(Request::get("/sw.js").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(r.status(), 200);
+        assert_eq!(r.headers()["content-type"], "text/javascript; charset=utf-8");
+        assert_eq!(r.headers()["cache-control"], "no-cache");
+        let b = axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap();
+        let text = String::from_utf8(b.to_vec()).unwrap();
+        assert!(text.starts_with(r#"self.KIT_SW = {"api":"/api/","app":"kit-demo","build":"3f9a0c1b2d4e"};"#), "{text}");
+        assert!(text.ends_with(SERVICE_WORKER_JS));
+        // the protocol kit-rules `update::Flow` speaks
+        for word in ["skip-waiting", "version?", ":version", "-shell-"] {
+            assert!(SERVICE_WORKER_JS.contains(word), "{word}");
+        }
+        // another build is another worker
+        assert_ne!(Worker::new("kit-demo", Some("aaaaaaaaaaaa".into())).script(), Worker::new("kit-demo", None).script());
+        assert!(Worker::new("kit-demo", None).script().contains(r#""build":"dev""#));
     }
 
     #[tokio::test]

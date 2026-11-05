@@ -98,6 +98,20 @@ await step('signed-out-after-ok', async () => {
   await page.locator('.modal-bg button[data-ok]', { hasText: 'Sign out' }).click();
   await see('.auth-card');
 });
+await step('opens-with-no-connection', async () => {
+  // the app-shell worker (/sw.js) keeps this build's page and files: a reload with no network still draws the app
+  const ready = await page.evaluate(() => navigator.serviceWorker.ready.then((r) => !!r.active));
+  if (!ready) throw new Error('the service worker did not start');
+  const kept = await page.evaluate(() => caches.keys());
+  if (!kept.some((k) => k.includes('-shell-'))) throw new Error(`no shell cache: ${kept.join(', ')}`);
+  await page.context().setOffline(true);
+  try {
+    await page.reload();
+    await see('.auth-card, .shell');
+  } finally {
+    await page.context().setOffline(false);
+  }
+});
 if (errors.length) {
   console.log(`FAIL page errors:\n${errors.join('\n')}`);
   await browser.close();

@@ -2,7 +2,7 @@
 //!
 //! | Where | What |
 //! | --- | --- |
-//! | everywhere | toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build |
+//! | everywhere | toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build, opening with no connection (the server's service worker at `/sw.js`) |
 //! | after signing in | the What's new popup, once per release |
 //! | `#/` | Home: the app's own start page (a bug report button to begin with) |
 //! | `#/bug-reports` | the account's bug reports and the New report sheet |
@@ -110,6 +110,8 @@ fn main() {
     let mut cfg = update::UpdateConfig::new(&app);
     cfg.build = this_build();
     update::start(cfg);
+    // the app-shell worker (https or localhost only; elsewhere the browser has none and this does nothing)
+    update::register_worker("/sw.js");
     rt::spawn(async move {
         let me = api::get("/auth/me").await.ok();
         let Some(root) = rt::by_id("app").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) else { return };
