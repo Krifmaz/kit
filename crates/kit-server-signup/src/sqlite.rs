@@ -4,22 +4,24 @@ use crate::store::{
     invite_of, request_of, settings_of, use_of, Invite, InviteUse, NewInvite, NewSignupRequest, SignupRequest, SignupStore, INVITE_COLS,
     REQUEST_COLS, SQLITE,
 };
-use kit_server_core::{async_trait, db::now, p, Db, Result, SqliteDb};
+use kit_server_core::{async_trait, db::now, p, Db, Result, SharedDb};
 use serde_json::Value;
+use std::sync::Arc;
 
 /// The sign-up data in SQLite, in the kit's `kit_signup_settings`, `kit_invites`, `kit_invite_uses` and
 /// `kit_signup_requests`.
 #[derive(Clone)]
 pub struct SqliteSignup {
-    /// the database
-    db: SqliteDb,
+    /// the database: the kit's `SqliteDb` or the app's own SQLite `Db`
+    db: SharedDb,
 }
 
 impl SqliteSignup {
-    /// The sign-up data on `db`, its tables made or brought up to date.
-    pub fn new(db: SqliteDb) -> Result<SqliteSignup> {
-        db.migrate(&SQLITE)?;
-        Ok(SqliteSignup { db })
+    /// The sign-up data on `db` (the kit's `SqliteDb` or the app's own SQLite database), its tables made or
+    /// brought up to date.
+    pub fn new(db: impl Db + 'static) -> Result<SqliteSignup> {
+        SQLITE.run(&db)?;
+        Ok(SqliteSignup { db: Arc::new(db) })
     }
 }
 
@@ -153,6 +155,6 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_keeps_the_contract() {
-        crate::store::signup_contract(&SqliteSignup::new(SqliteDb::memory()).unwrap()).await;
+        crate::store::signup_contract(&SqliteSignup::new(kit_server_core::SqliteDb::memory()).unwrap()).await;
     }
 }

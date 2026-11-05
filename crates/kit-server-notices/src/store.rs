@@ -3,9 +3,10 @@
 //! or, with feature `postgres`, [`PgNotices`] keep them in the kit's own `kit_notices` table; an app may
 //! implement the trait on its own storage.
 
-use kit_server_core::{async_trait, p, Db, Migrations, Result, RowExt, SqliteDb};
+use kit_server_core::{async_trait, p, Db, Migrations, Result, RowExt, SharedDb};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Where the last result of each kept notice is saved: one notice object per notice id.
 #[async_trait]
@@ -41,15 +42,15 @@ fn rows_to_map(rows: Vec<kit_server_core::Row>) -> HashMap<String, Value> {
 /// The notices' last results in SQLite, in `kit_notices`.
 #[derive(Clone)]
 pub struct SqliteNotices {
-    /// the database
-    db: SqliteDb,
+    /// the database: the kit's `SqliteDb` or the app's own SQLite `Db`
+    db: SharedDb,
 }
 
 impl SqliteNotices {
-    /// The last results on `db`, its table made or brought up to date.
-    pub fn new(db: SqliteDb) -> Result<SqliteNotices> {
-        db.migrate(&SQLITE)?;
-        Ok(SqliteNotices { db })
+    /// The last results on `db` (the kit's `SqliteDb` or the app's own SQLite database), its table made or brought up to date.
+    pub fn new(db: impl Db + 'static) -> Result<SqliteNotices> {
+        SQLITE.run(&db)?;
+        Ok(SqliteNotices { db: Arc::new(db) })
     }
 }
 
@@ -124,7 +125,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_keeps_the_contract() {
-        notices_contract(&SqliteNotices::new(SqliteDb::memory()).unwrap()).await;
+        notices_contract(&SqliteNotices::new(kit_server_core::SqliteDb::memory()).unwrap()).await;
     }
 
     #[cfg(feature = "postgres")]

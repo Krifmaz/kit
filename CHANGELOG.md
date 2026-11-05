@@ -4,6 +4,15 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- kit-server-core: `Migrations::run(&dyn Db)` makes and updates the kit's `kit_*` tables on any SQLite `Db`
+  (`SqliteDb::migrate` now uses it), and `SharedDb` (`Arc<dyn Db>`).
+
+### Changed
+- The SQLite stores (`SqlitePrefs`, `SqliteSettings`, `SqliteNotices`, `SqliteReports`, `SqliteSuite`, `SqliteSignup`) take any
+  `Db` (`new(db: impl Db + 'static)`), not only `SqliteDb`: an app with its own SQLite layer keeps the kit's
+  tables in its own database, on its own connections. Code that passes a `SqliteDb` is unchanged.
+
 ## v0.6.0 — 2026-11-05
 
 Notes: [docs/releases/0.6.0.md](docs/releases/0.6.0.md).
