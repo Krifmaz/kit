@@ -45,6 +45,11 @@ on:
         type: string
         required: false
         default: ""
+      apt-packages:
+        description: "Ubuntu packages the tests need, space-separated (e.g. ffmpeg), installed before anything runs"
+        type: string
+        required: false
+        default: ""
       runs-on:
         type: string
         required: false
@@ -65,6 +70,13 @@ jobs:
       FMT: ${{ inputs.fmt }}
     steps:
       - uses: actions/checkout@v4
+      - name: Ubuntu packages
+        if: inputs.apt-packages != ''
+        env:
+          PACKAGES: ${{ inputs.apt-packages }}
+        run: |
+          read -ra pkgs <<< "$PACKAGES"
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends -- "${pkgs[@]}"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ inputs.wasm-dirs != '' && 'wasm32-unknown-unknown' || '' }}

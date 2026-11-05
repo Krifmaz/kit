@@ -5,6 +5,7 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Added
+- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
 - kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
 - kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
