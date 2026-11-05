@@ -5,7 +5,7 @@
 
 use crate::table::Table;
 use crate::values::{clean_env, coerce, masked, Def, EnvLookup, Values};
-use kit_server_core::{async_trait, p, Db, Migrations, Result, RowExt, SqliteDb};
+use kit_server_core::{async_trait, p, Db, Migrations, Result, RowExt, SharedDb};
 use serde_json::{json, Map, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,15 +40,15 @@ fn rows_to_saved(rows: Vec<kit_server_core::Row>) -> HashMap<String, Value> {
 /// The saved values in SQLite, in `kit_settings`.
 #[derive(Clone)]
 pub struct SqliteSettings {
-    /// the database
-    db: SqliteDb,
+    /// the database: the kit's `SqliteDb` or the app's own SQLite `Db`
+    db: SharedDb,
 }
 
 impl SqliteSettings {
-    /// The saved values on `db`, its table made or brought up to date.
-    pub fn new(db: SqliteDb) -> Result<SqliteSettings> {
-        db.migrate(&SQLITE)?;
-        Ok(SqliteSettings { db })
+    /// The saved values on `db` (the kit's `SqliteDb` or the app's own SQLite database), its table made or brought up to date.
+    pub fn new(db: impl Db + 'static) -> Result<SqliteSettings> {
+        SQLITE.run(&db)?;
+        Ok(SqliteSettings { db: Arc::new(db) })
     }
 }
 
@@ -356,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn sqlite_keeps_the_contract() {
-        settings_contract(&SqliteSettings::new(SqliteDb::memory()).unwrap()).await;
+        settings_contract(&SqliteSettings::new(kit_server_core::SqliteDb::memory()).unwrap()).await;
     }
 
     #[cfg(feature = "postgres")]

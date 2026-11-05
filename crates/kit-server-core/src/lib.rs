@@ -30,7 +30,7 @@ pub use db::{Db, Row, RowExt};
 pub use error::{err, Error, Result};
 #[cfg(feature = "sqlite")]
 pub use sqlite::{SqliteDb, SqlitePrefs};
-pub use store::{async_trait, Migrations, PrefsStore};
+pub use store::{async_trait, Migrations, PrefsStore, SharedDb};
 
 /// serde_json for [`p!`], so a crate that uses the macro needs no dependency of its own on it.
 #[doc(hidden)]

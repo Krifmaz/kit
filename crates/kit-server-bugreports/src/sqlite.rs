@@ -1,27 +1,28 @@
 //! [`SqliteReports`]: the bug reports and crash reports in SQLite (feature `sqlite`, the default), on the kit's
-//! [`SqliteDb`].
+//! `SqliteDb` or the app's own SQLite database.
 
 use crate::store::sql::{self, Params};
 use crate::store::{
     BugReportStore, Crash, CrashStore, FileRow, ListFilter, Message, NewCrash, NewFile, NewMessage, NewReport, Report, ReportSummary, Side,
     BUG_REPORTS_SQLITE, CRASHES_SQLITE,
 };
-use kit_server_core::{async_trait, p, Db, Result, RowExt, SqliteDb};
+use kit_server_core::{async_trait, p, Db, Result, RowExt, SharedDb};
+use std::sync::Arc;
 
 /// The bug reports ([`BugReportStore`]) and crash reports ([`CrashStore`]) in SQLite, in `kit_bug_reports`,
 /// `kit_bug_report_messages`, `kit_bug_report_files` and `kit_client_crashes`. Clones share the database.
 #[derive(Clone)]
 pub struct SqliteReports {
-    /// the database
-    db: SqliteDb,
+    /// the database: the kit's `SqliteDb` or the app's own SQLite `Db`
+    db: SharedDb,
 }
 
 impl SqliteReports {
-    /// The reports on `db`, their tables made or brought up to date.
-    pub fn new(db: SqliteDb) -> Result<SqliteReports> {
-        db.migrate(&BUG_REPORTS_SQLITE)?;
-        db.migrate(&CRASHES_SQLITE)?;
-        Ok(SqliteReports { db })
+    /// The reports on `db` (the kit's `SqliteDb` or the app's own SQLite database), their tables made or brought up to date.
+    pub fn new(db: impl Db + 'static) -> Result<SqliteReports> {
+        BUG_REPORTS_SQLITE.run(&db)?;
+        CRASHES_SQLITE.run(&db)?;
+        Ok(SqliteReports { db: Arc::new(db) })
     }
 }
 
@@ -193,6 +194,7 @@ impl CrashStore for SqliteReports {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kit_server_core::SqliteDb;
 
     #[tokio::test]
     async fn reports_keep_their_contract() {
