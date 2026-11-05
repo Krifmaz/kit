@@ -1,0 +1,38 @@
+[package]
+name = "kit-server-signup"
+description = "Who may make an account: an admin setting (closed, invite only, open), invite links (one-time or multi-use, expiry, max uses, role and presets, revoke, who used each), and open sign-up with rate limits, optional email verification and admin approval. The app keeps its own accounts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kit-server-core.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+getrandom.workspace = true
+kit-server-suite = { workspace = true, optional = true }
+
+[dev-dependencies]
+kit-server-core = { workspace = true, features = ["testing"] }
+tokio.workspace = true
+tower.workspace = true
+reqwest.workspace = true
+
+[features]
+default = ["sqlite"]
+# `SqliteSignup`: the sign-up data in SQLite, on `kit_server_core::SqliteDb`
+sqlite = ["kit-server-core/sqlite"]
+# `PgSignup`: the sign-up data in Postgres, on `kit_server_core::pg::PgDb`
+postgres = ["kit-server-core/postgres"]
+# `store::signup_contract`, for the tests of an app's own store
+testing = ["kit-server-core/testing"]
+# `suite_account_source`: the account source of a kit-server-suite link (single sign-on)
+suite = ["dep:kit-server-suite"]
+
+[lints]
+workspace = true

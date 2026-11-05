@@ -91,6 +91,7 @@ object KitApp {
  * @property settings the settings' values (`GET`, `PUT`).
  * @property settingsSecret one saved secret, shown to the owner (`GET /{key}`).
  * @property settingsTest a settings card's Test button (`POST`; `{test}` is the card's check id).
+ * @property signup the sign-up routes' base (`GET` who can sign up, `POST` a sign-up, `/invite`, `/verify`, `/settings`, `/invites`, `/pending`).
  */
 data class KitRoutes(
     val health: String = "/api/health",
@@ -106,4 +107,5 @@ data class KitRoutes(
     val settings: String = "/api/settings",
     val settingsSecret: String = "/api/settings/secret",
     val settingsTest: String = "/api/diagnostics/{test}/test",
+    val signup: String = "/api/signup",
 )

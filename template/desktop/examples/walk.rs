@@ -82,6 +82,13 @@ async fn main() {
     step("the schema draws as a form", kit_iced::form::Schema::from_json(&schema));
     let values: Value = step("the settings' values", c.get(paths::SETTINGS.into()).await);
     assert!(values.is_object(), "{values}");
+    // the admin's sign-up page: the setting, a new invite, the lists (kit-iced's signup::Admin sends these)
+    let signup = step("Sign-up: the setting", c.get("/api/signup/settings".into()).await);
+    assert!(signup["settings"]["who"].is_string(), "{signup}");
+    let invite = step("Sign-up: a new invite", c.post("/api/signup/invites".into(), json!({ "note": "walk" })).await);
+    assert!(invite["link"].as_str().is_some_and(|l| l.contains("invite=")), "{invite}");
+    step("Sign-up: the invites", c.get("/api/signup/invites".into()).await);
+    step("Sign-up: the waiting sign-ups", c.get("/api/signup/pending".into()).await);
     let checks = step("Diagnostics' checks", c.get(paths::DIAGNOSTICS.into()).await);
     assert!(!kit_iced::diagnostics::checks(&checks).is_empty(), "{checks}");
     step("sign out", c.post(paths::LOGOUT.into(), json!({})).await);

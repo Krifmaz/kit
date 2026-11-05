@@ -19,6 +19,7 @@ import dev.krifmaz.kit.compose.bugs.BugReportScreen
 import dev.krifmaz.kit.compose.bugs.BugReportsApi
 import dev.krifmaz.kit.compose.bugs.BugReportsHost
 import dev.krifmaz.kit.compose.bugs.BugReportsScreen
+import dev.krifmaz.kit.compose.signup.SignupAdminScreen
 import dev.krifmaz.kit.compose.suite.SuiteSearch
 import dev.krifmaz.kit.compose.whatsnew.ChangelogScreen
 import dev.krifmaz.kit.compose.widgets.BackBar
@@ -43,6 +44,9 @@ sealed interface Page {
 
     /** The server's checks and the phone app's crash reports (admins). */
     data object Diagnostics : Page
+
+    /** Who can sign up, the invites and the accounts waiting (admins). */
+    data object Signup : Page
 
     /** One search across this app and every linked app ([SuiteSearch]). */
     data object Search : Page
@@ -91,6 +95,8 @@ fun AppShell(app: App) {
         Page.ServerSettings -> ServerSettingsPage(app, onBack = back)
 
         Page.Diagnostics -> DiagnosticsPage(app, onBack = back)
+
+        Page.Signup -> SignupAdminScreen(app.server.kit, base, onBack = back)
 
         Page.Search ->
             Column(Modifier.fillMaxSize()) {

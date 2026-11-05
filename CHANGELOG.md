@@ -10,6 +10,27 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   build; the API never is), and each new build arrives as a new worker that kit-rules `update::Flow` lets take over.
   The template serves and registers it, and its browser walk reloads offline.
 
+## v0.6.0 — 2026-11-05
+
+Notes: [docs/releases/0.6.0.md](docs/releases/0.6.0.md).
+
+### Added
+- Sign-up (`contracts/signup.md`): who may make an account.
+  - `kit-server-signup`: the admin setting "Who can sign up" (Closed, Invite only by default, Open); invite links
+    (one-time or multi-use, expiry, most uses, the role and presets the account gets, revoke, who used each;
+    the link shown once, kept as its SHA-256); open sign-up with limits per address and per day, an optional
+    email confirmation (`Mailer`, `LogMailer` by default) and an optional admin approval; the app makes,
+    switches on and removes accounts through `SignupHost`. Under single sign-on the account source's setting
+    applies and is shown read-only (`SignupHost::account_source`; `suite_account_source` with feature `suite`).
+    Data in `kit_signup_settings`, `kit_invites`, `kit_invite_uses` and `kit_signup_requests` on SQLite
+    (`SqliteSignup`) or Postgres (`PgSignup`).
+  - kit-rules `signup`; kit-leptos `signup` (`SignInLine`, `SignUpPage`, `VerifyPage`, `SignupAdmin`); kit-iced
+    `signup` (`SignUp`, `Admin`); kit-compose `signup` (`SignInLine`, `SignUpScreen`, `SignupAdminScreen`,
+    `SignupRules`), with `KitRoutes.signup` and kit-leptos `Paths::signup`.
+  - The template: sign-up on the web, desktop and Android sign-in pages, a Sign-up admin page on each, and the
+    server's accounts made through the hooks (`public_url` setting for the links). The Android demo has the
+    admin page on its in-app server.
+
 ## v0.5.0 — 2026-11-05
 
 Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).

@@ -74,6 +74,7 @@ Krifmaz/kit
 │   ├── kit-server-settings      schema → API → validation
 │   ├── kit-server-updates       release feed (full release vs hotfix)
 │   ├── kit-server-suite         linked apps: manifest, shared sidebar, single sign-on, search
+│   ├── kit-server-signup        who can sign up: invites, open sign-up, approval
 │   ├── kit-rules                toasts, changelog, update detection, offline, uploads
 │   ├── kit-leptos               web components (+ demo)
 │   └── kit-iced                 desktop components (+ demo)
@@ -160,6 +161,7 @@ storage hooks the app provides).
 | kit-server-diagnostics | Check registry with status, message and fix. |
 | kit-server-settings | Schema loading from the app's settings file, settings API, validation. |
 | kit-server-updates | Release feed for in-app updates (the app's repo and asset names). |
+| kit-server-signup | Who can sign up (Closed, Invite only, Open), invite links (uses, expiry, role and presets, revoke, who used them), open sign-up's limits, email confirmation and approval; the app keeps its accounts through hooks; under single sign-on the account source's setting applies. |
 | kit-server-suite | The app's manifest, links and keys, the shared sidebar, single sign-on (OIDC provider and relying party), search across linked apps. |
 
 ## 9. kit-rules

@@ -28,6 +28,7 @@ import dev.krifmaz.kit.compose.dialogs.ConfirmHost
 import dev.krifmaz.kit.compose.dialogs.rememberConfirms
 import dev.krifmaz.kit.compose.offline.OfflineBanner
 import dev.krifmaz.kit.compose.perf.KitPerf
+import dev.krifmaz.kit.compose.signup.SignupAdminScreen
 import dev.krifmaz.kit.compose.theme.KitTheme
 import dev.krifmaz.kit.compose.toasts.ToastHost
 import dev.krifmaz.kit.compose.update.Updater
@@ -92,6 +93,9 @@ sealed interface Page {
 
     /** Diagnostics, with the app's crash reports. */
     data object Diagnostics : Page
+
+    /** Sign-up: who can sign up, invites and accounts waiting. */
+    data object Signup : Page
 }
 
 /** What the bug report screens need, from the demo's server and its pages. */
@@ -155,6 +159,8 @@ private fun DemoRoot(app: DemoApp, look: DemoLook) {
             Page.Settings -> DemoSettings(app, close)
 
             Page.Diagnostics -> DemoDiagnostics(app, close)
+
+            Page.Signup -> SignupAdminScreen(app.server.kit, DemoServer.BASE, onBack = close)
         }
     }
     ConfirmHost(confirms)
