@@ -11,6 +11,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
 
 ### Changed
+- kit-leptos: `style/kit.css` (and the template's copy) draws the kit's look of docs/DESIGN.md §5, which it had
+  drifted from: Inter 14px/1.5 body, H1 28 / H2 19 / H3 15·650, small 12, the outlined danger button (red text,
+  red border on hover) instead of a filled one, and the same buttons, badges, lists, tables, dialogs, toasts and
+  banners the encore theme was drawn from. An app's stylesheet that loads after it no longer mixes two looks.
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
