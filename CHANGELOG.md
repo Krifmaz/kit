@@ -14,7 +14,16 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
 
-## v0.3.2 — 2026-11-05
+## v0.3.2 – v0.3.3 — 2026-11-05
+
+### Added
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+
+### Changed
+- kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
