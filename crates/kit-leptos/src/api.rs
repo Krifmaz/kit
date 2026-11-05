@@ -491,6 +491,16 @@ mod tests {
     }
 
     #[test]
+    fn only_an_unreachable_server_is_down() {
+        assert!(server_down(502, false, "<html>"));
+        assert!(server_down(503, false, r#"{"error":"x"}"#));
+        assert!(!server_down(502, true, r#"{"error":"upstream failed"}"#));
+        assert!(!server_down(504, true, ""));
+        assert!(!server_down(500, true, r#"{"error":"x"}"#));
+        assert!(!server_down(200, true, "{}"));
+    }
+
+    #[test]
     fn the_default_client_is_the_configured_app() {
         let b = HttpBackend::from_config();
         assert_eq!((b.app.as_str(), b.base.as_str()), ("app", "/api"));
