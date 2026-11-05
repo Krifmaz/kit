@@ -33,7 +33,7 @@ pub const FULL_CHANGELOG: &str = kit_rules::changelog::FULL_CHANGELOG;
 /// The changelog page without releases.
 pub const NO_NOTES: &str = kit_rules::changelog::NO_RELEASE_NOTES;
 
-pub use kit_rules::changelog::saved_words;
+pub use kit_rules::changelog::{saved_words, ChangelogWords};
 
 /// The help line under the changelog page's title: `app` is the app's name ("Demo").
 pub fn runs_words(app: &str, version: &str) -> String {
@@ -233,18 +233,24 @@ pub fn notes<'a, M: 'a>(blocks: &[Value]) -> El<'a, M> {
 /// The changelog page: the card with the switch, then every release (title, version, its notes
 /// when open). `app` is the app's name for the help line.
 pub fn changelog<'a>(state: &'a Changelog, app: &str) -> El<'a, ChangelogMsg> {
+    changelog_with(state, app, &ChangelogWords::DEFAULT)
+}
+
+/// The changelog page in the app's own `words`: the card's title, its first line (`intro`, with
+/// `{app}` and `{version}`), the switch and the line without notes.
+pub fn changelog_with<'a>(state: &'a Changelog, app: &str, words: &ChangelogWords) -> El<'a, ChangelogMsg> {
     if !state.error.is_empty() {
-        return card(TITLE, vec![err_text(state.error.clone()).into()]);
+        return card(words.whats_new, vec![err_text(state.error.clone()).into()]);
     }
     let Some(data) = &state.data else { return widgets::skeleton_rows(4) };
     let mut page = column![card(
-        TITLE,
-        vec![help(runs_words(app, &s(data, "version"))).into(), switch(state.popup, SHOW_WHATS_NEW, ChangelogMsg::Popup),]
+        words.whats_new,
+        vec![help(words.intro(app, &s(data, "version"))).into(), switch(state.popup, words.show_after_updates, ChangelogMsg::Popup),]
     )]
     .spacing(14);
     let releases = data["releases"].as_array().cloned().unwrap_or_default();
     if releases.is_empty() {
-        page = page.push(widgets::card(widgets::muted(NO_NOTES)).width(Length::Fill));
+        page = page.push(widgets::card(widgets::muted(words.no_notes)).width(Length::Fill));
     }
     for (i, r) in releases.into_iter().enumerate() {
         let open = state.open.contains(&i);
@@ -314,5 +320,16 @@ mod tests {
         assert_eq!(saved_words(true), "What's new will show after updates");
         assert_eq!(saved_words(false), "What's new won't show after updates – it stays in Settings");
         assert_eq!(runs_words("Demo", "0.40.1"), "This is Demo 0.40.1. After an update, a short list of what changed shows once.");
+    }
+
+    #[test]
+    fn the_changelog_page_takes_the_apps_words() {
+        let mut c = Changelog::default();
+        c.loaded(Ok(json!({ "version": "0.40.1", "popup": true, "releases": [] })));
+        let words = ChangelogWords { intro: "{app} {version} runs here.", no_notes: "Nothing yet.", ..ChangelogWords::DEFAULT };
+        let mut ui = iced_test::simulator(changelog_with(&c, "Demo", &words));
+        assert!(ui.find("Demo 0.40.1 runs here.").is_ok() && ui.find("Nothing yet.").is_ok());
+        let mut ui = iced_test::simulator(changelog(&c, "Demo"));
+        assert!(ui.find(runs_words("Demo", "0.40.1")).is_ok() && ui.find(NO_NOTES).is_ok());
     }
 }
