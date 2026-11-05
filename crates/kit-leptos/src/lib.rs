@@ -21,6 +21,7 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`outbox`] | the outbox store: actions kept on the device per account, sent once the server is back |
 //! | [`palette`] | the command palette (Ctrl+K / ⌘K): the app's commands and the ones it loads on opening |
 //! | [`signup`] | the sign-in page's sign-up line, the sign-up and confirmation pages, the admin's sign-up page |
 //! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
@@ -49,6 +50,7 @@ pub mod json;
 pub mod modal;
 pub mod notice;
 pub mod offline;
+pub mod outbox;
 pub mod palette;
 pub mod rt;
 pub mod schema_form;

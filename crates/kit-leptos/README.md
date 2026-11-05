@@ -54,6 +54,7 @@ kit_leptos::dropzone::init();     // drag and drop onto every [data-dropzone]
 kit_leptos::notice::start(kit_leptos::notice::NoticeSource::default(), is_admin);
 kit_leptos::notice::mount();
 kit_leptos::offline::watch_connection();
+outbox.watch(signed_in_user);    // a kit_leptos::outbox::Store: what waits goes once the server is back
 kit_leptos::update::start(kit_leptos::update::UpdateConfig::from_config().hold("It reloads when the upload is done", uploading));
 kit_leptos::whats_new::start(navigate);   // after signing in
 kit_leptos::palette::install(kit_leptos::palette::Palette::new(commands)); // Ctrl+K / ⌘K
@@ -98,6 +99,7 @@ kit_leptos::palette::install(kit_leptos::palette::Palette::new(commands)); // Ct
 | `signup` | `<SignInLine sign_up_href/>` (under the sign-in form: "Create an account", the invite hint, or where accounts are managed), `<SignUpPage app invite sign_in_href/>`, `<VerifyPage app token sign_in_href/>` and `<SignupAdmin/>` (who can sign up, waiting sign-ups, invites with the link shown once) on `paths.signup` |
 | `crash` | `install()` catches panics, uncaught errors and unhandled rejections and posts them to `paths.crash_reports` (`/crash-reports`), keeping them in `localStorage` until the server takes them; `report(kind, summary, text)`, `flush()` |
 | `offline` | `show_banner(grace_ended, on_retry)`, `set_trying`, `conn_banner(on, text)`, `watch_connection()`, `<OfflineBanner/>`, `<ConnBanner/>` |
+| `outbox` | `Store::open(name, send)` keeps the app's actions (`kit_rules::offline::outbox::Action`) per account in `localStorage` (`<id>.outbox.<name>`); `.noun(kind, one, many)`, `.limits(…)`; `send_or_keep(owner, a).await -> Sent::{Now, Kept, Refused}`, `add`, `flush(&owner).await -> Flushed`, `watch(owner)` (flushes at start, on `online` and `<id>:server-up`, then "Back online – 3 stars sent"), `waiting()` signal, `waiting_text()`, `clear()` |
 | `palette` | `install(Palette::new(vec![Command::new(ACTIONS, "New note", f).hint("…").icon("plus"), …]).source(\|\| async { load().await }))`; `open()`, `close()`, `toggle()`, `is_open()`, `set_commands(…)`. Ctrl+K / ⌘K toggles, Escape or a press beside it closes; Up/Down, Enter, click. Loaded commands follow the fixed ones (six per group until something is typed). Classes `.palette-bg`, `.palette`, `.palette-search`, `.palette-input`, `.palette-list`, `.palette-group`, `.palette-item[aria-selected]`, `.palette-icon`, `.palette-label`, `.palette-hint`, `.palette-empty` in `kit.css` |
 | `suite` | linked apps (`contracts/suite.md`): `<SuiteNav active/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related query/>` ("Related in …"), `<SsoButton next/>` ("Sign in with …"), `sso_error()`, `<LinkedApps/>` (the admin page: links and keys), `set_words(SuiteWords)` |
 | `api` | `get`/`post`/`post_empty`/`put`/`patch`/`del`/`post_form`, `Backend`, `HttpBackend` (`from_config`, `new(id)`, `with_base`, `with_headers(|method, path| …)` for the app's own headers, such as a CSRF token) |

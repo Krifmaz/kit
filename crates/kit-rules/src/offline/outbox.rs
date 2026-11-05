@@ -261,6 +261,14 @@ pub fn gone(status: u16) -> bool {
     status == 404
 }
 
+/// Whether actions whose call failed with `status` wait to be sent again later: no answer (0), a timeout (408),
+/// too many calls (429), the server's own trouble (5xx), or a session that is not (yet) valid (401, 403: sign in
+/// again and they go). Any other answer refused them for good, and they are dropped, as are those [`gone`] says
+/// went.
+pub fn retry_later(status: u16) -> bool {
+    matches!(status, 0 | 401 | 403 | 408 | 429) || status >= 500
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,6 +307,17 @@ mod tests {
                 Act::Star { .. } => "star",
             }
         }
+    }
+
+    #[test]
+    fn a_failed_call_waits_unless_the_server_refused_it() {
+        for s in [0, 401, 403, 408, 429, 500, 502, 503, 504] {
+            assert!(retry_later(s), "{s} waits");
+        }
+        for s in [400, 404, 409, 413, 422] {
+            assert!(!retry_later(s), "{s} is dropped");
+        }
+        assert!(gone(404) && !gone(400));
     }
 
     fn star(item: i64, on: bool) -> Act {

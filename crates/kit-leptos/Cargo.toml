@@ -1,6 +1,6 @@
 [package]
 name = "kit-leptos"
-description = "The kit's web components (toasts, dialogs, confirm, What's new, self-update, notices, drop zones, settings form, bug reports, diagnostics, offline banner, command palette) as Leptos components on kit-rules, configured per app, with a neutral stylesheet on the design tokens."
+description = "The kit's web components (toasts, dialogs, confirm, What's new, self-update, notices, drop zones, settings form, bug reports, diagnostics, offline banner, command palette, outbox store) as Leptos components on kit-rules, configured per app, with a neutral stylesheet on the design tokens."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
