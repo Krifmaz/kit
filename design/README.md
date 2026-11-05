@@ -13,3 +13,7 @@
 Themes: `encore` (the default, charcoal and cream), `dark`, `oled`, `light`; each has its own surface and
 accent colours. Regenerate after a change with `cargo run -p kit-tokens` (CI runs `-- --check`); the tests
 (`cargo test -p kit-tokens`) check every output against the tokens and that `out/` is up to date.
+
+- [`icons/`](icons) (`kit-icons`): turns an app's glyph into its whole icon set on the kit's tile (favicon,
+  PNGs, Apple touch icon, maskable icon, web manifest, `<head>` tags). See [`icons/README.md`](icons/README.md)
+  and DESIGN.md §5 "App icons".

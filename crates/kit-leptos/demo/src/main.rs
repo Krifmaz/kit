@@ -15,6 +15,7 @@ use kit_leptos::html::esc;
 use kit_leptos::icons::icon;
 use kit_leptos::modal::{self, ConfirmDialog};
 use kit_leptos::notice::{self, NoticeSource};
+use kit_leptos::palette::{self, Command, Palette, ACTIONS, GO_TO};
 use kit_leptos::schema_form::schema::{visible_cards, Schema};
 use kit_leptos::schema_form::{SettingsCards, SAMPLE_SCHEMA};
 use kit_leptos::toasts::{self, error_toast_html, toast, toast_action};
@@ -321,6 +322,32 @@ fn retry() {
     });
 }
 
+/// The palette's commands: a few actions and places, and fake sites loaded on opening.
+fn commands() -> Palette {
+    let jump = |label: &'static str| move || toast(&format!("Would go to {label}"), "info");
+    Palette::new(vec![
+        Command::new(ACTIONS, "Show a toast", || toast("Hello from the palette", "ok")).icon("check"),
+        Command::new(ACTIONS, "Report a bug", || {
+            bug_report::open(bug_report::SheetOpts::from_config("#/demo"));
+        })
+        .icon("bug"),
+        Command::new(GO_TO, "Settings", jump("Settings")).hint("/settings").icon("settings"),
+        Command::new(GO_TO, "Diagnostics", jump("Diagnostics")).hint("/diagnostics").icon("alert"),
+        Command::new(GO_TO, "Changelog", jump("Changelog")).hint("/changelog"),
+    ])
+    .source(|| async {
+        rt::sleep(150).await;
+        (1..=8)
+            .map(|n| {
+                let host = format!("site{n}.example");
+                Command::new("Sites", format!("Site {n}"), move || toast(&format!("Would open {host}"), "info"))
+                    .hint(format!("site{n}.example"))
+                    .icon("external")
+            })
+            .collect()
+    })
+}
+
 /// The demo app's icon (SVG path data).
 const DEMO_ICON: &str = "M4 4h16v16H4z";
 /// The other demo app's icon.
@@ -350,6 +377,11 @@ fn Demo() -> impl IntoView {
         <section><h2>"Dialogs and the bug report sheet"</h2><DialogButtons/></section>
         <section><h2>"Self-update"</h2><UpdateButtons/></section>
         <section><h2>"Offline and connection banners"</h2><Banners/></section>
+        <section>
+            <h2>"Command palette"</h2>
+            <p class="muted">"Ctrl+K or ⌘K opens it; the sites are loaded each time it opens (eight, six show until you type)."</p>
+            <div class="row wrap">{button("Open the command palette", palette::open)}</div>
+        </section>
         <section>
             <h2>"Drop zone"</h2>
             <DropZone input="demo-files" class="card">
@@ -564,6 +596,7 @@ fn main() {
         })
     });
     update::start(up);
+    palette::install(commands());
     if let Some(el) = rt::by_id("demo").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
         leptos::mount::mount_to(el, Demo).forget();
     }

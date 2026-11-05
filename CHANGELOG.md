@@ -4,9 +4,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.5.0 — 2026-11-05
+## v0.6.0 — 2026-11-05
 
-Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
+Notes: [docs/releases/0.6.0.md](docs/releases/0.6.0.md).
 
 ### Added
 - Sign-up (`contracts/signup.md`): who may make an account.
@@ -24,6 +24,16 @@ Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
   - The template: sign-up on the web, desktop and Android sign-in pages, a Sign-up admin page on each, and the
     server's accounts made through the hooks (`public_url` setting for the links). The Android demo has the
     admin page on its in-app server.
+
+## v0.5.0 — 2026-11-05
+
+Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
+
+### Added
+- `kit-icons` (design/icons): an app's glyph (one 24 × 24 SVG in `currentColor` and `{accent-2}`) becomes its whole
+  icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
+  DESIGN.md §5 "App icons" gives the rules for the glyph.
 
 ## v0.4.0 — 2026-11-05
 
@@ -57,6 +67,21 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
 - kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
 - kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+- Command palette (web):
+  - kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
+    Escape, a press beside it or Ctrl+K again closes it. The app installs its commands once
+    (`palette::install(Palette::new(commands).source(|| async { … }))`): fixed ones (`Command::new(group, label, run)`
+    with `.hint(…)` and `.icon(…)`, under `ACTIONS`, `GO_TO` or groups of its own) and, optionally, a source that
+    loads more each time it opens. Up and Down move the selection (kept in view), Enter or a click runs the command,
+    a new query selects the first result again. A dialog with a combobox and a listbox of options under their
+    groups; the words are `config.words.palette` (`PaletteWords`). Styled by `kit.css` (`.palette-*`), so an app
+    that loads the kit's stylesheet needs nothing else.
+  - kit-rules `palette`: what shows and in which order (`results`: with no query every fixed item, then the first
+    six of each loaded group; with one, label matches then hint-only matches, case-insensitive), `step` for Up and
+    Down, `is_toggle` for Ctrl+K / ⌘K, `PaletteWords`.
+  - kit-leptos: the `search` icon.
+  - Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
+    button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
 
 ### Changed
 - kit-leptos: `style/kit.css` (and the template's copy) draws the kit's look of docs/DESIGN.md §5, which it had
@@ -66,6 +91,8 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
+- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
+  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
   dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
   app is the same; the template needs cargo-generate 0.23.4 or later.
