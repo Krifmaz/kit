@@ -75,7 +75,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       KIT_TEST_POSTGRES_URL: postgres://postgres:kit@localhost:5432/kit_test
-      FEATURES: kit-server-core/postgres,kit-server-core/testing,kit-server-settings/postgres,kit-server-notices/postgres,kit-server-bugreports/postgres,kit-server-bugreports/testing
+      FEATURES: kit-server-core/postgres,kit-server-core/testing,kit-server-settings/postgres,kit-server-notices/postgres,kit-server-bugreports/postgres,kit-server-bugreports/testing,kit-server-suite/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -85,9 +85,9 @@ jobs:
         with:
           key: postgres
       - name: clippy with the Postgres stores
-        run: cargo clippy -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports --all-targets --locked --features "$FEATURES" -- -D warnings
+        run: cargo clippy -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports -p kit-server-suite --all-targets --locked --features "$FEATURES" -- -D warnings
       - name: tests on Postgres
-        run: cargo test -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports --locked --features "$FEATURES"
+        run: cargo test -p kit-server-core -p kit-server-changelog -p kit-server-settings -p kit-server-notices -p kit-server-bugreports -p kit-server-suite --locked --features "$FEATURES"
 
   template:
     runs-on: ubuntu-latest
