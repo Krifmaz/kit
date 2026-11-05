@@ -30,6 +30,7 @@ pub fn view(app: &App) -> El<'_, Message> {
     let base = match app.stage {
         Stage::Connect => connect(app),
         Stage::SignIn => sign_in(app),
+        Stage::SignUp => sign_up(app),
         Stage::Shell => shell(app),
     };
     let mut layers = vec![container(base).width(Length::Fill).height(Length::Fill).style(theme::app_bg).into()];
@@ -47,6 +48,11 @@ pub fn overlay(app: &App) -> Vec<El<'_, Message>> {
         }
         if let Some(d) = &app.new_report {
             out.push(bug_report::new_dialog(d, &app.server_version, Message::New, Message::CloseNewReport));
+        }
+        if app.page == Page::Signup {
+            if let Some(o) = app.signup_admin.overlay() {
+                out.push(o.map(Message::SignupAdmin));
+            }
         }
     }
     if let Some(d) = &app.details {
@@ -109,7 +115,20 @@ pub fn sign_in(app: &App) -> El<'_, Message> {
     c = c.push(btn(if app.busy { "Signing in…" } else { "Sign in" }, Btn::Primary, go).width(Length::Fill));
     if app.code.is_some() {
         c = c.push(s::link_muted("Use a different account", Message::SignInBack));
+    } else {
+        c = c.push(s::link(kit_rules::signup::SignupWords::default().create_account, Message::OpenSignUp));
     }
+    centred(c)
+}
+
+/// The sign-up page: an invite link, or open sign-up, as the server allows (kit-iced's `signup::SignUp`).
+pub fn sign_up(app: &App) -> El<'_, Message> {
+    let c = column![
+        row![w::logo(&crate::LOGO, 32.0), w::h2(kit_rules::signup::SignupWords::default().title)].spacing(10).align_y(Alignment::Center),
+        w::small_muted(app.client.base().to_string()),
+        app.signup.view(Message::SignUp, Message::SignUpBack),
+    ]
+    .spacing(14);
     centred(c)
 }
 
@@ -194,11 +213,19 @@ pub fn page(app: &App) -> El<'_, Message> {
         Page::BugReports => bug_reports(app),
         Page::Report(_) => report(app),
         Page::Settings => settings(app),
+        Page::Signup => {
+            column![w::page_head("Sign-up", None, vec![]), app.signup_admin.view(now()).map(Message::SignupAdmin)].spacing(14).into()
+        }
         Page::Diagnostics => diagnostics::view(&app.diagnostics, DIAGNOSTICS_HELP, format!("{} {}", crate::title(), app.server_version))
             .map(Message::Diagnostics),
         Page::WhatsNew => whats_new::changelog(&app.changelog, crate::title()).map(Message::Changelog),
         Page::Search => search(app),
     }
+}
+
+/// Now, in seconds since 1970 (the invites' expiry words).
+fn now() -> f64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0)
 }
 
 /// Home: the server, and a button for every kit feature (replace "Try the kit" with the app's own first page).
@@ -435,6 +462,32 @@ mod tests {
         a.code = Some(String::new());
         assert!(shows(&a, crate::signin::CODE_PROMPT));
         assert!(matches!(clicked(&a, "Use a different account")[..], [M::SignInBack]));
+    }
+
+    #[test]
+    fn sign_up_opens_from_sign_in_and_follows_the_server() {
+        use kit_iced::signup::{Kind, SignUpMsg};
+        let mut a = App::new(Stored { server: "https://x.example".into(), ..Stored::default() }, None, None);
+        assert!(matches!(clicked(&a, "Create an account")[..], [M::OpenSignUp]));
+        a.stage = Stage::SignUp;
+        a.signup.update(SignUpMsg::Answer(Kind::Policy, Ok(json!({ "who": "closed" }))));
+        assert!(shows(&a, "Sign-up is closed. Ask an admin to make you an account."));
+        a.signup.update(SignUpMsg::Answer(Kind::Policy, Ok(json!({ "who": "open" }))));
+        assert!(shows(&a, "Password again"));
+        assert!(matches!(clicked(&a, "Back to sign in")[..], [M::SignUpBack]));
+    }
+
+    #[test]
+    fn the_sign_up_admin_page_shows_the_setting() {
+        use kit_iced::signup::{AdminMsg, Kind};
+        let mut a = app(true);
+        a.page = Page::Signup;
+        a.signup_admin.update(AdminMsg::Answer(
+            Kind::Settings,
+            Ok(json!({ "settings": { "who": "invite" }, "roles": [{ "id": "user", "label": "Member" }] })),
+        ));
+        assert!(shows(&a, "Who can sign up") && shows(&a, kit_rules::signup::WHO[1].2) && shows(&a, "New invite"));
+        assert!(matches!(clicked(&a, "New invite")[..], [M::SignupAdmin(AdminMsg::ToggleForm)]));
     }
 
     #[test]

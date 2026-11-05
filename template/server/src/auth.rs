@@ -184,13 +184,19 @@ pub fn validate_credentials(username: &str, password: &str) -> Result<()> {
 
 /// Make an account; its id. 409 when the name is taken.
 pub fn create_user(db: &SqliteDb, username: &str, password: &str, role: &str) -> Result<i64> {
+    insert_user(db, username, password, &hash_password(password), role, "", false)
+}
+
+/// Make an account from a password already hashed (`hash`, of `password`, which is checked here); its id. 409 when
+/// the name is taken (in any case). `disabled`: it can't sign in yet (a sign-up waiting for its email or an admin).
+pub fn insert_user(db: &SqliteDb, username: &str, password: &str, hash: &str, role: &str, email: &str, disabled: bool) -> Result<i64> {
     validate_credentials(username, password)?;
-    if db.one("SELECT id FROM users WHERE username=?", p![username])?.is_some() {
+    if db.one("SELECT id FROM users WHERE username=? COLLATE NOCASE", p![username])?.is_some() {
         return Err(err(409, "Username already taken"));
     }
     db.execute(
-        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
-        p![username, hash_password(password), role, now()],
+        "INSERT INTO users (username, email, password_hash, role, disabled, created_at) VALUES (?,?,?,?,?,?)",
+        p![username, email, hash, role, disabled, now()],
     )
 }
 
@@ -365,7 +371,10 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
         return Err(err(401, "Invalid username or password"));
     };
     if user.b("disabled") {
-        return Err(err(403, "This account is disabled"));
+        // a sign-up that waits says what for
+        let words = kit_server_signup::Words::default();
+        let why = kit_server_signup::waiting(&st, user.i("id"), &words).await?;
+        return Err(err(403, why.unwrap_or_else(|| "This account is disabled".into())));
     }
     if b.app.is_some() {
         let token = random_token(32);

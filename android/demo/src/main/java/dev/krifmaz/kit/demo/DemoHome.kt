@@ -240,10 +240,11 @@ fun DemoHome(app: DemoApp, look: DemoLook, offline: DemoOffline, confirms: Confi
         }
 
         // ---- settings
-        SectionHead("Settings", subtitle = "Drawn from the server's schema; Diagnostics with the app's crashes")
+        SectionHead("Settings", subtitle = "Drawn from the server's schema; Diagnostics with the app's crashes; Sign-up with invites")
         Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SmallButton("Server settings") { open(Page.Settings) }
             SmallButton("Diagnostics") { open(Page.Diagnostics) }
+            SmallButton("Sign-up") { open(Page.Signup) }
         }
 
         // ---- uploads

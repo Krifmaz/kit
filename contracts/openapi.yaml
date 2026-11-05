@@ -5,7 +5,7 @@ info:
   license: { name: MIT }
   description: >
     The endpoints every kit server speaks. Every path is a default an app can move (each crate's `XPaths`). The prose files next to this one
-    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md, suite.md)
+    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md, suite.md, signup.md)
     say what the fields mean. Apps may add fields; clients ignore fields they do not know.
 components:
   schemas:
@@ -89,6 +89,61 @@ components:
         deep_links: { type: object, additionalProperties: { type: string } }
         search: { type: [string, "null"] }
         sso: { type: [object, "null"], properties: { issuer: { type: string } } }
+    SignupPolicy:
+      type: object
+      properties:
+        who: { type: [string, "null"], enum: [closed, invite, open, null] }
+        verify_email: { type: boolean }
+        approval: { type: boolean }
+        managed_by: { $ref: "#/components/schemas/ManagedBy" }
+    ManagedBy:
+      type: [object, "null"]
+      properties: { name: { type: string }, url: { type: string }, reachable: { type: boolean } }
+    SignupSettings:
+      type: object
+      properties:
+        who: { type: string, enum: [closed, invite, open] }
+        open_role: { type: string }
+        open_presets: { type: array, items: { type: string } }
+        verify_email: { type: boolean }
+        approval: { type: boolean }
+        per_hour: { type: integer, minimum: 1 }
+        per_day: { type: integer, minimum: 1 }
+    SignupAdmin:
+      type: object
+      properties:
+        settings: { $ref: "#/components/schemas/SignupSettings" }
+        roles: { type: array, items: { $ref: "#/components/schemas/Choice" } }
+        presets: { type: array, items: { $ref: "#/components/schemas/Choice" } }
+        mail_delivers: { type: boolean }
+        managed_by: { $ref: "#/components/schemas/ManagedBy" }
+        read_only: { type: boolean }
+    Choice:
+      type: object
+      required: [id, label]
+      properties: { id: { type: string }, label: { type: string } }
+    Invite:
+      type: object
+      properties:
+        id: { type: integer }
+        note: { type: string }
+        role: { type: string }
+        presets: { type: array, items: { type: string } }
+        max_uses: { type: integer, description: 1 one-time, 0 no limit }
+        uses: { type: integer }
+        expires_at: { type: number, description: seconds since 1970; 0 never }
+        revoked_at: { type: number }
+        status: { type: string, enum: [active, revoked, expired, used_up] }
+        created_by: { type: integer }
+        created_by_name: { type: string }
+        created_at: { type: number }
+        used_by: { type: array, items: { type: object, properties: { invite_id: { type: integer }, account_id: { type: integer }, username: { type: string }, used_at: { type: number } } } }
+    SignupStatus:
+      type: object
+      properties:
+        status: { type: string, enum: [active, verify_email, approval] }
+        message: { type: string }
+        account_id: { type: integer }
     SuiteLink:
       type: object
       properties:
@@ -391,6 +446,64 @@ paths:
     post:
       summary: Restart gracefully, exit code 75 (admin)
       responses: { "202": { description: restarting, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/signup:
+    get:
+      summary: Who can sign up (public); see signup.md
+      responses: { "200": { description: the setting, content: { application/json: { schema: { $ref: "#/components/schemas/SignupPolicy" } } } } }
+    post:
+      summary: Sign up, with an invite or openly (public)
+      requestBody: { content: { application/json: { schema: { type: object, required: [username, password], properties: { username: { type: string }, password: { type: string }, email: { type: string }, invite: { type: string } } } } } }
+      responses: { "200": { description: the new account's status, content: { application/json: { schema: { $ref: "#/components/schemas/SignupStatus" } } } }, "400": { description: a bad field or invite }, "403": { description: closed, or an invite is needed }, "409": { description: name taken, or another app keeps the accounts }, "429": { description: too many sign-ups } }
+  /api/signup/invite:
+    post:
+      summary: Whether an invite link works, and what it gives (public)
+      requestBody: { content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } } }
+      responses: { "200": { description: it works, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, role: { type: string }, presets: { type: array, items: { type: string } }, expires_at: { type: number } } } } } }, "400": { description: unknown, revoked, expired or used up } }
+  /api/signup/verify:
+    post:
+      summary: Confirm an email address with the mailed link's token (public)
+      requestBody: { content: { application/json: { schema: { type: object, required: [token], properties: { token: { type: string } } } } } }
+      responses: { "200": { description: the account's status, content: { application/json: { schema: { $ref: "#/components/schemas/SignupStatus" } } } }, "400": { description: unknown or expired link } }
+  /api/signup/settings:
+    get:
+      summary: The setting with the roles and presets the forms offer (admin)
+      responses: { "200": { description: the setting, content: { application/json: { schema: { $ref: "#/components/schemas/SignupAdmin" } } } } }
+    put:
+      summary: Change the setting (admin); 409 when another app keeps the accounts
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/SignupSettings" } } } }
+      responses: { "200": { description: the setting, content: { application/json: { schema: { $ref: "#/components/schemas/SignupAdmin" } } } } }
+  /api/signup/invites:
+    get:
+      summary: Every invite, newest first (admin)
+      responses: { "200": { description: invites, content: { application/json: { schema: { type: object, properties: { invites: { type: array, items: { $ref: "#/components/schemas/Invite" } } } } } } } }
+    post:
+      summary: Make an invite (admin); its link is in this answer only
+      requestBody: { content: { application/json: { schema: { type: object, properties: { note: { type: string }, role: { type: string }, presets: { type: array, items: { type: string } }, max_uses: { type: integer }, expires_in_hours: { type: integer } } } } } }
+      responses: { "200": { description: the invite, content: { application/json: { schema: { type: object, properties: { invite: { $ref: "#/components/schemas/Invite" }, token: { type: string }, link: { type: string } } } } } } }
+  /api/signup/invites/{id}:
+    get:
+      summary: One invite (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: the invite, content: { application/json: { schema: { type: object, properties: { invite: { $ref: "#/components/schemas/Invite" } } } } } } }
+  /api/signup/invites/{id}/revoke:
+    post:
+      summary: Revoke an invite (admin)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: the invite, content: { application/json: { schema: { type: object, properties: { invite: { $ref: "#/components/schemas/Invite" } } } } } } }
+  /api/signup/pending:
+    get:
+      summary: The sign-ups that wait, oldest first (admin)
+      responses: { "200": { description: waiting sign-ups, content: { application/json: { schema: { type: object, properties: { pending: { type: array, items: { type: object } } } } } } } }
+  /api/signup/pending/{id}/approve:
+    post:
+      summary: Approve a waiting sign-up (admin); counts as its email confirmation
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: approved, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, status: { type: string } } } } } } }
+  /api/signup/pending/{id}/reject:
+    post:
+      summary: Reject a waiting sign-up (admin); its account is removed
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { "200": { description: rejected, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
   /api/kit/manifest:
     get:
       summary: What this app is (public); see suite.md

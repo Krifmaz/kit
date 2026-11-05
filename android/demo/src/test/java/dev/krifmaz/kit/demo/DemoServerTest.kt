@@ -15,6 +15,8 @@ import dev.krifmaz.kit.compose.offline.probeHealth
 import dev.krifmaz.kit.compose.settings.DiagnosticsRules
 import dev.krifmaz.kit.compose.settings.SchemaApi
 import dev.krifmaz.kit.compose.settings.SchemaRules
+import dev.krifmaz.kit.compose.signup.SignupRules
+import dev.krifmaz.kit.compose.signup.SignupSettings
 import dev.krifmaz.kit.compose.whatsnew.ApiChangelogBackend
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -187,5 +189,27 @@ class DemoServerTest {
         val e = runCatching { server.kit.get("/api/nothing") }.exceptionOrNull() as ApiException
         assertEquals(404, e.code)
         assertEquals("Not found: GET /api/nothing", e.message)
+    }
+
+    @Test
+    fun signUpHasTheSettingInvitesAndAWaitingAccount() {
+        val r = KitApp.routes.signup
+        assertEquals("invite", SignupRules.policy(server.getObject(r)).who)
+        val admin = server.getObject("$r/settings")
+        assertEquals("Member", SignupRules.labelOf(SignupRules.choices(admin, "roles"), "user"))
+        server.kit.put("$r/settings", SignupRules.settingsBody(SignupSettings(who = "open", approval = true)))
+        assertEquals("open", SignupRules.policy(server.getObject(r)).who)
+        val made = server.kit.post("$r/invites", SignupRules.inviteBody("Team", "user", listOf("shared"), 5, 24)) as JsonObject
+        val token = SignupRules.tokenFrom(SignupRules.fullLink(made.str("link"), DemoServer.BASE))
+        assertTrue(token.isNotEmpty())
+        val list = SignupRules.invites(server.getObject("$r/invites"))
+        assertEquals("Team", SignupRules.title(list.first()))
+        assertEquals("0 of 5 uses", SignupRules.usesLine(list.first()))
+        assertEquals("1 of 1 use", SignupRules.usesLine(list.last()))
+        server.kit.post("$r/invites/${list.first().id}/revoke", JsonObject(emptyMap()))
+        assertFalse(SignupRules.canRevoke(SignupRules.invites(server.getObject("$r/invites")).first()))
+        val waiting = SignupRules.pending(server.getObject("$r/pending")).single()
+        server.kit.post("$r/pending/${waiting.id}/approve", JsonObject(emptyMap()))
+        assertTrue(SignupRules.pending(server.getObject("$r/pending")).isEmpty())
     }
 }

@@ -23,6 +23,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | `bug_report` | report labels and badges, the file picker with its limits, the New report dialog, the reply box |
 | `diagnostics` | the checks page: status dots, details, Copy, the copyable report; `view_with` for an app's own groups |
 | `offline` | the offline banner |
+| `signup` | `SignUp` (the sign-up page: invite link or open sign-up, as the server allows) and `Admin` (who can sign up, waiting sign-ups, invites with the link dialog); no network code: `update` answers `Out::Send(requests)` for the app to run and feed back |
 | `confirm` | the confirm dialog: a question, Cancel and the action's button (red when it destroys something) |
 | `suite` | linked apps (`contracts/suite.md`): `Sidebar` (the shared sidebar, Edit sidebar: move, hide, show, reset), `Search` (every app at once), `related` ("Related in …"), `path_icon`; each says what to do next as `Out` (`Save`, `Local`, `Browse`, `Search`) and the app makes the request |
 
