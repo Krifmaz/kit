@@ -17,6 +17,12 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 ## v0.3.2 – v0.3.3 — 2026-11-05
 
 ### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+- kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
+  own, so changes waiting on a phone survive the switch to the kit's outbox.
+- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
 - kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
 - kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).

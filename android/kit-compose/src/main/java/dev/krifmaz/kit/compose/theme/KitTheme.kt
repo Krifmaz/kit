@@ -144,21 +144,38 @@ object AppearanceRules {
     fun onAccent(a: String, b: String): Color = if ((luminance(a) + luminance(b)) / 2 > 0.45) Color(0xFF16161F) else Color.White
 }
 
-/** The palette of [theme] alone (System resolves to Dark or Light by [systemDark]). */
-fun basePaletteOf(theme: KitTheme, systemDark: Boolean): KitPalette = when (theme) {
-    KitTheme.Encore -> KitPalettes.Encore
-    KitTheme.Dark -> KitPalettes.Dark
-    KitTheme.Oled -> KitPalettes.Oled
-    KitTheme.Light -> KitPalettes.Light
-    KitTheme.System -> if (systemDark) KitPalettes.Dark else KitPalettes.Light
+/**
+ * The palette of each theme an app draws with: the kit's tokens by default. An app whose own colours differ from the
+ * kit's in a theme passes a set with that theme's palette replaced (usually `KitPalettes.X.copy(…)`), and every
+ * accent, background and Material colour is still worked out from it by [kitPaletteOf].
+ *
+ * @property encore the Encore theme's palette (the default theme).
+ * @property dark the Dark theme's palette; System uses it while the device is dark.
+ * @property oled the OLED black theme's palette.
+ * @property light the Light theme's palette; System uses it while the device is light.
+ */
+data class KitPaletteSet(
+    val encore: KitPalette = KitPalettes.Encore,
+    val dark: KitPalette = KitPalettes.Dark,
+    val oled: KitPalette = KitPalettes.Oled,
+    val light: KitPalette = KitPalettes.Light,
+)
+
+/** The palette of [theme] alone, from [palettes] (System resolves to Dark or Light by [systemDark]). */
+fun basePaletteOf(theme: KitTheme, systemDark: Boolean, palettes: KitPaletteSet = KitPaletteSet()): KitPalette = when (theme) {
+    KitTheme.Encore -> palettes.encore
+    KitTheme.Dark -> palettes.dark
+    KitTheme.Oled -> palettes.oled
+    KitTheme.Light -> palettes.light
+    KitTheme.System -> if (systemDark) palettes.dark else palettes.light
 }
 
 /**
- * The palette for a look: the theme's tokens, the accent's colours (none chosen: the theme's own) and, for the faded
- * background, a faint wash of the accent in the page colours.
+ * The palette for a look: the theme's tokens (from [palettes]), the accent's colours (none chosen: the theme's own)
+ * and, for the faded background, a faint wash of the accent in the page colours.
  */
-fun kitPaletteOf(look: KitLook, systemDark: Boolean): KitPalette {
-    val base = basePaletteOf(look.theme, systemDark)
+fun kitPaletteOf(look: KitLook, systemDark: Boolean, palettes: KitPaletteSet = KitPaletteSet()): KitPalette {
+    val base = basePaletteOf(look.theme, systemDark, palettes)
     val accented =
         if (look.accent.isEmpty() || look.accent == "theme") {
             base
@@ -246,6 +263,7 @@ fun KitTheme(palette: KitPalette, content: @Composable () -> Unit) {
  * @param accent "" for the theme's own accent, an accent id, or "custom" with [custom].
  * @param custom the custom accent colour.
  * @param background "solid" or "fade".
+ * @param palettes each theme's palette; the kit's by default ([KitPaletteSet]).
  * @param content the app's UI.
  */
 @Composable
@@ -254,10 +272,11 @@ fun KitTheme(
     accent: String = "",
     custom: String = KitAppearance.DEFAULT_CUSTOM,
     background: String = "solid",
+    palettes: KitPaletteSet = KitPaletteSet(),
     content: @Composable () -> Unit,
 ) {
     val systemDark = isSystemInDarkTheme()
     val look = KitLook(theme, accent, custom, background)
-    val palette = remember(look, systemDark) { kitPaletteOf(look, systemDark) }
+    val palette = remember(look, systemDark, palettes) { kitPaletteOf(look, systemDark, palettes) }
     KitTheme(palette, content)
 }

@@ -69,4 +69,19 @@ class KitThemeTest {
         assertEquals("#8b5cf6" to "#ec4899", AppearanceRules.accentHex("violet", "#000000"))
         assertEquals("#ff7a00" to "#ebff00", AppearanceRules.accentHex("custom", "#ff7a00"))
     }
+
+    @Test
+    fun anAppsOwnPalettesReplaceTheKitsPerTheme() {
+        val night = KitPalettes.Dark.copy(accent = Color(0xFFF0EAD6), accent2 = Color(0xFFD6C49A), onAccent = Color(0xFF16161F))
+        val set = KitPaletteSet(dark = night)
+        // the replaced theme, also through System while the device is dark; the others stay the kit's
+        assertSame(night, basePaletteOf(KitTheme.Dark, systemDark = false, set))
+        assertSame(night, basePaletteOf(KitTheme.System, systemDark = true, set))
+        assertSame(KitPalettes.Encore, basePaletteOf(KitTheme.Encore, systemDark = true, set))
+        // no accent chosen keeps the app's own; a chosen one and the faded background are worked out from it
+        assertSame(night, kitPaletteOf(KitLook(KitTheme.Dark), systemDark = true, set))
+        val faded = kitPaletteOf(KitLook(KitTheme.Dark, accent = "violet", background = "fade"), systemDark = true, set)
+        assertEquals(Color(0xFF8B5CF6), faded.accent)
+        assertNotEquals(night.bg, faded.bg)
+    }
 }
