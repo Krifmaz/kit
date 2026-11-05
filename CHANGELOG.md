@@ -5,6 +5,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+- kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
+  own, so changes waiting on a phone survive the switch to the kit's outbox.
+- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
 - Command palette (web):
   - kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
     Escape, a press beside it or Ctrl+K again closes it. The app installs its commands once
@@ -20,11 +30,6 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   - kit-leptos: the `search` icon.
   - Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
     button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
-- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
-- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
-  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
-- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
-- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
 
 ### Changed
 - kit-leptos: `style/kit.css` (and the template's copy) draws the kit's look of docs/DESIGN.md §5, which it had
