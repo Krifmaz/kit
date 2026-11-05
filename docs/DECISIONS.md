@@ -182,3 +182,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-05 · kit-server-suite asks other apps with reqwest 0.12 on rustls with ring (not 0.13's aws-lc default), so apps and their Docker builds need no extra C toolchain.
 - 2026-11-05 · A suite search on behalf of a person names them to the other app by user name (`X-Kit-Suite-User`), a hint the other app may use or ignore; the key alone is what is trusted.
 - 2026-11-05 · The shared sidebar keeps each person's choices in the kit's account preferences under `suite_sidebar` (`{order, hidden}`); entries never ordered follow in the apps' own order, so a newly linked app shows up at the end.
+- 2026-11-05 · kit-compose takes an app's own palettes per theme (`KitPaletteSet`) instead of the app copying `kitPaletteOf`: an app that keeps colours of its own (an older look) still gets every accent and background rule from the kit.

@@ -6,6 +6,6 @@ colours, type and shapes, and the focus ring that appears when a D-pad or keyboa
 
 - `KitTokens.kt` is generated from `design/tokens.json` (`design/out/`), not kept here.
 - `KitTheme.kt`: the theme ids, `KitLook` (theme, accent — `""` for the theme's own — custom colour,
-  background), `kitPaletteOf`, the colour maths of Settings → Appearance (`AppearanceRules`), `kitColorScheme`,
+  background), `KitPaletteSet` (an app's own palette for any theme, `KitPalettes.X.copy(…)`), `kitPaletteOf`, the colour maths of Settings → Appearance (`AppearanceRules`), `kitColorScheme`,
   `MaterialTheme.palette`.
 - `FocusRing.kt`: the focus ring indication and modifier.

@@ -4,6 +4,11 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+
 ## v0.3.0 — 2026-11-05
 
 Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
