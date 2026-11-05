@@ -2,27 +2,30 @@
 <html lang="en" data-theme="encore">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#161617">
   <title>kit-leptos demo</title>
   <!-- the kit's design tokens (every theme), then the kit's stylesheet built on them -->
   <link data-trunk rel="css" href="../../../design/out/tokens.css">
   <link data-trunk rel="css" href="../style/kit.css">
   <link data-trunk rel="rust" data-wasm-opt="z" data-bin="kit-leptos-demo">
   <style>
-    #demo { max-width: 1100px; margin: 0 auto; padding: 24px 16px 120px; }
-    #demo > section { margin-top: 32px; }
-    #demo > section > h2 { margin-bottom: 12px; }
-    #server-notice { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
-    #server-notice:not(:empty) { padding-top: 16px; }
-    body:has(> #offline-banner) { padding-top: 40px; }
-    .demo-head { margin-bottom: 8px; }
-    #kit-check { margin: 12px 0 0; }
+    /* the demo's own few rules: the Kit page's sections and two layouts of the design-system pages */
+    .k-page > section { margin-top: 32px; }
+    .k-page > section > h2 { margin-bottom: 12px; }
+    #server-notice:empty { display: none; }
+    body:has(> #offline-banner) .k-appbar { top: 44px; }
+    #kit-check { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .demo-detail { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); margin-bottom: 8px; }
+    .demo-detail h3 { margin-bottom: 6px; }
+    .demo-detail p { margin: 0; }
+    .demo-progress { display: flex; align-items: center; gap: 16px; }
+    .demo-empties { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
   </style>
 </head>
 <body>
-  <!-- the shell: the notice slot, the app, the toasts and the dialogs -->
-  <div id="server-notice"></div>
-  <div id="demo"></div>
+  <!-- the shell (with the notice slot inside), the toasts and the dialogs -->
+  <div id="app"></div>
   <div id="toasts"></div>
   <div id="modal-root"></div>
 </body>

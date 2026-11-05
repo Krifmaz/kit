@@ -6,6 +6,8 @@ release source an input the app gives (`KitApp.init`). Maven coordinates: `dev.k
 | Package | What it gives an app |
 | --- | --- |
 | [`theme`](src/main/java/dev/krifmaz/kit/compose/theme/README.md) | `KitTheme(theme, accent) { App() }`: the palettes (`KitPalettes.Encore`, the default, `Dark`, `Oled`, `Light`, generated from `design/tokens.json`), accents, focus ring |
+| [`ui`](src/main/java/dev/krifmaz/kit/compose/ui/README.md) | The design system, as on the web: `KitScaffold` (bottom bar on phones, rail on tablets, sidebar from 1024 dp), `KitSheet`, `MediaCard`, `MediaGrid`, `Carousel`, `Hero`, `DetailHeader`, chips, `StatCard`, `ProgressRing`, `KitEmptyState`, skeletons |
+| [`icons`](src/main/java/dev/krifmaz/kit/compose/icons/README.md) | `KitIcons`: the web's Lucide icons as `ImageVector`s (`KitIcons.Search`, `KitIcons.byName("layout-grid")`) |
 | [`widgets`](src/main/java/dev/krifmaz/kit/compose/widgets/README.md) | Buttons, badges, cards, fields, error box, empty state, menus |
 | [`dialogs`](src/main/java/dev/krifmaz/kit/compose/dialogs/README.md) | Confirm dialogs, with a word to type for the ones that can't be undone |
 | [`toasts`](src/main/java/dev/krifmaz/kit/compose/toasts/README.md) | Toasts above every sheet and dialog; errors stay with Copy; Undo; stack rules |

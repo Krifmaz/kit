@@ -119,6 +119,10 @@ fun DemoHome(app: DemoApp, look: DemoLook, offline: DemoOffline, confirms: Confi
             for (a in KitAppearance.ACCENTS) Badge(a.name, kind = if (look.accent == a.id) "accent" else "", onClick = { look.setAccent(a.id) })
         }
 
+        // ---- the design system
+        SectionHead("Design system", subtitle = "Bottom bar, covers, carousels, stats, empty states")
+        Row(Modifier.padding(horizontal = Gutter)) { KitButton("Open the design system", primary = true) { open(Page.Design) } }
+
         // ---- widgets
         SectionHead("Buttons and badges")
         Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

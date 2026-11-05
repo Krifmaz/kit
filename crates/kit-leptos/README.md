@@ -60,6 +60,31 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 kit_leptos::palette::install(kit_leptos::palette::Palette::new(commands)); // Ctrl+K / ⌘K
 ```
 
+## The design system (`ui`)
+
+Mobile first, on the tokens' scales (`--space-N`, `--text-*`, `--touch`, `--app-bar`, `--tab-bar`, `--rail`,
+`--shadow-1..3`, `--glass-blur`, `--dur-*`). Below 768 px: a glass top app bar, a glass bottom tab bar (up to five
+sections, the rest under More), full-width bottom sheets (every `.modal` too), 44 px touch targets, the safe-area
+insets (`viewport-fit=cover` in the page's viewport meta). 768–1023 px: a navigation rail. From 1024 px: the
+sidebar. No animation is longer than 180 ms, and none runs under `prefers-reduced-motion`. See
+[`src/ui/README.md`](src/ui/README.md).
+
+```rust
+use kit_leptos::ui::*;
+
+view! {
+    <AppShell brand="Notes" nav=vec![NavItem::new("#/", "Home", "home"), NavItem::new("#/browse", "Browse", "layout-grid")]
+        active=route title=page_title back=back_href actions=move || view! { <button class="k-icon-btn" …/> }>
+        <div id="server-notice"></div>
+        {move || match route.get().as_str() { "#/browse" => view! { <Browse/> }.into_any(), _ => view! { <Home/> }.into_any() }}
+    </AppShell>
+}
+```
+
+Icons are [Lucide](https://lucide.dev) (ISC), generated from `design/lucide/icons.txt`: `icons::icon("layout-grid")`
+or `<Icon name="star"/>`; the kit's first short names (`trash`, `refresh`, `external`, `chevron`, `offline`,
+`alert`, `home`, `more`) still work.
+
 ## Configuration
 
 `AppConfig` holds:
@@ -102,6 +127,8 @@ kit_leptos::palette::install(kit_leptos::palette::Palette::new(commands)); // Ct
 | `outbox` | `Store::open(name, send)` keeps the app's actions (`kit_rules::offline::outbox::Action`) per account in `localStorage` (`<id>.outbox.<name>`); `.noun(kind, one, many)`, `.limits(…)`; `send_or_keep(owner, a).await -> Sent::{Now, Kept, Refused}`, `add`, `flush(&owner).await -> Flushed`, `watch(owner)` (flushes at start, on `online` and `<id>:server-up`, then "Back online – 3 stars sent"), `waiting()` signal, `waiting_text()`, `clear()` |
 | `palette` | `install(Palette::new(vec![Command::new(ACTIONS, "New note", f).hint("…").icon("plus"), …]).source(\|\| async { load().await }))`; `open()`, `close()`, `toggle()`, `is_open()`, `set_commands(…)`. Ctrl+K / ⌘K toggles, Escape or a press beside it closes; Up/Down, Enter, click. Loaded commands follow the fixed ones (six per group until something is typed). Classes `.palette-bg`, `.palette`, `.palette-search`, `.palette-input`, `.palette-list`, `.palette-group`, `.palette-item[aria-selected]`, `.palette-icon`, `.palette-label`, `.palette-hint`, `.palette-empty` in `kit.css` |
 | `suite` | linked apps (`contracts/suite.md`): `<SuiteNav active/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related query/>` ("Related in …"), `<SsoButton next/>` ("Sign in with …"), `sso_error()`, `<LinkedApps/>` (the admin page: links and keys), `set_words(SuiteWords)` |
+| `ui` | the design system: `<AppShell/>`, `<Page/>`, `<PageHead/>`, `<Section/>`, `<Sheet/>`, `<MediaCard/>`, `<MediaGrid/>`, `<Carousel/>`, `<Hero/>`, `<DetailHeader/>`, `<Chip/>`, `<FilterChips/>`, `<StatCard/>`, `<ProgressRing/>`, `<EmptyState/>`, `<SkeletonLines/>`, `<SkeletonGrid/>`, `<SkeletonRail/>`, `placeholder_art(seed, title)` ([`src/ui/README.md`](src/ui/README.md)) |
+| `icons` | `icon(name)` (the whole `<svg>`), `<Icon name/>`, `paths(name)`; every Lucide icon in `lucide::NAMES` and the kit's short names (`ALIASES`) |
 | `api` | `get`/`post`/`post_empty`/`put`/`patch`/`del`/`post_form`, `Backend`, `HttpBackend` (`from_config`, `new(id)`, `with_base`, `with_headers(|method, path| …)` for the app's own headers, such as a CSRF token) |
 
 ## Tests

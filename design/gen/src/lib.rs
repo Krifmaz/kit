@@ -50,6 +50,8 @@ pub struct Tokens {
     pub spacing: Vec<u32>,
     /// Durations and keyframes.
     pub motion: Motion,
+    /// The design system's scales: spacing, type, touch target, bars, breakpoints, elevations.
+    pub scale: Scale,
     /// Android specifics.
     pub compose: Compose,
     /// Desktop specifics.
@@ -212,6 +214,35 @@ pub struct Motion {
     pub slow: String,
     /// Keyframes by name.
     pub keyframes: BTreeMap<String, String>,
+}
+
+/// The design system's scales, the same on every client.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Scale {
+    /// Spacing steps in px by name (`--space-1` = 4px …).
+    pub space: BTreeMap<String, u32>,
+    /// The type scale in px by name (`--text-xs` … `--text-3xl`).
+    pub text: BTreeMap<String, u32>,
+    /// The smallest touch target in px (`--touch`).
+    pub touch: u32,
+    /// The phone's top app bar height in px (`--app-bar`).
+    pub app_bar: u32,
+    /// The phone's bottom tab bar height in px, without the safe area (`--tab-bar`).
+    pub tab_bar: u32,
+    /// The tablet's navigation rail width in px (`--rail`).
+    pub rail: u32,
+    /// Below this width in px an app is laid out for phones (tab bar, app bar, sheets).
+    pub breakpoint: u32,
+    /// From this width in px the full sidebar shows instead of the rail.
+    pub wide: u32,
+    /// `--shadow-1` … `--shadow-3` on dark themes.
+    pub elevation: BTreeMap<String, String>,
+    /// `--shadow-1` … `--shadow-3` on light themes.
+    pub elevation_light: BTreeMap<String, String>,
+    /// The blur of the glass bars in px (`--glass-blur`).
+    pub glass_blur: u32,
+    /// No animation runs longer than this, in ms.
+    pub max_motion_ms: u32,
 }
 
 /// Android specifics: Material shapes and type roles.
@@ -406,6 +437,7 @@ pub fn css(t: &Tokens) -> String {
     let _ = writeln!(o, "  --sidebar: {};", t.layout.sidebar);
     let _ = writeln!(o, "  --player: {};", t.layout.player);
     let _ = writeln!(o, "  --player-h: {};", t.layout.player_h);
+    scale_vars(&mut o, t, root.dark);
     let _ = writeln!(o, "  color-scheme: {};", if root.dark { "dark" } else { "light" });
     o.push_str("}\n");
     for th in &t.themes[1..] {
@@ -423,11 +455,44 @@ pub fn css(t: &Tokens) -> String {
             let _ = writeln!(o, "  --shadow: {};", th.shadow);
         }
         if th.dark != root.dark {
+            for (k, v) in if th.dark { &t.scale.elevation } else { &t.scale.elevation_light } {
+                let _ = writeln!(o, "  --shadow-{k}: {v};");
+            }
             let _ = writeln!(o, "  color-scheme: {};", if th.dark { "dark" } else { "light" });
         }
         o.push_str("}\n");
     }
     o
+}
+
+/// The scale's variables for `:root`: spacing, type, sizes, elevations (of a dark or light default), blur and
+/// motion.
+fn scale_vars(o: &mut String, t: &Tokens, dark: bool) {
+    let sc = &t.scale;
+    let mut space: Vec<(&String, &u32)> = sc.space.iter().collect();
+    space.sort_by_key(|(_, v)| **v);
+    for (k, v) in space {
+        let _ = writeln!(o, "  --space-{k}: {v}px;");
+    }
+    let mut text: Vec<(&String, &u32)> = sc.text.iter().collect();
+    text.sort_by_key(|(_, v)| **v);
+    for (k, v) in text {
+        let _ = writeln!(o, "  --text-{k}: {v}px;");
+    }
+    let _ = writeln!(o, "  --touch: {}px;", sc.touch);
+    let _ = writeln!(o, "  --app-bar: {}px;", sc.app_bar);
+    let _ = writeln!(o, "  --tab-bar: {}px;", sc.tab_bar);
+    let _ = writeln!(o, "  --rail: {}px;", sc.rail);
+    for (k, v) in if dark { &sc.elevation } else { &sc.elevation_light } {
+        let _ = writeln!(o, "  --shadow-{k}: {v};");
+    }
+    let _ = writeln!(o, "  --glass-blur: {}px;", sc.glass_blur);
+    let _ = writeln!(o, "  --font: {};", t.typography.font_family);
+    let _ = writeln!(o, "  --mono: {};", t.typography.mono_family);
+    let _ = writeln!(o, "  --dur-fast: {};", t.motion.fast);
+    let _ = writeln!(o, "  --dur-base: {};", t.motion.base);
+    let _ = writeln!(o, "  --dur-pop: {};", t.motion.pop);
+    o.push_str("  --ease: cubic-bezier(.2, .8, .2, 1);\n");
 }
 
 /// `#aabbcc` as Kotlin `Color(0xFFAABBCC)`.
@@ -523,7 +588,35 @@ pub fn compose(t: &Tokens) -> String {
     for k in ["extraSmall", "small", "medium", "large", "extraLarge"] {
         let _ = writeln!(o, "    {k} = RoundedCornerShape({}.dp),", t.compose.shapes.get(k).copied().unwrap_or(0));
     }
-    o.push_str(")\n\nprivate val Sans = FontFamily.SansSerif\n\n");
+    o.push_str(")\n\n");
+    o.push_str("/** The spacing scale (`--space-N`). */\nobject KitSpace {\n");
+    let mut space: Vec<(&String, &u32)> = t.scale.space.iter().collect();
+    space.sort_by_key(|(_, v)| **v);
+    for (k, v) in space {
+        let _ = writeln!(o, "    val S{k} = {v}.dp");
+    }
+    o.push_str(
+        "}\n\n/** The sizes of the design system: touch target, phone bars, rail and the phone/wide breakpoints. */\nobject KitSizes {\n",
+    );
+    let sc = &t.scale;
+    for (n, v) in [
+        ("Touch", sc.touch),
+        ("AppBar", sc.app_bar),
+        ("TabBar", sc.tab_bar),
+        ("Rail", sc.rail),
+        ("Breakpoint", sc.breakpoint),
+        ("Wide", sc.wide),
+    ] {
+        let _ = writeln!(o, "    val {n} = {v}.dp");
+    }
+    o.push_str(
+        "}\n\n/** Durations in ms (`--dur-fast`, `--dur-base`, `--dur-pop`); nothing runs longer than `MAX`. */\nobject KitMotion {\n",
+    );
+    let ms = |s: &str| (s.trim_end_matches('s').parse::<f64>().unwrap_or(0.0) * 1000.0).round() as u32;
+    for (n, v) in [("FAST", ms(&t.motion.fast)), ("BASE", ms(&t.motion.base)), ("POP", ms(&t.motion.pop)), ("MAX", sc.max_motion_ms)] {
+        let _ = writeln!(o, "    const val {n} = {v}");
+    }
+    o.push_str("}\n\nprivate val Sans = FontFamily.SansSerif\n\n");
     o.push_str("/** The web's type scale as Material roles. */\nval KitTypography: Typography = Typography(\n");
     for r in &t.compose.typography {
         let tracking = if r.tracking < 0.0 { format!("({})", num(r.tracking)) } else { num(r.tracking) };
@@ -548,7 +641,17 @@ pub fn iced(t: &Tokens) -> String {
     o.push_str("// kit-iced includes this file; the colours are `#rrggbb` strings its `hex` turns into colours.\n\n");
     let _ = writeln!(o, "/// `--radius`.\npub const RADIUS: f32 = {:?};", t.iced.radius);
     let _ = writeln!(o, "/// `--sidebar`.\npub const SIDEBAR: f32 = {:?};", t.iced.sidebar);
-    let _ = writeln!(o, "/// `--player-h`.\npub const PLAYER_H: f32 = {:?};\n", t.iced.player_h);
+    let _ = writeln!(o, "/// `--player-h`.\npub const PLAYER_H: f32 = {:?};", t.iced.player_h);
+    let mut space: Vec<u32> = t.scale.space.values().copied().collect();
+    space.sort_unstable();
+    let list: Vec<String> = space.iter().map(|v| format!("{:?}", *v as f32)).collect();
+    let _ = writeln!(
+        o,
+        "/// The spacing scale (`--space-N`), smallest first.\npub const SPACE: [f32; {}] = [{}];",
+        list.len(),
+        list.join(", ")
+    );
+    let _ = writeln!(o, "/// `--touch`: the smallest touch target.\npub const TOUCH: f32 = {:?};\n", t.scale.touch as f32);
     let _ = writeln!(
         o,
         "/// `(id, name)` of the themes the Appearance page offers, in its order.\npub const THEMES: [(&str, &str); {}] = [",

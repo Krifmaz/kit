@@ -1,4 +1,6 @@
-//! The kit-leptos demo: every component on one page with fake data, served by `trunk serve` (see README.md).
+//! The kit-leptos demo: every component with fake data, served by `trunk serve` (see README.md), in the kit's
+//! design system: the [`AppShell`] (sidebar, rail, or app bar and tab bar on phones) around six pages, Home,
+//! Browse, an item's page, Stats, States ([`pages`]) and Kit (the kit's features, below).
 //!
 //! The app is "Kit Demo" 1.4.0 ([`config`]); a fake [`Backend`] answers every call the components make, so the
 //! page needs no server. Once it is drawn the page shows toasts, a confirm dialog and the banners through the
@@ -6,6 +8,8 @@
 //! comments and whitespace-only text left out, attributes in any order). The result goes into
 //! `<pre id="kit-check">` and `document.body.dataset.kitCheck` ("pass" or "fail"), for the screenshot script to
 //! read.
+
+mod pages;
 
 use kit_leptos::api::{ApiError, ApiFuture, Backend};
 use kit_leptos::config::{self, AppConfig};
@@ -20,6 +24,7 @@ use kit_leptos::palette::{self, Command, Palette, ACTIONS, GO_TO};
 use kit_leptos::schema_form::schema::{visible_cards, Schema};
 use kit_leptos::schema_form::{SettingsCards, SAMPLE_SCHEMA};
 use kit_leptos::toasts::{self, error_toast_html, toast, toast_action};
+use kit_leptos::ui::{AppShell, NavItem, Page, PageHead};
 use kit_leptos::update::{self, UpdateConfig};
 use kit_leptos::whats_new::{self, ChangelogPage};
 use kit_leptos::{bug_report, details, dropzone, offline, rt};
@@ -50,6 +55,8 @@ const HOLD_WORDS: &str = "It reloads when the demo's switch is off";
 const THEMES: [(&str, &str); 4] = [("encore", "Encore"), ("dark", "Dark"), ("oled", "OLED black"), ("light", "Light")];
 
 thread_local! {
+    /// The page check's result, once it ran (the Kit page shows it).
+    static CHECK: RefCell<Option<String>> = const { RefCell::new(None) };
     /// The settings the fake server keeps.
     static SETTINGS: RefCell<Value> = const { RefCell::new(Value::Null) };
     /// How often Check again ran (the second one finds the notice fixed).
@@ -277,22 +284,23 @@ fn set_theme(theme: &str) {
     }
 }
 
-/// The head: the logo, the app's name and version, and the theme switcher.
+/// The theme picker of the Kit page.
 #[component]
-fn Head() -> impl IntoView {
-    let c = config::get();
+fn ThemePicker() -> impl IntoView {
     let opts = THEMES.iter().map(|(id, label)| view! { <option value=*id>{*label}</option> }).collect_view();
     view! {
-        <header class="row between wrap demo-head">
-            <div class="row">
-                <img src=c.logo.clone().unwrap_or_default() alt="" width="36" height="36"/>
-                <div><h1 style="margin:0">{c.app.name.clone()}</h1><div class="small muted">{format!("kit-leptos demo · version {}", c.app.version)}</div></div>
-            </div>
-            <label class="row small muted">"Theme"
-                <select class="input" id="theme" style="width:auto" on:change=move |e| set_theme(&event_target_value(&e))>{opts}</select>
-            </label>
-        </header>
+        <label class="row small muted">"Theme"
+            <select class="input" id="theme" style="width:auto" on:change=move |e| set_theme(&event_target_value(&e))>{opts}</select>
+        </label>
     }
+}
+
+/// The app bar's theme button: the next of the four themes.
+fn next_theme() {
+    let now = rt::document().and_then(|d| d.document_element()).and_then(|h| h.get_attribute("data-theme")).unwrap_or_default();
+    let i = THEMES.iter().position(|(id, _)| *id == now).map_or(0, |i| (i + 1) % THEMES.len());
+    set_theme(THEMES[i].0);
+    toast(&format!("Theme: {}", THEMES[i].1), "info");
 }
 
 fn button(label: &'static str, f: impl Fn() + 'static) -> impl IntoView {
@@ -483,17 +491,21 @@ thread_local! {
     ]));
 }
 
+/// The Kit page: every kit feature with fake data, and the page's own check.
 #[component]
-fn Demo() -> impl IntoView {
+fn KitPage() -> impl IntoView {
     let schema = Schema::from_json(&serde_json::from_str(SAMPLE_SCHEMA).unwrap_or_default());
     let values = SETTINGS.with(|s| s.borrow().clone());
     let general = schema.section("general").map(|s| visible_cards(&s.groups, &values)).unwrap_or_default();
     let mail = schema.section("mail").map(|s| visible_cards(&s.groups, &values)).unwrap_or_default();
     let v2 = values.clone();
     view! {
-        <Head/>
-        <p class="muted">"Every kit component with fake data. The check below compares the page with the kit's own markup."</p>
-        <pre id="kit-check" class="code small">"checking…"</pre>
+        <Page>
+        <PageHead title="Kit" subtitle=format!("Every kit feature with fake data · {} {}", config::get().app.name, config::get().app.version)>
+            <ThemePicker/>
+        </PageHead>
+        <p class="muted">"The check below compares the page with the kit's own markup."</p>
+        <pre id="kit-check" class="code small">{CHECK.with(|c| c.borrow().clone()).unwrap_or_else(|| "checking…".into())}</pre>
         <section><h2>"Toasts"</h2><ToastButtons/></section>
         <section><h2>"Dialogs and the bug report sheet"</h2><DialogButtons/></section>
         <section><h2>"Self-update"</h2><UpdateButtons/></section>
@@ -523,6 +535,78 @@ fn Demo() -> impl IntoView {
         <section><h2>"Suite: search across apps"</h2><kit_leptos::suite::SuiteSearch initial="thing"/></section>
         <section><DiagnosticsPage/></section>
         <section><ChangelogPage/></section>
+        </Page>
+    }
+}
+
+/// The address's page: `#/browse` → `#/browse` (`#/` when empty).
+fn current() -> String {
+    let h = rt::window().and_then(|w| w.location().hash().ok()).unwrap_or_default();
+    if h.is_empty() || h == "#" {
+        "#/".into()
+    } else {
+        h
+    }
+}
+
+/// The demo app: the kit's shell with the demo's sections, the page the address names inside.
+#[component]
+fn App() -> impl IntoView {
+    let (route, set_route) = signal(current());
+    rt::on_window("hashchange", move |_| {
+        set_route.set(current());
+        // a new page starts at its top
+        if let Some(w) = rt::window() {
+            w.scroll_to_with_x_and_y(0.0, 0.0);
+        }
+    });
+    let nav = vec![
+        NavItem::new("#/", "Home", "home"),
+        NavItem::new("#/browse", "Browse", "layout-grid"),
+        NavItem::new("#/stats", "Stats", "chart-column"),
+        NavItem::new("#/states", "States", "square-stack"),
+        NavItem::new("#/kit", "Kit", "shapes"),
+    ];
+    let item = move || route.get().strip_prefix("#/item/").and_then(|n| n.parse::<usize>().ok());
+    let title = Signal::derive(move || match route.get().as_str() {
+        "#/browse" => "Browse".to_string(),
+        "#/stats" => "Stats".to_string(),
+        "#/states" => "States".to_string(),
+        "#/kit" => "Kit".to_string(),
+        _ => item().map(|n| pages::ITEMS[n % pages::ITEMS.len()].0.to_string()).unwrap_or_default(),
+    });
+    let back = Signal::derive(move || item().map(|_| "#/browse".to_string()));
+    // the sidebar shows Browse while an item is open
+    let active = Signal::derive(move || if item().is_some() { "#/browse".to_string() } else { route.get() });
+    let c = config::get();
+    view! {
+        <AppShell
+            brand=c.app.name.clone()
+            logo=c.logo.clone().unwrap_or_default()
+            nav=nav
+            active=active
+            title=title
+            back=back
+            actions=move || view! {
+                <button class="k-icon-btn" id="search-btn" aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" on:click=|_| palette::open() inner_html=icon("search")></button>
+                <button class="k-icon-btn" id="theme-btn" aria-label="Next theme" title="Next theme" on:click=|_| next_theme() inner_html=icon("palette")></button>
+            }
+            side_foot=move || view! {
+                <div class="grow small muted ellipsis">{format!("{} {}", name(), config::get().app.version)}</div>
+            }
+        >
+            <div id="server-notice"></div>
+            {move || match route.get().as_str() {
+                "#/browse" => view! { <pages::Browse/> }.into_any(),
+                "#/stats" => view! { <pages::Stats/> }.into_any(),
+                "#/states" => view! { <pages::States/> }.into_any(),
+                "#/kit" => view! { <KitPage/> }.into_any(),
+                _ => match item() {
+                    Some(n) => view! { <pages::Item n=n/> }.into_any(),
+                    None => view! { <pages::Home/> }.into_any(),
+                },
+            }}
+        </AppShell>
     }
 }
 
@@ -706,6 +790,7 @@ async fn check() {
     if let Some(pre) = rt::by_id("kit-check") {
         pre.set_text_content(Some(&text));
     }
+    CHECK.with(|c| *c.borrow_mut() = Some(text));
     // leave a few toasts for the screenshot
     toasts::clear();
     toast("upload failed: mkdir /data/<team>: permission denied (os error 13)", "err");
@@ -726,6 +811,10 @@ fn main() {
     toasts::mount();
     details::init();
     dropzone::init();
+    // the shell first: the notice slot is inside it
+    if let Some(el) = rt::by_id("app").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+        leptos::mount::mount_to(el, App).forget();
+    }
     notice::start(NoticeSource::default().words_for("storage", STORAGE_WORDS), true);
     notice::mount();
     let mut up = UpdateConfig::from_config().hold(HOLD_WORDS, || HOLD.with(Cell::get));
@@ -739,9 +828,6 @@ fn main() {
     update::start(up);
     outbox().watch(|| Some(USER));
     palette::install(commands());
-    if let Some(el) = rt::by_id("demo").and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
-        leptos::mount::mount_to(el, Demo).forget();
-    }
     // the notices' first answer comes after the fake backend's delay
     rt::after(600, || rt::spawn(check()));
 }

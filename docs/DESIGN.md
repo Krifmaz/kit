@@ -104,7 +104,17 @@ Themes: **`encore`** (default: charcoal and cream), **`dark`** (blue-black, viol
 accent, accent-2 and on-accent. Status colours ok `#22c55e`, warn `#f59e0b`, err `#ef4444`, info `#38bdf8`.
 Accents for the picker: cream, violet, pastel, lilac, pink, sky, teal, green, amber, red, or a custom colour.
 Type: Inter 14px/1.5 body, H1 28/750, H2 19/700, H3 15/650, small 12, a ui-monospace stack. Radius 14px
-(cards), 12 (tiles), 10 (inputs), 8 (thumbs). Shadow `0 10px 30px rgba(0,0,0,.35)`. Motion .12s / .15s / .2s.
+(cards), 12 (tiles), 10 (inputs), 8 (thumbs). Shadow `0 10px 30px rgba(0,0,0,.35)`. Motion .12s / .15s / .18s
+(nothing over 200 ms; nothing under reduced motion). Scales: spacing 4–64 px, type 12–36 px, touch target 44 px,
+app bar 56, tab bar 64, rail 80, elevations 1–3, glass blur 18. Icons: Lucide (`design/lucide`).
+
+### Design system
+
+Mobile first, the same on web (kit-leptos `ui`) and Android (kit-compose `ui`): below 768 px a top app bar, a
+bottom tab bar (up to five sections, the rest under More) and full-width sheets; 768–1023 px a rail; from 1024 px
+the sidebar. Components: cover cards and grids, carousels, hero banners with blurred backdrop art, detail headers,
+chips, stat cards, progress rings, empty states, skeletons, page transitions. CI screenshots every demo page at
+390×844, 820×1180 and 1440×900 and fails on horizontal overflow or overlapping text.
 
 ### App icons
 

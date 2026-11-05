@@ -25,6 +25,38 @@
   --sidebar: 236px;
   --player: 0px;
   --player-h: 84px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 19px;
+  --text-xl: 23px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --touch: 44px;
+  --app-bar: 56px;
+  --tab-bar: 64px;
+  --rail: 80px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, .28);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, .45);
+  --glass-blur: 18px;
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --dur-fast: .12s;
+  --dur-base: .15s;
+  --dur-pop: .18s;
+  --ease: cubic-bezier(.2, .8, .2, 1);
   color-scheme: dark;
 }
 :root[data-theme="dark"] {
@@ -70,5 +102,8 @@
   --accent-2-rgb: 138, 122, 78;
   --on-accent: #f0ead6;
   --shadow: 0 10px 30px rgba(20, 20, 50, .08);
+  --shadow-1: 0 1px 2px rgba(20, 20, 50, .08);
+  --shadow-2: 0 6px 18px rgba(20, 20, 50, .08);
+  --shadow-3: 0 18px 48px rgba(20, 20, 50, .14);
   color-scheme: light;
 }

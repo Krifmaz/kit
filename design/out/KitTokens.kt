@@ -147,6 +147,38 @@ val KitShapes: Shapes = Shapes(
     extraLarge = RoundedCornerShape(20.dp),
 )
 
+/** The spacing scale (`--space-N`). */
+object KitSpace {
+    val S1 = 4.dp
+    val S2 = 8.dp
+    val S3 = 12.dp
+    val S4 = 16.dp
+    val S5 = 20.dp
+    val S6 = 24.dp
+    val S8 = 32.dp
+    val S10 = 40.dp
+    val S12 = 48.dp
+    val S16 = 64.dp
+}
+
+/** The sizes of the design system: touch target, phone bars, rail and the phone/wide breakpoints. */
+object KitSizes {
+    val Touch = 44.dp
+    val AppBar = 56.dp
+    val TabBar = 64.dp
+    val Rail = 80.dp
+    val Breakpoint = 768.dp
+    val Wide = 1024.dp
+}
+
+/** Durations in ms (`--dur-fast`, `--dur-base`, `--dur-pop`); nothing runs longer than `MAX`. */
+object KitMotion {
+    const val FAST = 120
+    const val BASE = 150
+    const val POP = 180
+    const val MAX = 180
+}
+
 private val Sans = FontFamily.SansSerif
 
 /** The web's type scale as Material roles. */

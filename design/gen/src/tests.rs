@@ -169,3 +169,43 @@ fn design_out_is_up_to_date() {
         assert!(on_disk == text, "design/out/{name} is stale: run `cargo run -p kit-tokens`");
     }
 }
+
+#[test]
+fn the_scales_reach_every_output() {
+    let t = tokens();
+    let css = css(&t);
+    for want in [
+        "--space-4: 16px;",
+        "--text-3xl: 36px;",
+        "--touch: 44px;",
+        "--tab-bar: 64px;",
+        "--shadow-2:",
+        "--dur-pop: .18s;",
+        "--glass-blur: 18px;",
+    ] {
+        assert!(css.contains(want), "{want}");
+    }
+    // the light theme gets the lighter elevations
+    let light = &css[css.find(":root[data-theme=\"light\"]").expect("light block")..];
+    assert!(light.contains("--shadow-1: 0 1px 2px rgba(20, 20, 50, .08);"));
+    let kt = compose(&t);
+    for want in [
+        "object KitSpace",
+        "val S4 = 16.dp",
+        "object KitSizes",
+        "val Touch = 44.dp",
+        "val Breakpoint = 768.dp",
+        "object KitMotion",
+        "const val POP = 180",
+        "const val MAX = 180",
+    ] {
+        assert!(kt.contains(want), "{want}");
+    }
+    let rs = iced(&t);
+    assert!(rs.contains("pub const TOUCH: f32 = 44.0;") && rs.contains("pub const SPACE: [f32; 10]"));
+    // no animation token runs longer than the scale allows
+    let ms = |s: &str| (s.trim_end_matches('s').parse::<f64>().unwrap_or(9.0) * 1000.0).round() as u32;
+    for d in [&t.motion.fast, &t.motion.base, &t.motion.pop] {
+        assert!(ms(d) <= t.scale.max_motion_ms, "{d}");
+    }
+}

@@ -96,6 +96,9 @@ sealed interface Page {
 
     /** Sign-up: who can sign up, invites and accounts waiting. */
     data object Signup : Page
+
+    /** The design system: the scaffold's sections, covers, stats and states. */
+    data object Design : Page
 }
 
 /** What the bug report screens need, from the demo's server and its pages. */
@@ -161,6 +164,8 @@ private fun DemoRoot(app: DemoApp, look: DemoLook) {
             Page.Diagnostics -> DemoDiagnostics(app, close)
 
             Page.Signup -> SignupAdminScreen(app.server.kit, DemoServer.BASE, onBack = close)
+
+            Page.Design -> DemoDesign(onBack = close)
         }
     }
     ConfirmHost(confirms)
