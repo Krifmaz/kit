@@ -64,7 +64,9 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 
 - `app`: `App { id, name, version }`. The id prefixes storage keys (`<id>.update.tried`), the API events
   (`<id>:server-down`, `<id>:server-up`, `<id>:unauthorized`, `<id>:bugs-changed`), the `X-Requested-With`
-  header and the service worker's names.
+  header and the service worker's names. `<id>:server-down` means the server gave no answer of its own (the call
+  failed, or a 404/5xx came without the server's `x-<id>` header), after 2 failed calls in a row or 5 s with no
+  call answered; a cancelled call counts for nothing.
 - `logo`, and `script`: the stem of the page's script name (`<id>-web` by default, whose hash is the build).
 - `paths`: every server path, relative to `api` (`/api`): `health` `/health`, `changelog` `/changelog`,
   `changelog_new` `/changelog/new`, `changelog_seen` `/changelog/seen`, `popup` `/auth/prefs` with

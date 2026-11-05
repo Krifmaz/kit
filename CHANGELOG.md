@@ -4,6 +4,17 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.2.1 — 2026-11-05
+
+Notes: [docs/releases/0.2.1.md](docs/releases/0.2.1.md).
+
+### Fixed
+- kit-leptos: a 502–504 that carries the app's `x-<app id>` header no longer raises "The <app> server isn't
+  answering": the server answered (an error from something behind it). `<id>:server-down` now goes out only when
+  the request failed or the answer lacks the header (a proxy's page), and only after 2 failed calls in a row or
+  5 s after a failure with no call answered since (`api::DownWatch`). Aborted calls, and calls cut off while the
+  page is being left, count for nothing and fail with `api::CANCELLED`.
+
 ## v0.2.0 — 2026-11-04
 
 Notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md).
