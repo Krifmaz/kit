@@ -361,16 +361,18 @@ jobs:
           fi
           if [ -n "$NOTES_SCRIPT" ]; then bash -c "$NOTES_SCRIPT"; fi
           cat notes.md
-      # GITHUB_TOKEN can't create a tag on a commit whose .github/workflows differ from the default branch's head
-      # (that takes the `workflows` permission, which it never has: HTTP 403 "Resource not accessible by
-      # integration"). That happens when main moved on while this run built and the newer commit changed a
-      # workflow. The run for that newer commit releases this one's changes too, so this run stops here.
+      # GITHUB_TOKEN can't create a tag on a commit whose .github/workflows differ from the head of the branch it
+      # was released from (that takes the `workflows` permission, which it never has: HTTP 403 "Resource not
+      # accessible by integration"). That happens when main moved on while this run built and the newer commit
+      # changed a workflow. The run for that newer commit releases this one's changes too, so this run stops here.
+      # The branch is the one this run is for (a push to main), not the repository's default branch, which may be
+      # set to something else; a run on a tag compares with the default branch.
       - name: Can this commit be tagged
         id: tag
-        env:
-          BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          B=${BRANCH:-$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)}
+          if [ "$GITHUB_REF_TYPE" = branch ]; then B=$GITHUB_REF_NAME; else
+            B=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+          fi
           git fetch -q origin "refs/heads/$B"
           HEAD_SHA=$(git rev-parse FETCH_HEAD)
           if [ "$HEAD_SHA" = "$GITHUB_SHA" ] || git diff --quiet "$GITHUB_SHA" "$HEAD_SHA" -- .github/workflows; then

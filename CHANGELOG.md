@@ -16,6 +16,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - `kit-release` publish: a run whose commit is no longer the default branch's head, where a newer commit changed
   `.github/workflows`, skips the release with a notice instead of failing with HTTP 403 ("Resource not accessible
   by integration"): `GITHUB_TOKEN` can't tag such a commit, and the newer commit's run releases its changes too.
+- `kit-release` publish (v0.7.3's check): it compares with the head of the branch the run is for (main), not the
+  repository's default branch, which may be set to another branch; a release from main then failed with "not on
+  <default branch>".
 
 ## v0.7.0 — 2026-11-05
 
