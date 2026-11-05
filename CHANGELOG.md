@@ -4,6 +4,8 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.3.1 — 2026-11-05
+
 ### Fixed
 - Postgres stores: a statement run with a null where a later call passes a number (a bug report file's
   `message_id`, for one) no longer fails now and then with "invalid byte sequence for encoding UTF8: 0x00";
