@@ -7,6 +7,8 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 Notes: [docs/releases/0.9.0.md](docs/releases/0.9.0.md).
 
 ### Added
+- `kit-android.yml`: `web-dir`, `web-build` and `node-version` build a web front end the APK carries (a Capacitor or
+  Cordova app) before Gradle: `npm ci`, then the app's build and copy commands.
 - A design system, mobile first, on the web (kit-leptos `ui`) and Android (kit-compose `ui`):
   - the app's frame: below 768 px a glass top app bar and a glass bottom tab bar (up to five sections, the rest
     under More), 768–1023 px a navigation rail, from 1024 px the sidebar (`AppShell` / `KitScaffold`);
