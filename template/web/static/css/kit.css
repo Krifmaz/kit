@@ -206,6 +206,11 @@ details.settings-card[open] .chev svg { transform: rotate(180deg); }
   .toast { max-width: none; }
 }
 details.adv-fields > summary { cursor: pointer; width: max-content; }
+/* drag and drop (kit_leptos::dropzone): every drop place on screen while files are dragged over the window, and
+   the one under the pointer */
+.drop-ready { outline: 2px dashed rgba(var(--accent-rgb), .55); outline-offset: 3px; border-radius: 10px; transition: outline-color .12s, background-color .12s; }
+.drop-over { outline: 2px solid var(--accent); background-color: rgba(var(--accent-rgb), .12); }
+
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: scale(.97) translateY(6px); } }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -227,3 +232,23 @@ details.adv-fields > summary { cursor: pointer; width: max-content; }
 }
 /* the small spinner in a button that is busy (Check again → Checking…) */
 .spinner.sm { width: 12px; height: 12px; }
+
+/* ---------- suite: linked apps (kit-leptos suite) ---------- */
+.suite-icon { width: 18px; height: 18px; flex: none; }
+.suite-nav { display: flex; flex-direction: column; gap: 2px; }
+.suite-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.suite-app { margin-left: auto; font-size: 11px; color: var(--faint); white-space: nowrap; }
+.suite-edit-btn { align-self: flex-start; margin-top: 6px; }
+.suite-edit-btn.hidden { display: none; }
+.suite-edit { display: flex; flex-direction: column; gap: 2px; }
+.suite-edit-row { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 10px; min-width: 0; }
+.suite-edit-row.hidden { opacity: .5; }
+.suite-edit-row .btn { padding: 2px 8px; }
+.suite-edit-foot { justify-content: flex-end; gap: 6px; margin-top: 6px; }
+.suite-search .input { width: 100%; }
+.suite-results, .suite-related { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.suite-group .section-head { gap: 8px; align-items: center; }
+.suite-hit { color: inherit; text-decoration: none; }
+.suite-sso { display: inline-flex; align-items: center; gap: 8px; }
+.suite-new-key { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.suite-admin .card { margin-bottom: 12px; }

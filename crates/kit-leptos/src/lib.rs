@@ -22,6 +22,7 @@
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
 //! | [`palette`] | the command palette (Ctrl+K / ⌘K): the app's commands and the ones it loads on opening |
+//! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
 //! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`palette::open`], [`details::show`], [`clipboard::copy_text`])
@@ -50,6 +51,7 @@ pub mod offline;
 pub mod palette;
 pub mod rt;
 pub mod schema_form;
+pub mod suite;
 pub mod toasts;
 pub mod update;
 pub mod whats_new;

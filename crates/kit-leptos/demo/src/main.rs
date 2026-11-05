@@ -140,6 +140,23 @@ impl Backend for Fake {
                 ("GET", "/changelog") => Ok(json!({ "version": "1.4.0", "popup": true, "releases": releases() })),
                 ("POST", "/changelog/seen") | ("PUT", "/auth/prefs") => Ok(json!({ "ok": true })),
                 ("GET", "/diagnostics") => Ok(diagnostics()),
+                ("GET", "/kit/suite/sidebar") => Ok(json!({ "items": SIDEBAR.with(|s| s.borrow().clone()) })),
+                ("PUT", "/kit/suite/sidebar") => Ok(SIDEBAR.with(|s| {
+                    // the demo keeps the order it was sent and marks the hidden entries
+                    let p: kit_rules::suite::SidebarPrefs = body.and_then(|b| serde_json::from_value(b).ok()).unwrap_or_default();
+                    let mut items: Vec<kit_rules::suite::SidebarItem> = serde_json::from_value(s.borrow().clone()).unwrap_or_default();
+                    items.sort_by_key(|i| p.order.iter().position(|k| *k == i.key).unwrap_or(usize::MAX));
+                    for i in &mut items {
+                        i.hidden = p.hidden.contains(&i.key);
+                    }
+                    *s.borrow_mut() = serde_json::to_value(&items).unwrap_or_default();
+                    json!({ "items": items })
+                })),
+                ("GET", p) if p.starts_with("/kit/suite/search") => Ok(json!({ "groups": [
+                    { "app": "demo", "app_name": "Demo", "icon": DEMO_ICON, "local": true, "results": [{ "title": "First thing", "subtitle": "Things", "url": "#things/1" }] },
+                    { "app": "other", "app_name": "Other demo", "icon": OTHER_ICON, "local": false, "results": [{ "title": "A related item", "subtitle": "Items", "url": "#items/1" }] },
+                    { "app": "down", "app_name": "Third demo", "icon": OTHER_ICON, "local": false, "results": [], "error": "http://third.test can't be reached. Check the address and that the app is running." }
+                ] })),
                 ("GET", "/notices") => Ok(notices()),
                 ("POST", "/notices/check") => {
                     CHECKS.with(|c| c.set(c.get() + 1));
@@ -331,6 +348,20 @@ fn commands() -> Palette {
     })
 }
 
+/// The demo app's icon (SVG path data).
+const DEMO_ICON: &str = "M4 4h16v16H4z";
+/// The other demo app's icon.
+const OTHER_ICON: &str = "M12 3l9 9-9 9-9-9z";
+
+thread_local! {
+    /// The demo's shared sidebar: its own section and another app's.
+    static SIDEBAR: std::cell::RefCell<Value> = std::cell::RefCell::new(json!([
+        { "key": "demo/things", "app": "demo", "app_name": "Demo", "section": "things", "title": "Things", "icon": DEMO_ICON, "url": "#things", "path": "#things", "hidden": false, "local": true },
+        { "key": "other/items", "app": "other", "app_name": "Other demo", "section": "items", "title": "Items", "icon": OTHER_ICON, "url": "#items", "path": "/items", "hidden": false, "local": false },
+        { "key": "other/more", "app": "other", "app_name": "Other demo", "section": "more", "title": "More", "icon": "", "url": "#more", "path": "/more", "hidden": true, "local": false }
+    ]));
+}
+
 #[component]
 fn Demo() -> impl IntoView {
     let schema = Schema::from_json(&serde_json::from_str(SAMPLE_SCHEMA).unwrap_or_default());
@@ -366,6 +397,8 @@ fn Demo() -> impl IntoView {
         </section>
         <section><h2>"Settings from a schema: General"</h2><SettingsCards cards=general values=values/></section>
         <section><h2>"Settings from a schema: Mail"</h2><SettingsCards cards=mail values=v2/></section>
+        <section><h2>"Suite: the shared sidebar"</h2><div class="card nav"><kit_leptos::suite::SuiteNav/></div></section>
+        <section><h2>"Suite: search across apps"</h2><kit_leptos::suite::SuiteSearch initial="thing"/></section>
         <section><DiagnosticsPage/></section>
         <section><ChangelogPage/></section>
     }

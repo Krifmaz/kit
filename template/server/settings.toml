@@ -33,6 +33,39 @@ type = "number"
 unit = "days"
 min = 1
 
+[sections.suite]
+title = "Linked apps"
+
+[groups.suite]
+section = "suite"
+title = "Linked apps"
+desc = "How other apps on the kit reach this one, and whether people sign in to them with their account here."
+
+[keys.public_url]
+env = "APP_PUBLIC_URL"
+default = ""
+group = "suite"
+label = "This app's address"
+help = "Where people reach this app (https://…). Empty: the address each request came to."
+type = "url"
+
+[keys.suite_id]
+env = "APP_SUITE_ID"
+default = ""
+group = "suite"
+label = "App id"
+help = "This app's id among linked apps (a-z, 0-9, -). Empty: {{project-name}}. Give each copy of the same app its own."
+type = "text"
+advanced = true
+
+[keys.account_source]
+env = "APP_ACCOUNT_SOURCE"
+default = false
+group = "suite"
+label = "Account source"
+help = "Linked apps may sign people in with their account here."
+type = "bool"
+
 [keys.api_key]
 env = "APP_API_KEY"
 default = ""

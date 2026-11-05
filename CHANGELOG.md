@@ -4,6 +4,27 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.4.0 — 2026-11-05
+
+Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+
+### Added
+- Suite screens (`contracts/suite.md`) on every client:
+  - kit-leptos `suite`: `<SuiteNav/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related/>`,
+    `<SsoButton/>` and `<LinkedApps/>` (the admin page for links and keys).
+  - kit-iced `suite`: `Sidebar`, `Search`, `related`, `path_icon`.
+  - kit-compose `suite`: `SuiteNav`, `SuiteSearch`, `Related`, `SuiteRules`.
+  - The demos show a shared sidebar and a search across apps.
+- Template: the app is a suite member. It has a manifest of its pages, its pages in search and single sign-on
+  (as the account source, or through one). The settings are `public_url`, `suite_id` and `account_source`, with
+  Settings → Linked apps. The web, desktop and Android apps show the shared sidebar and Search. A test runs two
+  linked copies side by side.
+
+### Changed
+- Template: new apps pin the kit's `v0.4.0` (`kit_tag`).
+
+## v0.3.2 to v0.3.4 — 2026-11-05
+
 ### Added
 - kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
   `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
@@ -39,6 +60,8 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
+- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
+  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
   dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
   app is the same; the template needs cargo-generate 0.23.4 or later.
