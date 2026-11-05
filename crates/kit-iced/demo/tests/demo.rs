@@ -337,3 +337,32 @@ fn diagnostics_counts_the_problem_and_copies_the_report() {
     tick(&mut demo);
     assert!(shows(&demo, diagnostics::RUN) && shows(&demo, "1 problem"));
 }
+
+#[test]
+fn linked_apps_show_in_one_sidebar_and_one_search() {
+    let mut demo = on(Page::Suite);
+    for word in ["Things", "Items", "Other demo", "Edit sidebar"] {
+        assert!(shows(&demo, word), "{word}");
+    }
+    assert!(!shows(&demo, "More"), "a hidden entry shows only while editing");
+    click(&mut demo, "Items");
+    assert!(demo.toasts().list().iter().any(|t| t.text.contains("http://other.test/#items")), "another app opens in the browser");
+    clear_toasts(&mut demo);
+    click(&mut demo, "Edit sidebar");
+    assert!(shows(&demo, "More") && shows(&demo, "Done"));
+    click(&mut demo, "Show");
+    click(&mut demo, "Done");
+    tick(&mut demo);
+    assert!(shows(&demo, "More"), "shown again after Done");
+    let _ = demo.update(Message::Search(kit_iced::suite::SearchMsg::Text("thing".into())));
+    let _ = demo.update(Message::Search(kit_iced::suite::SearchMsg::Submit));
+    tick(&mut demo);
+    for word in [
+        "First thing",
+        "A related item",
+        "Third demo",
+        "http://third.test can't be reached. Check the address and that the app is running.",
+    ] {
+        assert!(shows(&demo, word), "{word}");
+    }
+}

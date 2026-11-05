@@ -25,7 +25,7 @@ default = "Krifmaz"
 [placeholders.kit_tag]
 type = "string"
 prompt = "The kit release to use"
-default = "v0.1.0"
+default = "v0.4.0"
 
 [placeholders.android]
 type = "bool"

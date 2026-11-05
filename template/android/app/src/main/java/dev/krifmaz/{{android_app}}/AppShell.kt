@@ -3,6 +3,7 @@ package {{android_package}}
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -11,13 +12,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import dev.krifmaz.kit.compose.bugs.BugReportScreen
 import dev.krifmaz.kit.compose.bugs.BugReportsApi
 import dev.krifmaz.kit.compose.bugs.BugReportsHost
 import dev.krifmaz.kit.compose.bugs.BugReportsScreen
+import dev.krifmaz.kit.compose.suite.SuiteSearch
 import dev.krifmaz.kit.compose.whatsnew.ChangelogScreen
 import dev.krifmaz.kit.compose.widgets.BackBar
+import dev.krifmaz.kit.compose.widgets.Gutter
 
 /** The app's pages; [AppShell] keeps them as a stack, and Back goes to the one below. */
 sealed interface Page {
@@ -38,6 +43,9 @@ sealed interface Page {
 
     /** The server's checks and the phone app's crash reports (admins). */
     data object Diagnostics : Page
+
+    /** One search across this app and every linked app ([SuiteSearch]). */
+    data object Search : Page
 }
 
 /**
@@ -63,9 +71,12 @@ fun AppShell(app: App) {
         return
     }
     val bugs = remember(app) { AppBugReports(app, open, back) }
+    val uri = LocalUriHandler.current
+    // a suite link: this app's page here, another app in the browser
+    val follow: (String) -> Unit = { link -> SuiteLinks.pageOf(link, base)?.let(open) ?: uri.openUri(link) }
     if (stack.size > 1) BackHandler(onBack = back)
     when (val page = stack.last()) {
-        Page.Home -> HomePage(app, base, bugs, open, onChangeServer = { app.settings.forget() })
+        Page.Home -> HomePage(app, base, bugs, open, follow, onChangeServer = { app.settings.forget() })
 
         Page.Changelog ->
             Column(Modifier.fillMaxSize()) {
@@ -80,6 +91,14 @@ fun AppShell(app: App) {
         Page.ServerSettings -> ServerSettingsPage(app, onBack = back)
 
         Page.Diagnostics -> DiagnosticsPage(app, onBack = back)
+
+        Page.Search ->
+            Column(Modifier.fillMaxSize()) {
+                BackBar("Search", back)
+                Column(Modifier.padding(horizontal = Gutter, vertical = 12.dp)) {
+                    SuiteSearch(app.api, onOpen = { hit, _ -> follow(hit.url) })
+                }
+            }
     }
 }
 
