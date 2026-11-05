@@ -24,6 +24,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | `diagnostics` | the checks page: status dots, details, Copy, the copyable report; `view_with` for an app's own groups |
 | `offline` | the offline banner |
 | `confirm` | the confirm dialog: a question, Cancel and the action's button (red when it destroys something) |
+| `suite` | linked apps (`contracts/suite.md`): `Sidebar` (the shared sidebar, Edit sidebar: move, hide, show, reset), `Search` (every app at once), `related` ("Related in …"), `path_icon`; each says what to do next as `Out` (`Save`, `Local`, `Browse`, `Search`) and the app makes the request |
 
 Components hold no network code: each keeps its state, draws it, and its `update` returns what the app should
 do next (save this body, run this test, send this report, copy this text). The app makes the requests with its
