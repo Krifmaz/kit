@@ -7,6 +7,10 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ### Added
 - kit-server-core: `Migrations::run(&dyn Db)` makes and updates the kit's `kit_*` tables on any SQLite `Db`
   (`SqliteDb::migrate` now uses it), and `SharedDb` (`Arc<dyn Db>`).
+- kit-leptos `crash`: a panic puts a banner over the page (what stopped it, where, and Reload; `CrashWords` in
+  `Words::crash`, an empty sentence turns it off) and posts its log at once with a plain `fetch`, since after a
+  panic the app's tasks may never run again. The log still waits in the pending list until the server has it; the
+  server keeps the same key once. The log's text now carries the JavaScript stack and the page.
 
 ### Changed
 - The SQLite stores (`SqlitePrefs`, `SqliteSettings`, `SqliteNotices`, `SqliteReports`, `SqliteSuite`, `SqliteSignup`) take any
@@ -43,6 +47,12 @@ Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
   icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
+
+## v0.4.1 — 2026-11-05
+
+### Fixed
+- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
+  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 
 ## v0.4.0 — 2026-11-05
 
@@ -100,8 +110,6 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
-- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
-  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
   dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
   app is the same; the template needs cargo-generate 0.23.4 or later.
