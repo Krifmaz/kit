@@ -2,7 +2,7 @@
 
 The neutral shared base for every Krifmaz app: one look, the same ease-of-use features (What's new, a
 self-updating web app, notice banners, smart toasts, copyable errors, confirm dialogs, bug reports,
-diagnostics, settings from a schema, offline mode, drag and drop) and the same fast, safe Rust and Kotlin
+diagnostics, settings from a schema, offline mode, drag and drop, a command palette on the web) and the same fast, safe Rust and Kotlin
 building blocks — built once, configured per app.
 
 | Piece | Where |

@@ -6,7 +6,7 @@ toast and the real self-update flow (Publish a new build, with a switch that hol
 (`modal::confirm` and the `ConfirmDialog` component), the details dialog, What's new (popup and changelog page),
 the notice banner with Check again, the offline and connection banners, the outbox (take the fake server away,
 star things and add notes, bring it back and they go), a drop zone, the settings form drawn
-from the kit's sample schema (`schema_form::SAMPLE_SCHEMA`), the bug report sheet and the Diagnostics page. A
+from the kit's sample schema (`schema_form::SAMPLE_SCHEMA`), the bug report sheet, the Diagnostics page and the command palette (Ctrl+K, with fake sites loaded on opening). A
 fake `api::Backend` answers every call on the kit's default paths, so no server is needed.
 
 ```sh

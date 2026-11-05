@@ -7,7 +7,7 @@ builds for `wasm32-unknown-unknown`, so kit-leptos (web), kit-iced (desktop) and
 
 Nothing in it belongs to one app. The app's id, name and version are parameters ([`app::App`]); every word a
 person reads is a `pub const` default, gathered per module in a `Words` struct (`ToastWords`, `DialogWords`,
-`ChangelogWords`, `UpdateWords`, `CheckWords`, `OfflineWords`, `BugWords`, `DiagWords`) with a `DEFAULT`
+`ChangelogWords`, `UpdateWords`, `CheckWords`, `OfflineWords`, `BugWords`, `DiagWords`, `PaletteWords`) with a `DEFAULT`
 const. An app changes any word by passing its own struct (`ChangelogWords { intro: "…", ..ChangelogWords::DEFAULT }`).
 Words that name the app or a number are templates (`A new version of {app} is ready`), filled by `app::fill`.
 Where platforms differ on purpose, the difference is a policy with one preset per platform (`web()`,
@@ -74,6 +74,12 @@ field and what Send says is missing.
 **`diagnostics`** — the Diagnostics page's words (`DiagWords`), its groups of checks (the kit's three kinds
 first, then the app's own kinds: `groups`, `groups_with`), a check's level and HTTP badge, the summary and
 sources lines and the copied report (`report_text`).
+
+**`palette`** — the command palette (Ctrl+K / ⌘K, `is_toggle`): `Item::new(group, label).hint(…).icon(…).dynamic(true)`;
+`results(items, query)` gives the indexes that show, in order (no query: every fixed item, then the first
+`DYNAMIC_SHOWN` (6) of each dynamic group; a query, trimmed and case-insensitive: label matches, then hint-only
+matches); `step(sel, len, Move::Up/Down)` keeps the selection on the list. `ACTIONS` and `GO_TO` are the
+usual group names; `PaletteWords` (title, placeholder, empty).
 
 **`suite`** — linked apps (`contracts/suite.md`): the `Manifest` every app serves (sections, deep links,
 search, sign-on; `problems()` says what keeps it from being linked), `sidebar(apps, local, prefs)` (every
