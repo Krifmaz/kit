@@ -2,7 +2,7 @@
 //!
 //! | Route | From |
 //! | --- | --- |
-//! | `GET /api/health` | kit-server-health |
+//! | `GET /api/health`, `GET /sw.js` (the app-shell service worker of this web build) | kit-server-health |
 //! | `/api/changelog`, `/api/changelog/new`, `/api/changelog/seen` (What's new), `/api/auth/prefs` (the popup switch) | kit-server-changelog |
 //! | `/api/notices`, `/api/notices/check`, `/api/notices/{id}`, `/api/notices/{id}/check` | kit-server-notices |
 //! | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports |
@@ -287,7 +287,8 @@ pub fn app(st: AppState) -> Router {
     kit_server_notices::spawn_rechecks(st.clone());
     kit_server_suite::spawn_refresh(st.clone(), std::time::Duration::from_secs(15 * 60));
     Router::new()
-        .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web)))
+        .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web.clone())))
+        .merge(kit_server_health::worker_router(kit_server_health::Worker::new(NAME, web)))
         .merge(kit_server_changelog::router())
         .merge(kit_server_changelog::prefs_router("/api/auth/prefs"))
         .merge(kit_server_notices::router())

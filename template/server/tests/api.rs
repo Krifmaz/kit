@@ -201,6 +201,20 @@ async fn the_web_app_is_served_for_every_other_path() {
 }
 
 #[tokio::test]
+async fn the_service_worker_keeps_this_builds_shell() {
+    let (app, _, _) = server("worker").await;
+    let r = app.clone().oneshot(Request::get("/sw.js").body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    assert!(r.headers()[header::CONTENT_TYPE].to_str().unwrap().starts_with("text/javascript"));
+    assert_eq!(r.headers()[header::CACHE_CONTROL], "no-cache");
+    let b = axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap();
+    let text = String::from_utf8_lossy(&b);
+    // made for the build in the tests' web folder
+    let settings = json!({ "api": "/api/", "app": server::NAME, "build": "0123456789abcdef" });
+    assert!(text.starts_with(&format!("self.KIT_SW = {settings};")), "{text}");
+}
+
+#[tokio::test]
 async fn the_health_check_command_asks_a_running_server() {
     let (app, _, _) = server("healthcheck").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

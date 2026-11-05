@@ -20,6 +20,10 @@ Notes: [docs/releases/0.7.0.md](docs/releases/0.7.0.md).
 ## v0.6.1 — 2026-11-05
 
 ### Added
+- The app-shell service worker: kit-server-health `worker_router(Worker::new(app, web))` serves `/sw.js`, made for
+  the web build the server serves. The web app opens with no connection (the page and its files are kept per
+  build; the API never is), and each new build arrives as a new worker that kit-rules `update::Flow` lets take over.
+  The template serves and registers it, and its browser walk reloads offline.
 - kit-server-core: `Migrations::run(&dyn Db)` makes and updates the kit's `kit_*` tables on any SQLite `Db`
   (`SqliteDb::migrate` now uses it), and `SharedDb` (`Arc<dyn Db>`).
 - kit-leptos `crash`: a panic puts a banner over the page (what stopped it, where, and Reload; `CrashWords` in
