@@ -28,7 +28,8 @@
 //! work from any code, Leptos or hand-written. Server calls go through [`api`], whose backend an app can replace
 //! ([`api::set_backend`]).
 
-/// The kit's stylesheet (`style/kit.css`): every component's classes, on the variables of `tokens.css`. Load
+/// The kit's stylesheet (`style/kit.css`): every component's classes in the kit's look (docs/DESIGN.md §5), on the
+/// variables of `tokens.css`. Load
 /// `tokens.css` first, then this (trunk: `<link data-trunk rel="css" href="…/kit.css">`).
 pub const CSS: &str = include_str!("../style/kit.css");
 

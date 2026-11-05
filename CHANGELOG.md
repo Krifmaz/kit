@@ -5,7 +5,7 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 ## Unreleased
 
 ### Added
-- Command palette (notes: [docs/releases/0.3.4.md](docs/releases/0.3.4.md)):
+- Command palette (web):
   - kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
     Escape, a press beside it or Ctrl+K again closes it. The app installs its commands once
     (`palette::install(Palette::new(commands).source(|| async { … }))`): fixed ones (`Command::new(group, label, run)`
@@ -20,12 +20,17 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   - kit-leptos: the `search` icon.
   - Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
     button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
+- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
 - kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
 - kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
 - kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
 
 ### Changed
+- kit-leptos: `style/kit.css` (and the template's copy) draws the kit's look of docs/DESIGN.md §5, which it had
+  drifted from: Inter 14px/1.5 body, H1 28 / H2 19 / H3 15·650, small 12, the outlined danger button (red text,
+  red border on hover) instead of a filled one, and the same buttons, badges, lists, tables, dialogs, toasts and
+  banners the encore theme was drawn from. An app's stylesheet that loads after it no longer mixes two looks.
 - kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
 
 ### Fixed
