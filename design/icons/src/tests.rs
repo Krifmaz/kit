@@ -6,7 +6,7 @@ fn colors() -> Colors {
 }
 
 fn app() -> App {
-    App { name: "Kit Demo".into(), short_name: None, start_url: None }
+    App { name: "Kit Demo".into(), short_name: None, start_url: None, base: None }
 }
 
 const GLYPH: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/><circle cx="12" cy="12" r="3" fill="{accent-2}"/></svg>"#;
@@ -109,4 +109,15 @@ fn an_unknown_theme_says_so() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tokens.json");
     let e = Colors::from_theme(&Tokens::load(&root).expect("tokens"), "neon").expect_err("unknown");
     assert_eq!(e.0, "The tokens have no theme called \"neon\".");
+}
+
+#[test]
+fn head_points_at_the_icon_folder() {
+    let files = render(GLYPH, &colors(), &app()).expect("render");
+    let text = String::from_utf8(files[7].1.clone()).expect("utf8");
+    assert!(text.contains(r#"<link rel="manifest" href="/icons/manifest.webmanifest">"#), "{text}");
+    let files = render(GLYPH, &colors(), &App { base: Some("/app-icons".into()), ..app() }).expect("render");
+    let text = String::from_utf8(files[7].1.clone()).expect("utf8");
+    assert!(text.contains(r#"<link rel="icon" href="/app-icons/favicon.svg" type="image/svg+xml">"#), "{text}");
+    assert!(text.contains(r##"<meta name="theme-color" content="#161617">"##), "{text}");
 }

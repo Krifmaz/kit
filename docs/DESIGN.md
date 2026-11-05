@@ -112,7 +112,7 @@ so it still reads at 16 px. The kit puts it on a rounded tile (panel-2 at the to
 hairline, corner radius 22 % of the side), with the glyph filling the middle 60 % (50 % on the maskable icon,
 inside Android's safe circle). `cargo run -p kit-icons -- glyph.svg out/ --name "App"` writes `favicon.svg`,
 `icon-32.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`,
-`manifest.webmanifest` and `head.html` (the tags for `index.html`, serving the folder at `/icons/`);
+`manifest.webmanifest` and `head.html` (the tags for `index.html`, serving the folder at `/icons/` or `--base`);
 `--check` says whether a folder is up to date. Desktop and Android icons use the same `icon-512.png`.
 
 ## 6. Features

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: kit-icons <glyph.svg> <out-dir> --name <App name> [--short-name <name>] \
-                     [--start-url <url>] [--theme <id>] [--check]";
+                     [--start-url <url>] [--base <path>] [--theme <id>] [--check]";
 
 fn main() -> ExitCode {
     match run(std::env::args().skip(1).collect()) {
@@ -20,7 +20,7 @@ fn main() -> ExitCode {
 
 fn run(args: Vec<String>) -> Result<ExitCode, String> {
     let mut paths = Vec::new();
-    let (mut name, mut short_name, mut start_url, mut theme, mut check) = (None, None, None, "encore".to_string(), false);
+    let (mut base, mut name, mut short_name, mut start_url, mut theme, mut check) = (None, None, None, None, "encore".to_string(), false);
     let mut it = args.into_iter();
     while let Some(arg) = it.next() {
         let mut value = || it.next().ok_or_else(|| format!("{arg} needs a value.\n{USAGE}"));
@@ -28,6 +28,7 @@ fn run(args: Vec<String>) -> Result<ExitCode, String> {
             "--name" => name = Some(value()?),
             "--short-name" => short_name = Some(value()?),
             "--start-url" => start_url = Some(value()?),
+            "--base" => base = Some(value()?),
             "--theme" => theme = value()?,
             "--check" => check = true,
             "-h" | "--help" => {
@@ -44,7 +45,7 @@ fn run(args: Vec<String>) -> Result<ExitCode, String> {
     let tokens = kit_tokens::Tokens::parse(include_str!("../../tokens.json")).map_err(|e| e.to_string())?;
     let colors = kit_icons::Colors::from_theme(&tokens, &theme).map_err(|e| e.to_string())?;
     let source = std::fs::read_to_string(&glyph).map_err(|e| format!("Could not read {}: {e}", glyph.display()))?;
-    let app = kit_icons::App { name, short_name, start_url };
+    let app = kit_icons::App { name, short_name, start_url, base };
     let files = kit_icons::render(&source, &colors, &app).map_err(|e| e.to_string())?;
     let mut stale = Vec::new();
     for (file, bytes) in files {

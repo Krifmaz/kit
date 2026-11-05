@@ -13,7 +13,7 @@
 //! | `icon-maskable-512.png` | full-bleed square with the glyph inside the maskable safe zone (Android crops it) |
 //! | `apple-touch-icon.png` | 180 px, opaque, square (iOS rounds it itself) |
 //! | `manifest.webmanifest` | name, colours and the icons above |
-//! | `head.html` | the `<link>` and `<meta>` tags to paste into the app's `index.html` |
+//! | `head.html` | the `<link>` and `<meta>` tags to paste into the app's `index.html` (folder at `/icons/`, or `base`) |
 //!
 //! [`render`] makes them in memory; the `kit-icons` binary writes them to a folder.
 
@@ -70,6 +70,8 @@ pub struct App {
     pub short_name: Option<String>,
     /// Where the installed app opens; `/` when it is not given.
     pub start_url: Option<String>,
+    /// Where the app serves the icon folder, for `head.html`; `/icons/` when it is not given.
+    pub base: Option<String>,
 }
 
 /// Something that stopped the icon set from being made, in plain words.
@@ -98,7 +100,7 @@ pub fn render(glyph: &str, colors: &Colors, app: &App) -> Result<Vec<File>, Erro
     files.push(("icon-maskable-512.png", png(&tile_svg(&glyph, colors, Shape::Maskable), 512)?));
     files.push(("apple-touch-icon.png", png(&tile_svg(&glyph, colors, Shape::Square), 180)?));
     files.push(("manifest.webmanifest", manifest(colors, app).into_bytes()));
-    files.push(("head.html", head(colors).into_bytes()));
+    files.push(("head.html", head(colors, app).into_bytes()));
     Ok(files)
 }
 
@@ -216,17 +218,25 @@ fn manifest(colors: &Colors, app: &App) -> String {
     text
 }
 
-fn head(colors: &Colors) -> String {
+fn head(colors: &Colors, app: &App) -> String {
+    let base = app.base.as_deref().unwrap_or("/icons/");
+    let slash = if base.ends_with('/') { "" } else { "/" };
+    let at = |file: &str| format!("{base}{slash}{file}");
     format!(
         concat!(
-            "<!-- the kit's icon set (kit-icons): served from /icons/ -->\n",
-            "<link rel=\"icon\" href=\"/icons/favicon.svg\" type=\"image/svg+xml\">\n",
-            "<link rel=\"icon\" href=\"/icons/icon-32.png\" sizes=\"32x32\" type=\"image/png\">\n",
-            "<link rel=\"apple-touch-icon\" href=\"/icons/apple-touch-icon.png\">\n",
-            "<link rel=\"manifest\" href=\"/icons/manifest.webmanifest\">\n",
-            "<meta name=\"theme-color\" content=\"{}\">\n"
+            "<!-- the kit's icon set (kit-icons), served from {base} -->\n",
+            "<link rel=\"icon\" href=\"{svg}\" type=\"image/svg+xml\">\n",
+            "<link rel=\"icon\" href=\"{png}\" sizes=\"32x32\" type=\"image/png\">\n",
+            "<link rel=\"apple-touch-icon\" href=\"{apple}\">\n",
+            "<link rel=\"manifest\" href=\"{manifest}\">\n",
+            "<meta name=\"theme-color\" content=\"{color}\">\n"
         ),
-        colors.tile_bottom
+        base = base,
+        svg = at("favicon.svg"),
+        png = at("icon-32.png"),
+        apple = at("apple-touch-icon.png"),
+        manifest = at("manifest.webmanifest"),
+        color = colors.tile_bottom
     )
 }
 
