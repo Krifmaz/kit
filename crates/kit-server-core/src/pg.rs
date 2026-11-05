@@ -39,6 +39,20 @@ fn bind<'q>(q: Query<'q, Postgres, PgArguments>, v: &Value) -> Query<'q, Postgre
     }
 }
 
+/// A statement with its parameters bound. Postgres fixes a prepared statement's parameter types when it is first
+/// prepared, and each pooled connection keeps the statements it prepared, keyed by their SQL. A null is bound as
+/// a `text` null, so a statement first run with a null where it later gets a number would send that number's
+/// bytes as text ("invalid byte sequence for encoding UTF8: 0x00"), on whichever connection kept it. So a
+/// statement with a null is prepared for that call only and never kept.
+fn statement<'q>(sql: &'q str, params: &[Value]) -> Query<'q, Postgres, PgArguments> {
+    let q = params.iter().fold(sqlx_core::query::query::<Postgres>(sql), bind);
+    if params.iter().any(Value::is_null) {
+        q.persistent(false)
+    } else {
+        q
+    }
+}
+
 /// A column of a Postgres row as JSON, by its type (integers, reals, booleans, text, JSON; anything else as
 /// text when it reads as text, null otherwise).
 fn column(row: &PgRow, i: usize) -> Value {
@@ -89,7 +103,7 @@ impl PgDb {
 
     /// Rows of a statement.
     pub async fn query(&self, sql: &str, params: Vec<Value>) -> Result<Vec<Row>> {
-        let q = params.iter().fold(sqlx_core::query::query::<Postgres>(sql), bind);
+        let q = statement(sql, &params);
         let rows = q.fetch_all(&self.pool).await.map_err(Error::database)?;
         Ok(rows.iter().map(to_row).collect())
     }
@@ -102,7 +116,7 @@ impl PgDb {
     /// Runs a statement; the number of rows it changed. A statement that makes a row and needs its id says
     /// `RETURNING id` and is run with [`PgDb::one`].
     pub async fn execute(&self, sql: &str, params: Vec<Value>) -> Result<u64> {
-        let q = params.iter().fold(sqlx_core::query::query::<Postgres>(sql), bind);
+        let q = statement(sql, &params);
         Ok(q.execute(&self.pool).await.map_err(Error::database)?.rows_affected())
     }
 
@@ -235,6 +249,20 @@ mod tests {
         let n = db.one("SELECT COUNT(*) AS n FROM kit_migrations WHERE component = 't'", p![]).await.unwrap().unwrap();
         assert_eq!(n.i("n"), 2);
         assert_eq!(db.query("SELECT nope FROM kit_t", p![]).await.unwrap_err().detail, "Database error");
+    }
+
+    #[tokio::test]
+    async fn a_null_then_a_number_in_one_statement() {
+        // one connection, so the second call meets whatever the first one left prepared
+        let url = std::env::var("KIT_TEST_POSTGRES_URL").expect("KIT_TEST_POSTGRES_URL");
+        let db = PgDb::new(PgPoolOptions::new().max_connections(1).connect(&url).await.expect("the test database"));
+        db.execute_batch("CREATE TEMP TABLE kit_null_t (n BIGINT)").await.unwrap();
+        let sql = "INSERT INTO kit_null_t (n) VALUES ($1::BIGINT)";
+        for v in [Value::Null, Value::from(7), Value::Null, Value::from(8)] {
+            db.execute(sql, vec![v]).await.unwrap();
+        }
+        let r = db.one("SELECT COUNT(n) AS c, SUM(n)::BIGINT AS s FROM kit_null_t", p![]).await.unwrap().unwrap();
+        assert_eq!((r.i("c"), r.i("s")), (2, 15));
     }
 
     #[tokio::test]
