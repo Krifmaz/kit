@@ -4,6 +4,16 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.3.0 — 2026-11-05
+
+Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
+
+### Added
+- `kit-icons` (design/icons): an app's glyph (one 24 × 24 SVG in `currentColor` and `{accent-2}`) becomes its whole
+  icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
+  DESIGN.md §5 "App icons" gives the rules for the glyph.
+
 ## v0.2.2 — 2026-11-05
 
 Notes: [docs/releases/0.2.2.md](docs/releases/0.2.2.md).

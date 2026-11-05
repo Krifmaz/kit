@@ -103,6 +103,18 @@ Accents for the picker: cream, violet, pastel, lilac, pink, sky, teal, green, am
 Type: Inter 14px/1.5 body, H1 28/750, H2 19/700, H3 15/650, small 12, a ui-monospace stack. Radius 14px
 (cards), 12 (tiles), 10 (inputs), 8 (thumbs). Shadow `0 10px 30px rgba(0,0,0,.35)`. Motion .12s / .15s / .2s.
 
+### App icons
+
+Every app's icon is the same tile with the app's own glyph on it, made by `design/icons` (`kit-icons`). The app
+draws only its glyph: one small SVG on a 24 × 24 grid, painted with `currentColor` (the theme's text, cream on
+Encore) and, for one detail at most, `{accent-2}`; strokes 2 units with round ends, nothing finer than 1.5 units
+so it still reads at 16 px. The kit puts it on a rounded tile (panel-2 at the top fading to bg, a border-colour
+hairline, corner radius 22 % of the side), with the glyph filling the middle 60 % (50 % on the maskable icon,
+inside Android's safe circle). `cargo run -p kit-icons -- glyph.svg out/ --name "App"` writes `favicon.svg`,
+`icon-32.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon.png`,
+`manifest.webmanifest` and `head.html` (the tags for `index.html`, serving the folder at `/icons/`);
+`--check` says whether a folder is up to date. Desktop and Android icons use the same `icon-512.png`.
+
 ## 6. Features
 
 Every feature exists on web (kit-leptos), Android (kit-compose) and desktop (kit-iced), on the same rules
