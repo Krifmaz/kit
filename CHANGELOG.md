@@ -4,25 +4,34 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.3.2 — 2026-11-05
-
-Notes: [docs/releases/0.3.2.md](docs/releases/0.3.2.md).
-
 ### Added
-- kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
-  Escape, a press beside it or Ctrl+K again closes it. The app installs its commands once
-  (`palette::install(Palette::new(commands).source(|| async { … }))`): fixed ones (`Command::new(group, label, run)`
-  with `.hint(…)` and `.icon(…)`, under `ACTIONS`, `GO_TO` or groups of its own) and, optionally, a source that
-  loads more each time it opens. Up and Down move the selection (kept in view), Enter or a click runs the command,
-  a new query selects the first result again. A dialog with a combobox and a listbox of options under their
-  groups; the words are `config.words.palette` (`PaletteWords`). Styled by `kit.css` (`.palette-*`), so an app
-  that loads the kit's stylesheet needs nothing else.
-- kit-rules `palette`: what shows and in which order (`results`: with no query every fixed item, then the first
-  six of each loaded group; with one, label matches then hint-only matches, case-insensitive), `step` for Up and
-  Down, `is_toggle` for Ctrl+K / ⌘K, `PaletteWords`.
-- kit-leptos: the `search` icon.
-- Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
-  button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
+- Command palette (notes: [docs/releases/0.3.4.md](docs/releases/0.3.4.md)):
+  - kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
+    Escape, a press beside it or Ctrl+K again closes it. The app installs its commands once
+    (`palette::install(Palette::new(commands).source(|| async { … }))`): fixed ones (`Command::new(group, label, run)`
+    with `.hint(…)` and `.icon(…)`, under `ACTIONS`, `GO_TO` or groups of its own) and, optionally, a source that
+    loads more each time it opens. Up and Down move the selection (kept in view), Enter or a click runs the command,
+    a new query selects the first result again. A dialog with a combobox and a listbox of options under their
+    groups; the words are `config.words.palette` (`PaletteWords`). Styled by `kit.css` (`.palette-*`), so an app
+    that loads the kit's stylesheet needs nothing else.
+  - kit-rules `palette`: what shows and in which order (`results`: with no query every fixed item, then the first
+    six of each loaded group; with one, label matches then hint-only matches, case-insensitive), `step` for Up and
+    Down, `is_toggle` for Ctrl+K / ⌘K, `PaletteWords`.
+  - kit-leptos: the `search` icon.
+  - Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
+    button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+
+### Changed
+- kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
+
+### Fixed
+- Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
+  dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
+  app is the same; the template needs cargo-generate 0.23.4 or later.
 
 ## v0.3.1 — 2026-11-05
 
