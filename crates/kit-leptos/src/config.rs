@@ -25,6 +25,7 @@ use kit_rules::diagnostics::DiagWords;
 use kit_rules::dialogs::DialogWords;
 use kit_rules::notices::CheckWords;
 use kit_rules::offline::mode::OfflineWords;
+use kit_rules::palette::PaletteWords;
 use kit_rules::toasts::{ToastPolicy, ToastWords};
 use kit_rules::update::UpdateWords;
 use std::cell::RefCell;
@@ -140,6 +141,8 @@ pub struct Words {
     pub notices: CheckWords,
     /// The settings form.
     pub form: FormWords,
+    /// The command palette.
+    pub palette: PaletteWords,
 }
 
 /// One app's configuration.
