@@ -48,6 +48,7 @@ pub mod dropzone;
 pub mod html;
 pub mod icons;
 pub mod json;
+pub mod lucide;
 pub mod modal;
 pub mod notice;
 pub mod offline;
@@ -59,6 +60,7 @@ pub mod setup;
 pub mod signup;
 pub mod suite;
 pub mod toasts;
+pub mod ui;
 pub mod update;
 pub mod whats_new;
 

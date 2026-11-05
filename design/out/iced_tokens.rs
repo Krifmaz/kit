@@ -7,6 +7,10 @@ pub const RADIUS: f32 = 14.0;
 pub const SIDEBAR: f32 = 236.0;
 /// `--player-h`.
 pub const PLAYER_H: f32 = 84.0;
+/// The spacing scale (`--space-N`), smallest first.
+pub const SPACE: [f32; 10] = [4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 64.0];
+/// `--touch`: the smallest touch target.
+pub const TOUCH: f32 = 44.0;
 
 /// `(id, name)` of the themes the Appearance page offers, in its order.
 pub const THEMES: [(&str, &str); 5] = [

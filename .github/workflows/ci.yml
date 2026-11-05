@@ -8,7 +8,9 @@ name: ci
 # healthy read-only Docker image (scripts/template-check.sh);
 # `template-android` builds and tests the generated app's Android part on kit-compose from source. `postgres` runs
 # the server crates' Postgres stores and their tests on a Postgres service. `workflows` lints every workflow file with actionlint (and
-# shellcheck on their scripts). Required to pass before a merge.
+# shellcheck on their scripts). `visual-qa` builds the kit-leptos demo and screenshots every page at a phone, a
+# tablet and a desktop size (scripts/visual-qa.cjs), failing on horizontal overflow or overlapping text; on a pull
+# request the screenshots go on the PR in one comment (kept up to date). Required to pass before a merge.
 on:
   pull_request:
   push:
@@ -39,6 +41,53 @@ jobs:
         echo "::group::Contracts parse"
         python3 -c "import yaml; yaml.safe_load(open('contracts/openapi.yaml'))"
         echo "::endgroup::"
+
+  visual-qa:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # the screenshots go on the visual-qa branch, which the PR comment shows
+      pull-requests: write     # the PR comment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: visual-qa
+      - name: trunk
+        run: curl -fsSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /usr/local/bin trunk
+      - name: Playwright
+        run: npm install --no-save playwright@1.63.0 && npx playwright install --with-deps chromium
+      - name: Build the demo
+        run: cd crates/kit-leptos/demo && trunk build --release --locked
+      - name: Every page at 390×844, 820×1180 and 1440×900
+        id: qa
+        run: |
+          (cd crates/kit-leptos/demo/dist && python3 -m http.server 8099 > /dev/null 2>&1 &)
+          for _ in $(seq 1 30); do curl -fs http://127.0.0.1:8099/ > /dev/null && break; sleep 1; done
+          set +e
+          node scripts/visual-qa.cjs http://127.0.0.1:8099/ "$RUNNER_TEMP/visual-qa"
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/visual-qa/report.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-qa
+          path: ${{ runner.temp }}/visual-qa
+      - name: Screenshots on the pull request
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          OUT: ${{ runner.temp }}/visual-qa
+        run: scripts/visual-qa-publish.sh
+      - name: The pages pass
+        if: steps.qa.outputs.code != '0'
+        run: |
+          echo "::error::Visual QA failed: horizontal overflow, overlapping text or a page error (the job summary says where)."
+          exit 1
 
   workflows:
     runs-on: ubuntu-latest

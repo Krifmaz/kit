@@ -360,7 +360,7 @@ mod tests {
     use super::*;
     use crate::testing::{assert_same_html, render};
 
-    const X_SVG: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>"#;
+    const X_SVG: &str = r#"<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>"#;
 
     /// The kit's modal markup around an (already escaped) title, body and footer.
     fn modal(title: &str, body: &str, footer: &str, wide: bool) -> String {

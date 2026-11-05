@@ -4,6 +4,36 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+Notes: [docs/releases/0.9.0.md](docs/releases/0.9.0.md).
+
+### Added
+- A design system, mobile first, on the web (kit-leptos `ui`) and Android (kit-compose `ui`):
+  - the app's frame: below 768 px a glass top app bar and a glass bottom tab bar (up to five sections, the rest
+    under More), 768–1023 px a navigation rail, from 1024 px the sidebar (`AppShell` / `KitScaffold`);
+  - full-width bottom sheets on phones (`Sheet` / `KitSheet`; every kit dialog becomes one below 768 px);
+  - covers with hover and press states (`MediaCard`: poster, square, wide; badge, progress), grids that fit three
+    posters on a phone (`MediaGrid`), carousels that snap (`Carousel`), a hero banner with blurred backdrop art
+    (`Hero`), an item page's header with metadata chips and actions (`DetailHeader`), chips and filter chips;
+  - stat cards with their change, progress rings, empty states with illustrations, skeletons in the content's
+    shape, page transitions (`Page`), placeholder covers from a seed and a title (`placeholder_art`).
+- Tokens: spacing (`--space-1` … `--space-16`), the type scale (`--text-xs` … `--text-3xl`), the touch target
+  (`--touch`, 44 px), the bars (`--app-bar`, `--tab-bar`, `--rail`), elevations (`--shadow-1..3`, lighter on the
+  light theme), the glass blur, `--font`, `--mono` and the motion (`--dur-*`, `--ease`); Compose `KitSpace`,
+  `KitSizes`, `KitMotion`; Iced `SPACE`, `TOUCH`.
+- Lucide icons (ISC) on every client from one list (`design/lucide`): 78 in kit-leptos (`icons::icon`, `lucide`)
+  and kit-compose (`KitIcons`). The kit's own icon names still work and now draw Lucide's.
+- Visual QA (`scripts/visual-qa.cjs`): every demo page at 390×844, 820×1180 and 1440×900, failing on horizontal
+  overflow or overlapping text; CI posts the screenshots on every pull request (`visual-qa` job).
+- The kit-leptos demo is six pages in the new shell (Home, Browse, an item, Stats, States, Kit); the Android demo
+  has "Open the design system".
+
+### Changed
+- `kit.css`: 44 px touch targets on phones and touch screens (`.btn`, inputs, segmented controls), 16 px inputs on
+  phones, the phone breakpoint is 768 px (was 760 px), dialogs pop in 180 ms, and nothing animates under
+  `prefers-reduced-motion`. The motion token `pop` is .18s (was .2s).
+
+## v0.8.0 — 2026-11-05
+
 Notes: [docs/releases/0.8.0.md](docs/releases/0.8.0.md).
 
 ### Added

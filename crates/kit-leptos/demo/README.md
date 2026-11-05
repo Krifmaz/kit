@@ -1,6 +1,12 @@
 # kit-leptos demo
 
-Every kit-leptos component on one page, for a neutral app ("Kit Demo" 1.4.0, set with `config::set`), with fake
+The kit's design system around six pages (`#/` Home: hero, carousels, stat cards; `#/browse`: filter chips, a grid
+of covers, skeletons; `#/item/<n>`: an item's page; `#/stats`: stat cards and rings; `#/states`: empty states,
+skeletons, a sheet; `#/kit`), in the kit's `AppShell` (tab bar on phones, rail on tablets, sidebar on desktops).
+`node scripts/visual-qa.cjs http://127.0.0.1:8080/ out/` screenshots every page at three sizes and checks for
+sideways overflow and overlapping text.
+
+The Kit page has every kit-leptos feature, for a neutral app ("Kit Demo" 1.4.0, set with `config::set`), with fake
 data: toasts (each kind, an error with Copy, the same error merged, Undo, the cap of three errors), the update
 toast and the real self-update flow (Publish a new build, with a switch that holds the page), the confirm dialog
 (`modal::confirm` and the `ConfirmDialog` component), the details dialog, What's new (popup and changelog page),
