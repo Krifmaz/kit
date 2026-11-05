@@ -41,6 +41,8 @@ import dev.krifmaz.kit.compose.dialogs.ConfirmDialog
 import dev.krifmaz.kit.compose.offline.OfflineBanner
 import dev.krifmaz.kit.compose.offline.probeHealth
 import dev.krifmaz.kit.compose.settings.Muted
+import dev.krifmaz.kit.compose.suite.SuiteNav
+import dev.krifmaz.kit.compose.suite.rememberSidebar
 import dev.krifmaz.kit.compose.theme.palette
 import dev.krifmaz.kit.compose.toasts.Toasts
 import dev.krifmaz.kit.compose.update.UpdatesSection
@@ -69,7 +71,7 @@ import dev.krifmaz.kit.compose.R as KitR
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit, onChangeServer: () -> Unit) {
+fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit, follow: (String) -> Unit, onChangeServer: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // who is looking: null until the server says (or when it can't); the admin pages show unless it says no
@@ -120,6 +122,11 @@ fun HomePage(app: App, base: String, bugs: BugReportsHost, open: (Page) -> Unit,
                 .verticalScroll(rememberScrollState()),
         ) {
             SectionHead(KitApp.name, subtitle = base.substringAfter("://"), action = "Change server", onAction = onChangeServer)
+
+            // the shared sidebar: this app's pages and every linked app's, in the person's order (Edit sidebar)
+            SectionHead("Your apps", subtitle = "This app's pages and every linked app's")
+            SuiteNav(rememberSidebar(app.api), active = "/#/", onLocal = follow, onBrowse = follow)
+            EntryRow("Search", "This app and every linked app, at once") { open(Page.Search) }
 
             SectionHead("Try the kit", subtitle = "Toasts and details, in the kit's theme")
             Row(Modifier.padding(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

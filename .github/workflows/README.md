@@ -6,7 +6,7 @@ its own Docker image, APK and desktop installers, all attached to its own GitHub
 
 | Workflow | Does | Main inputs |
 | --- | --- | --- |
-| `kit-ci.yml` | fmt (optional), clippy `-D warnings` and tests of each Rust workspace; the web app's wasm32 check, clippy and tests (strings/parity); the app's extra checks. Job `test`. | `rust-dirs`, `wasm-dirs`, `fmt`, `check`, `advisory` |
+| `kit-ci.yml` | fmt (optional), clippy `-D warnings` and tests of each Rust workspace; the web app's wasm32 check, clippy and tests (strings/parity); the app's extra checks. Job `test`. | `rust-dirs`, `wasm-dirs`, `fmt`, `check`, `advisory`, `apt-packages` |
 | `kit-release.yml` | `stage: prepare` picks the next `vX.Y.Z` (PATCH by default, MINOR/MAJOR from `docs/releases/<version>.md`, or by hand) and builds the web app and server tarballs; `stage: publish` writes the notes, attaches every file the run built (or the previous release's apps when none were built), writes `SHA256SUMS` and publishes a normal release (never a pre-release) marked Latest. | `app-name`, `bump`, `version`, `web-dir`, `server-dir`, `server-bin`, `keep-previous`, `apps-result`, `files`, `notes`, `app-files`, `carry-over` |
 | `kit-docker.yml` | Multi-arch (amd64, arm64) image on GHCR, `:<version>` and `:latest`; `push: false` only builds it (pull requests). | `image`, `version`, `push`, `build-args` |
 | `kit-android.yml` | Signed release APK (the caller passes the signing secrets), unit tests, signature, native libraries, 16 KB pages, optional Baseline Profile check; artifact `kit-app-android`. | `app-name`, `version`, `code`, `project-dir`, `version-property`, `ndk`, `native-libs`, `baseline-profile` |

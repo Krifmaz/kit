@@ -5,6 +5,8 @@
 //! | everywhere | toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build, opening with no connection (the server's service worker at `/sw.js`) |
 //! | after signing in | the What's new popup, once per release |
 //! | `#/` | Home: the app's own start page (a bug report button to begin with) |
+//! | the sidebar | the shared sidebar: this app's pages and every linked app's, in each person's order (Edit sidebar) |
+//! | `#/search` | one search across this app and every linked app |
 //! | `#/bug-reports` | the account's bug reports and the New report sheet |
 //! | `#/settings?s=<page>` | the server settings form from the server's schema, Diagnostics and What's new |
 //!
@@ -173,6 +175,7 @@ fn Shell(me: Value) -> impl IntoView {
         let r = route.get();
         match r.path.as_str() {
             "/bug-reports" => view! { <pages::BugReports/> }.into_any(),
+            "/search" => view! { <pages::Search q=r.param("q")/> }.into_any(),
             "/settings" => view! { <pages::Settings page=r.param("s")/> }.into_any(),
             _ => view! { <pages::Home/> }.into_any(),
         }
@@ -182,10 +185,9 @@ fn Shell(me: Value) -> impl IntoView {
             <aside class="sidebar" id="sidebar">
                 <a class="brand" href="#/">{name}</a>
                 <nav class="nav">
-                    <NavLink href="/" label="Home" route=route/>
-                </nav>
-                <nav class="nav nav-under">
-                    <NavLink href="/bug-reports" label="Bug reports" route=route/>
+                    // this app's pages and every linked app's (the server's suite manifest), in the person's order
+                    <kit_leptos::suite::SuiteNav active=Signal::derive(move || format!("/#{}", route.get().path))/>
+                    <NavLink href="/search" label="Search" route=route/>
                 </nav>
                 <div class="sidebar-foot" style="margin-top:0">
                     <div class="grow" style="min-width:0">

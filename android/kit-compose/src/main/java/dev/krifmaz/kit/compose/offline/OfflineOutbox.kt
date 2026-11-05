@@ -161,8 +161,14 @@ data class Outbox(val owner: String = "", val actions: List<OutAction> = emptyLi
     }
 }
 
-/** The outbox kept in a file of the app's own storage; every change is written at once. Thread-safe. */
-class OutboxFile(private val file: File) {
+/**
+ * The outbox kept in a file of the app's own storage; every change is written at once. Thread-safe.
+ *
+ * @param file where the outbox is kept.
+ * @param upgrade reads a file the app wrote in an earlier form of its own (null when the text is not that), so the
+ *   changes waiting in it are kept; the next change writes it in the kit's form. None by default.
+ */
+class OutboxFile(private val file: File, private val upgrade: (String) -> Outbox? = { null }) {
     private val lock = Any()
     private var doc: Outbox? = null
     private val _changes = MutableStateFlow(0)
@@ -173,7 +179,7 @@ class OutboxFile(private val file: File) {
     private fun loaded(): Outbox {
         doc?.let { return it }
         val d = try {
-            if (file.isFile) Outbox.parse(file.readText()) else Outbox()
+            if (file.isFile) file.readText().let { upgrade(it) ?: Outbox.parse(it) } else Outbox()
         } catch (_: Exception) {
             Outbox()
         }

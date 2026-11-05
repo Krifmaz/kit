@@ -1,0 +1,16 @@
+[package]
+name = "kit-icons"
+description = "Turns an app's glyph (one small SVG) into its whole icon set in the kit's look: SVG favicon, PNGs, Apple touch icon, maskable icon, web manifest and the <head> tags."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kit-tokens = { path = "../gen" }
+resvg = { version = "0.49", default-features = false }
+serde_json.workspace = true
+
+[lints]
+workspace = true

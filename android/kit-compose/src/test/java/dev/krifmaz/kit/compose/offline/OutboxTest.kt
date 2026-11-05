@@ -109,4 +109,31 @@ class OutboxTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun anEarlierFileOfTheAppsOwnIsUpgraded() {
+        val dir = Files.createTempDirectory("outbox").toFile()
+        try {
+            val f = File(dir, "outbox.json")
+            // the app's earlier form: its own list of comment ids
+            f.writeText("""{"owner":"$ana","comments":["7","8"]}""")
+            val upgrade = { text: String ->
+                if (!text.contains("\"comments\"")) {
+                    null
+                } else {
+                    listOf("7", "8").fold(Outbox(ana)) { o, id -> o.add(comment(id, 1)) }
+                }
+            }
+            val box = OutboxFile(f, upgrade)
+            assertEquals(listOf("7", "8"), box.read().of("comment").map { it.key })
+            // the next change writes the kit's form, which reads back without the upgrade
+            box.update { it.add(vote("2", true, 3), OutMerge.Latest) }
+            assertEquals(3, OutboxFile(f).read().size)
+            // without one, a file the kit can't read is an empty outbox
+            f.writeText("""{"comments":["7"]}""")
+            assertTrue(OutboxFile(f).read().isEmpty)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }

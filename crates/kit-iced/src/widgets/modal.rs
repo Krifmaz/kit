@@ -38,8 +38,16 @@ pub fn modal<'a, M: Clone + 'a>(
     .into()
 }
 
-/// `confirmDialog(title, text, okLabel, danger)`: Cancel + the OK button.
-pub fn confirm<'a, M: Clone + 'a>(title: &'a str, text: &'a str, ok_label: &'a str, danger: bool, on_ok: M, on_cancel: M) -> El<'a, M> {
+/// `confirmDialog(title, text, okLabel, danger)`: Cancel + the OK button. The title may be built
+/// for the occasion ("Delete “notes.txt” forever?").
+pub fn confirm<'a, M: Clone + 'a>(
+    title: impl Into<String>,
+    text: &'a str,
+    ok_label: &'a str,
+    danger: bool,
+    on_ok: M,
+    on_cancel: M,
+) -> El<'a, M> {
     let footer = row![
         btn("Cancel", Btn::Default, Some(on_cancel.clone())),
         btn(ok_label, if danger { Btn::Danger } else { Btn::Primary }, Some(on_ok)),

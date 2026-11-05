@@ -21,11 +21,17 @@ use kit_iced::toast::{self, ToastKind, Toasts};
 use kit_iced::update::{self, Feed, Phase, UpdateMsg};
 use kit_iced::whats_new::{self, Changelog, ChangelogMsg, Popup, PopupMsg};
 use kit_iced::widgets::{self as w, El, Icon, Logo};
-use kit_iced::{bug_report, confirm, offline, settings};
+use kit_iced::{bug_report, confirm, offline, settings, suite};
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
+
+/// An icon of the demo app's own, beside the kit's set: an app adds icons this way.
+pub const APP_ICON: Icon = Icon::App(kit_iced::widgets::AppIcon::stroke(
+    "star",
+    r#"<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>"#,
+));
 
 /// The imaginary app's name, in every sentence the components build.
 pub const APP: &str = "Demo";
@@ -99,11 +105,13 @@ pub enum Page {
     BugReport,
     /// The diagnostics checks.
     Diagnostics,
+    /// Suite: the shared sidebar of linked apps and the search across apps.
+    Suite,
 }
 
 impl Page {
     /// Every page, in the sidebar's order.
-    pub const ALL: [Page; 12] = [
+    pub const ALL: [Page; 13] = [
         Page::Appearance,
         Page::Toasts,
         Page::Details,
@@ -116,6 +124,7 @@ impl Page {
         Page::Settings,
         Page::BugReport,
         Page::Diagnostics,
+        Page::Suite,
     ];
 
     /// The sidebar entry.
@@ -133,6 +142,7 @@ impl Page {
             Page::Settings => "Settings",
             Page::BugReport => "Bug report",
             Page::Diagnostics => "Diagnostics",
+            Page::Suite => "Linked apps",
         }
     }
 
@@ -151,6 +161,7 @@ impl Page {
             Page::Settings => Icon::Settings,
             Page::BugReport => Icon::Bug,
             Page::Diagnostics => Icon::Activity,
+            Page::Suite => Icon::Link,
         }
     }
 }
@@ -256,6 +267,12 @@ pub enum Message {
     Diag(diagnostics::Msg),
     /// The fake answer to Run checks came.
     DiagChecked,
+    /// A message of the shared sidebar.
+    Sidebar(suite::SidebarMsg),
+    /// A message of the search across apps.
+    Search(suite::SearchMsg),
+    /// The fake answer to a suite request came (the request's body).
+    SuiteAnswered(suite::Out),
 }
 
 /// The demo's whole state.
@@ -296,6 +313,8 @@ pub struct Demo {
     reply: bug_report::Reply,
     replying: Option<String>,
     diag: diagnostics::State,
+    sidebar: suite::Sidebar,
+    search: suite::Search,
 }
 
 impl Default for Demo {
@@ -517,6 +536,12 @@ impl Demo {
             reply: bug_report::Reply::default(),
             replying: None,
             diag,
+            sidebar: {
+                let mut sb = suite::Sidebar::default();
+                sb.load(&fake_sidebar());
+                sb
+            },
+            search: suite::Search::default(),
         }
     }
 
@@ -927,6 +952,22 @@ impl Demo {
                 None => {}
             },
             Message::DiagChecked => self.diag.checked(Ok(fake_checks())),
+            Message::Sidebar(m) => {
+                if let Some(out) = self.sidebar.update(m) {
+                    self.suite_out(out);
+                }
+            }
+            Message::Search(m) => {
+                if let Some(out) = self.search.update(m) {
+                    self.suite_out(out);
+                }
+            }
+            Message::SuiteAnswered(suite::Out::Save(body)) => {
+                let answer = fake_sidebar_after(&self.sidebar.items, &body);
+                self.sidebar.load(&answer);
+            }
+            Message::SuiteAnswered(suite::Out::Search(_)) => self.search.load(&fake_search()),
+            Message::SuiteAnswered(_) => {}
         }
         Task::none()
     }
@@ -1000,7 +1041,30 @@ impl Demo {
             Page::Settings => self.settings_page(),
             Page::BugReport => self.bug_report_page(),
             Page::Diagnostics => self.diagnostics_page(),
+            Page::Suite => self.suite_page(),
         }
+    }
+
+    /// What the demo does with a suite component's request: the fake server answers on the next tick, and an
+    /// address to open becomes a toast.
+    fn suite_out(&mut self, out: suite::Out) {
+        match out {
+            suite::Out::Local(path) => self.toasts.push(format!("Open {path}"), ToastKind::Ok),
+            suite::Out::Browse(url) => self.toasts.push(format!("Open {url} in the browser"), ToastKind::Ok),
+            other => self.later.push(Message::SuiteAnswered(other)),
+        }
+    }
+
+    fn suite_page(&self) -> El<'_, Message> {
+        column![
+            w::h1("Linked apps"),
+            w::small_muted("The shared sidebar shows every linked app's sections; each person hides, shows and reorders them."),
+            w::card(self.sidebar.view("#things", Message::Sidebar)).width(Length::Fixed(320.0)),
+            w::h2("Search every app"),
+            self.search.view(Message::Search),
+        ]
+        .spacing(14)
+        .into()
     }
 
     fn appearance(&self) -> El<'_, Message> {
@@ -1049,7 +1113,8 @@ impl Demo {
             badges = badges.push(w::badge(name, kind));
         }
         let mut icons = row![].spacing(10);
-        for i in Icon::ALL {
+        // the kit's set, then an app's own icon (AppIcon) drawn the same way
+        for i in Icon::ALL.into_iter().chain([APP_ICON]) {
             icons = icons.push(
                 column![w::icon(i, 20.0, self.palette.text), w::small_muted(i.name())].spacing(4).align_x(Alignment::Center).width(64),
             );
@@ -1472,4 +1537,41 @@ fn next_phase(p: &Phase) -> Phase {
         Phase::Installing(_) => Phase::Failed(failed_words()),
         Phase::Failed(_) => Phase::Idle,
     }
+}
+
+/// The demo app's icon (SVG path data).
+const DEMO_ICON: &str = "M4 4h16v16H4z";
+/// The other demo app's icon.
+const OTHER_ICON: &str = "M12 3l9 9-9 9-9-9z";
+
+/// The fake `GET /api/kit/suite/sidebar`: this app's section and two of another app's (one hidden).
+fn fake_sidebar() -> Value {
+    json!({ "items": [
+        { "key": "demo/things", "app": "demo", "app_name": APP, "section": "things", "title": "Things", "icon": DEMO_ICON, "url": "http://demo.test/#things", "path": "#things", "local": true },
+        { "key": "other/items", "app": "other", "app_name": "Other demo", "section": "items", "title": "Items", "icon": OTHER_ICON, "url": "http://other.test/#items", "path": "#items", "local": false },
+        { "key": "other/more", "app": "other", "app_name": "Other demo", "section": "more", "title": "More", "icon": "", "url": "http://other.test/#more", "path": "#more", "hidden": true }
+    ] })
+}
+
+/// The fake `PUT /api/kit/suite/sidebar`: the entries in the order sent, the hidden ones marked (`{}`: as at first).
+fn fake_sidebar_after(items: &[suite::SidebarItem], body: &Value) -> Value {
+    let p: suite::SidebarPrefs = serde_json::from_value(body.clone()).unwrap_or_default();
+    if p.order.is_empty() {
+        return fake_sidebar();
+    }
+    let mut items = items.to_vec();
+    items.sort_by_key(|i| p.order.iter().position(|k| *k == i.key).unwrap_or(usize::MAX));
+    for i in &mut items {
+        i.hidden = p.hidden.contains(&i.key);
+    }
+    json!({ "items": items })
+}
+
+/// The fake `GET /api/kit/suite/search`: hits in this app and the other, and a third app that is down.
+fn fake_search() -> Value {
+    json!({ "groups": [
+        { "app": "demo", "app_name": APP, "icon": DEMO_ICON, "local": true, "results": [{ "title": "First thing", "subtitle": "Things", "url": "http://demo.test/#things/1" }] },
+        { "app": "other", "app_name": "Other demo", "icon": OTHER_ICON, "results": [{ "title": "A related item", "subtitle": "Items", "url": "http://other.test/#items/1" }] },
+        { "app": "third", "app_name": "Third demo", "icon": OTHER_ICON, "results": [], "error": "http://third.test can't be reached. Check the address and that the app is running." }
+    ] })
 }

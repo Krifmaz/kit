@@ -10,7 +10,59 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
   build; the API never is), and each new build arrives as a new worker that kit-rules `update::Flow` lets take over.
   The template serves and registers it, and its browser walk reloads offline.
 
+## v0.5.0 — 2026-11-05
+
+Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
+
+### Added
+- `kit-icons` (design/icons): an app's glyph (one 24 × 24 SVG in `currentColor` and `{accent-2}`) becomes its whole
+  icon set on the kit's tile in the theme's colours: `favicon.svg`, `icon-32.png`, `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
+  DESIGN.md §5 "App icons" gives the rules for the glyph.
+
+## v0.4.0 — 2026-11-05
+
+Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+
+### Added
+- Suite screens (`contracts/suite.md`) on every client:
+  - kit-leptos `suite`: `<SuiteNav/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related/>`,
+    `<SsoButton/>` and `<LinkedApps/>` (the admin page for links and keys).
+  - kit-iced `suite`: `Sidebar`, `Search`, `related`, `path_icon`.
+  - kit-compose `suite`: `SuiteNav`, `SuiteSearch`, `Related`, `SuiteRules`.
+  - The demos show a shared sidebar and a search across apps.
+- Template: the app is a suite member. It has a manifest of its pages, its pages in search and single sign-on
+  (as the account source, or through one). The settings are `public_url`, `suite_id` and `account_source`, with
+  Settings → Linked apps. The web, desktop and Android apps show the shared sidebar and Search. A test runs two
+  linked copies side by side.
+
+### Changed
+- Template: new apps pin the kit's `v0.4.0` (`kit_tag`).
+
+## v0.3.2 to v0.3.4 — 2026-11-05
+
+### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+- kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
+  own, so changes waiting on a phone survive the switch to the kit's outbox.
+- `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `whats_new::changelog_with` draws the changelog page in the app's own `ChangelogWords` (re-exported).
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+
+### Changed
+- kit-leptos: `style/kit.css` (and the template's copy) draws the kit's look of docs/DESIGN.md §5, which it had
+  drifted from: Inter 14px/1.5 body, H1 28 / H2 19 / H3 15·650, small 12, the outlined danger button (red text,
+  red border on hover) instead of a filled one, and the same buttons, badges, lists, tables, dialogs, toasts and
+  banners the encore theme was drawn from. An app's stylesheet that loads after it no longer mixes two looks.
+- kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
+
 ### Fixed
+- kit-leptos: `style/kit.css` draws the drop places of `dropzone` (`.drop-ready` while files are dragged over the
+  window, `.drop-over` under the pointer); they had no outline without an app's own rules.
 - Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
   dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
   app is the same; the template needs cargo-generate 0.23.4 or later.

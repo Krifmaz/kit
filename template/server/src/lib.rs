@@ -8,12 +8,14 @@
 //! | `/api/bug-reports/*`, `/api/crash-reports` | kit-server-bugreports |
 //! | `/api/diagnostics`, `/api/diagnostics/{id}/test` | kit-server-diagnostics |
 //! | `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` | kit-server-settings |
+//! | `/api/kit/manifest`, `/api/kit/suite/*`, `/api/kit/search`, `/api/kit/sso/*`, OIDC (`/.well-known/openid-configuration`, `/api/kit/oidc/*`) | kit-server-suite ([`suite`]) |
 //! | `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` | [`auth`] |
 //!
 //! Everything the app adds of its own goes into [`app`] next to them.
 
 pub mod auth;
 pub mod checks;
+pub mod suite;
 
 use axum::http::{header, HeaderValue};
 use axum::Router;
@@ -77,6 +79,10 @@ pub struct AppState {
     pub notices: kit_server_notices::Notices<AppState>,
     /// Sign-in and bug report limits per address or account.
     pub limits: Arc<auth::Limits>,
+    /// Suite: this app's manifest, its links to other apps and single sign-on ([`suite`]).
+    pub suite: kit_server_suite::Suite,
+    /// The links to other apps and the keys made for them, in the kit's `kit_suite_*` tables.
+    pub links: kit_server_suite::SqliteSuite,
 }
 
 impl AppState {
@@ -109,6 +115,9 @@ impl AppState {
         let settings =
             Store::load_with(saved, SETTINGS, env).await.map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
         let changelog = Arc::new(Changelog::new(&settings.str("app_name"), VERSION, changelog_gen::NOTES));
+        let links = kit_server_suite::SqliteSuite::new(db.clone()).map_err(kit)?;
+        auth::migrate_sso(&db)?;
+        let suite = kit_server_suite::Suite::new(suite::config(&settings));
         Ok(AppState {
             db,
             reports,
@@ -119,6 +128,8 @@ impl AppState {
             changelog,
             notices,
             limits: Arc::new(auth::Limits::default()),
+            suite,
+            links,
         })
     }
 
@@ -204,6 +215,7 @@ pub fn app(st: AppState) -> Router {
     let spa = ServeDir::new(&st.static_dir).precompressed_br().precompressed_gzip().fallback(index);
     let spa = tower_http::set_header::SetResponseHeader::if_not_present(spa, header::VARY, HeaderValue::from_static("accept-encoding"));
     kit_server_notices::spawn_rechecks(st.clone());
+    kit_server_suite::spawn_refresh(st.clone(), std::time::Duration::from_secs(15 * 60));
     Router::new()
         .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web.clone())))
         .merge(kit_server_health::worker_router(kit_server_health::Worker::new(NAME, web)))
@@ -214,6 +226,7 @@ pub fn app(st: AppState) -> Router {
         .merge(kit_server_bugreports::crash::router())
         .merge(kit_server_diagnostics::router())
         .merge(kit_server_settings::router())
+        .merge(kit_server_suite::router())
         .merge(auth::router())
         .with_state(st)
         .fallback_service(spa)

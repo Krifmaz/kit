@@ -11,7 +11,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | Module | What it gives an app |
 | --- | --- |
 | `theme` | every palette (themes × accents × background), `theme::default_look()`, `set`/`look`, every widget style (`btn(Btn::Primary)`, `input`, `card`, `modal`, `toast`, `warn_box`, `badge` …) |
-| `widgets` | text styles (`h1`–`h3`, `muted`, `small`), buttons, cards, `field`, `modal`, badges, skeletons, tabs/segments, the icon set, the app's `Logo`, text area, links |
+| `widgets` | text styles (`h1`–`h3`, `muted`, `small`), buttons, cards, `field`, `modal`, badges, skeletons, tabs/segments, the icon set and the app's own icons (`AppIcon`), the app's `Logo`, text area, links |
 | `toast` | `Toasts<A>`: errors stay with Copy, a repeated error does not pile up, Undo toasts, 3 errors / 5 toasts (kit-rules' desktop policy); `view` |
 | `details` | the details dialog: any text in full, selectable, with Copy, an optional action and links |
 | `whats_new` | `Popup` (after an update) and `Changelog` (the full page), with the release notes renderer |
@@ -24,6 +24,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | `diagnostics` | the checks page: status dots, details, Copy, the copyable report; `view_with` for an app's own groups |
 | `offline` | the offline banner |
 | `confirm` | the confirm dialog: a question, Cancel and the action's button (red when it destroys something) |
+| `suite` | linked apps (`contracts/suite.md`): `Sidebar` (the shared sidebar, Edit sidebar: move, hide, show, reset), `Search` (every app at once), `related` ("Related in …"), `path_icon`; each says what to do next as `Out` (`Save`, `Local`, `Browse`, `Search`) and the app makes the request |
 
 Components hold no network code: each keeps its state, draws it, and its `update` returns what the app should
 do next (save this body, run this test, send this report, copy this text). The app makes the requests with its

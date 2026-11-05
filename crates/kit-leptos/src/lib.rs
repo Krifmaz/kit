@@ -21,13 +21,15 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
 //! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`details::show`], [`clipboard::copy_text`])
 //! work from any code, Leptos or hand-written. Server calls go through [`api`], whose backend an app can replace
 //! ([`api::set_backend`]).
 
-/// The kit's stylesheet (`style/kit.css`): every component's classes, on the variables of `tokens.css`. Load
+/// The kit's stylesheet (`style/kit.css`): every component's classes in the kit's look (docs/DESIGN.md §5), on the
+/// variables of `tokens.css`. Load
 /// `tokens.css` first, then this (trunk: `<link data-trunk rel="css" href="…/kit.css">`).
 pub const CSS: &str = include_str!("../style/kit.css");
 
@@ -47,6 +49,7 @@ pub mod notice;
 pub mod offline;
 pub mod rt;
 pub mod schema_form;
+pub mod suite;
 pub mod toasts;
 pub mod update;
 pub mod whats_new;
