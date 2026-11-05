@@ -19,6 +19,7 @@
 //! | [`diagnostics`] | the diagnostics checks: status dot, name, message, fix, and a copyable report |
 //! | [`offline`] | the offline banner |
 //! | [`signup`] | the sign-up page and the admin's sign-up page: who can sign up, invites, waiting sign-ups |
+//! | [`suite`] | linked apps: the shared sidebar with Edit sidebar, the search across apps, "related in …" |
 //! | [`confirm`] | the confirm dialog: a question, Cancel and the action (red when it destroys something) |
 //!
 //! Components hold no network code: they keep their state, draw it and say what the app should do next,
@@ -35,6 +36,7 @@ pub mod notice;
 pub mod offline;
 pub mod settings;
 pub mod signup;
+pub mod suite;
 pub mod theme;
 pub mod toast;
 pub mod update;

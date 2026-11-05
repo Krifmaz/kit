@@ -258,7 +258,6 @@ details.settings-card[open] .chev svg { transform: rotate(180deg); }
 #conn-banner svg { width: 16px; height: 16px; flex: none; }
 #conn-banner span { flex: 1; }
 /* ---------- bug reports (sidebar entry, #/bug-reports) ---------- */
-.nav.nav-under { flex: none; margin: 0 0 6px; overflow: visible; }
 .bug-row .bug-title { color: var(--text); }
 .bug-row .bug-title:hover { text-decoration: underline; }
 .bug-thumbs { display: flex; flex-wrap: wrap; gap: 8px; min-height: 0; }

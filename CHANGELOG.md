@@ -4,9 +4,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.4.0 — 2026-11-05
+## v0.5.0 — 2026-11-05
 
-Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
 
 ### Added
 - Sign-up (`contracts/signup.md`): who may make an account.
@@ -24,6 +24,34 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   - The template: sign-up on the web, desktop and Android sign-in pages, a Sign-up admin page on each, and the
     server's accounts made through the hooks (`public_url` setting for the links). The Android demo has the
     admin page on its in-app server.
+
+## v0.4.0 — 2026-11-05
+
+Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+
+### Added
+- Suite screens (`contracts/suite.md`) on every client:
+  - kit-leptos `suite`: `<SuiteNav/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related/>`,
+    `<SsoButton/>` and `<LinkedApps/>` (the admin page for links and keys).
+  - kit-iced `suite`: `Sidebar`, `Search`, `related`, `path_icon`.
+  - kit-compose `suite`: `SuiteNav`, `SuiteSearch`, `Related`, `SuiteRules`.
+  - The demos show a shared sidebar and a search across apps.
+- Template: the app is a suite member. It has a manifest of its pages, its pages in search and single sign-on
+  (as the account source, or through one). The settings are `public_url`, `suite_id` and `account_source`, with
+  Settings → Linked apps. The web, desktop and Android apps show the shared sidebar and Search. A test runs two
+  linked copies side by side.
+
+### Changed
+- Template: new apps pin the kit's `v0.4.0` (`kit_tag`).
+
+## v0.3.2 to v0.3.4 — 2026-11-05
+
+### Added
+- kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,
+  `kitPaletteOf` and `KitTheme(theme, …, palettes)`; accents, the faded background and Material colours are worked
+  out from it. The kit's palettes stay the default.
+- kit-compose `offline`: `OutboxFile(file, upgrade)` reads an outbox file the app wrote in an earlier form of its
+  own, so changes waiting on a phone survive the switch to the kit's outbox.
 - `kit-ci.yml`: `apt-packages`, Ubuntu packages the tests need (e.g. `ffmpeg`), installed before the checks run.
 - kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
   kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.

@@ -9,12 +9,14 @@
 //! | `/api/diagnostics`, `/api/diagnostics/{id}/test` | kit-server-diagnostics |
 //! | `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` | kit-server-settings |
 //! | `/api/signup`, `/api/signup/invite`, `/api/signup/verify`, `/api/signup/settings`, `/api/signup/invites/*`, `/api/signup/pending/*` | kit-server-signup |
+//! | `/api/kit/manifest`, `/api/kit/suite/*`, `/api/kit/search`, `/api/kit/sso/*`, OIDC (`/.well-known/openid-configuration`, `/api/kit/oidc/*`) | kit-server-suite ([`suite`]) |
 //! | `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` | [`auth`] |
 //!
 //! Everything the app adds of its own goes into [`app`] next to them.
 
 pub mod auth;
 pub mod checks;
+pub mod suite;
 
 use axum::http::{header, HeaderValue};
 use axum::Router;
@@ -80,6 +82,10 @@ pub struct AppState {
     pub limits: Arc<auth::Limits>,
     /// Who can sign up, the invites and the sign-ups that wait, in the kit's `kit_signup_*` and `kit_invite*` tables.
     pub signup: kit_server_signup::SqliteSignup,
+    /// Suite: this app's manifest, its links to other apps and single sign-on ([`suite`]).
+    pub suite: kit_server_suite::Suite,
+    /// The links to other apps and the keys made for them, in the kit's `kit_suite_*` tables.
+    pub links: kit_server_suite::SqliteSuite,
 }
 
 impl AppState {
@@ -113,6 +119,9 @@ impl AppState {
         let settings =
             Store::load_with(saved, SETTINGS, env).await.map_err(|e| anyhow::anyhow!("The settings can't be read: {}", e.detail))?;
         let changelog = Arc::new(Changelog::new(&settings.str("app_name"), VERSION, changelog_gen::NOTES));
+        let links = kit_server_suite::SqliteSuite::new(db.clone()).map_err(kit)?;
+        auth::migrate_sso(&db)?;
+        let suite = kit_server_suite::Suite::new(suite::config(&settings));
         Ok(AppState {
             db,
             reports,
@@ -124,6 +133,8 @@ impl AppState {
             notices,
             limits: Arc::new(auth::Limits::default()),
             signup,
+            suite,
+            links,
         })
     }
 
@@ -252,6 +263,11 @@ impl kit_server_signup::SignupHost for AppState {
     fn base_url(&self) -> String {
         self.settings.str("public_url")
     }
+
+    /// Linked to an account source: its sign-up setting applies here, shown read-only.
+    async fn account_source(&self) -> Option<kit_server_signup::AccountSource> {
+        kit_server_signup::suite_account_source(&self.suite, &self.links, "/api/signup").await
+    }
 }
 
 impl kit_server_diagnostics::Diagnostics for AppState {
@@ -269,6 +285,7 @@ pub fn app(st: AppState) -> Router {
     let spa = ServeDir::new(&st.static_dir).precompressed_br().precompressed_gzip().fallback(index);
     let spa = tower_http::set_header::SetResponseHeader::if_not_present(spa, header::VARY, HeaderValue::from_static("accept-encoding"));
     kit_server_notices::spawn_rechecks(st.clone());
+    kit_server_suite::spawn_refresh(st.clone(), std::time::Duration::from_secs(15 * 60));
     Router::new()
         .merge(kit_server_health::router(kit_server_health::Health::new(VERSION, web)))
         .merge(kit_server_changelog::router())
@@ -279,6 +296,7 @@ pub fn app(st: AppState) -> Router {
         .merge(kit_server_diagnostics::router())
         .merge(kit_server_settings::router())
         .merge(kit_server_signup::router())
+        .merge(kit_server_suite::router())
         .merge(auth::router())
         .with_state(st)
         .fallback_service(spa)

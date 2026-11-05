@@ -20,11 +20,17 @@ pub enum Page {
     Diagnostics,
     /// Every release's notes.
     WhatsNew,
+    /// One search across this app and every linked app.
+    Search,
 }
 
 impl Page {
-    /// The sidebar's pages, in order.
-    pub const NAV: [Page; 6] = [Page::Home, Page::BugReports, Page::Settings, Page::Signup, Page::Diagnostics, Page::WhatsNew];
+    /// The app's own pages in the shared sidebar until the server's sidebar (every linked app's sections, in the
+    /// person's order) has come, or when it can't be had.
+    pub const OWN: [Page; 2] = [Page::Home, Page::BugReports];
+
+    /// The sidebar's pages under the shared sidebar, in order.
+    pub const NAV: [Page; 5] = [Page::Search, Page::Settings, Page::Signup, Page::Diagnostics, Page::WhatsNew];
 
     /// The page's name in the sidebar and its heading.
     pub fn title(self) -> &'static str {
@@ -35,6 +41,7 @@ impl Page {
             Page::Signup => "Sign-up",
             Page::Diagnostics => "Diagnostics",
             Page::WhatsNew => "What's new",
+            Page::Search => "Search",
         }
     }
 
@@ -47,6 +54,7 @@ impl Page {
             Page::Signup => Icon::Ticket,
             Page::Diagnostics => Icon::Activity,
             Page::WhatsNew => Icon::Spark,
+            Page::Search => Icon::Search,
         }
     }
 
@@ -73,17 +81,21 @@ impl Page {
             Page::Signup => "#/settings?s=sign-up".into(),
             Page::Diagnostics => "#/settings?s=diagnostics".into(),
             Page::WhatsNew => "#/settings?s=whats-new".into(),
+            Page::Search => "#/search".into(),
         }
     }
 
-    /// The page a web path names (with or without `#`); `None` for one the desktop app doesn't have.
+    /// The page a web path names (with or without `#`, or as a suite section's `/#/…`); `None` for one the
+    /// desktop app doesn't have.
     pub fn parse(path: &str) -> Option<Page> {
-        let p = path.trim().trim_start_matches('#');
+        let p = path.trim();
+        let p = p.strip_prefix("/#").unwrap_or(p).trim_start_matches('#');
         let (p, query) = p.split_once('?').unwrap_or((p, ""));
         let s = query.split('&').filter_map(|kv| kv.split_once('=')).find(|(k, _)| *k == "s").map(|(_, v)| v).unwrap_or("");
         match (p.trim_end_matches('/'), s) {
             ("", _) => Some(Page::Home),
             ("/bug-reports", _) => Some(Page::BugReports),
+            ("/search", _) => Some(Page::Search),
             ("/settings", "diagnostics") => Some(Page::Diagnostics),
             ("/settings", "sign-up") => Some(Page::Signup),
             ("/settings", "whats-new") => Some(Page::WhatsNew),
@@ -99,7 +111,7 @@ mod tests {
 
     #[test]
     fn every_page_goes_there_and_back() {
-        for p in Page::NAV.into_iter().chain([Page::Report(7)]) {
+        for p in Page::OWN.into_iter().chain(Page::NAV).chain([Page::Report(7)]) {
             assert_eq!(Page::parse(&p.path()), Some(p), "{}", p.path());
         }
     }
@@ -112,11 +124,14 @@ mod tests {
         assert_eq!(Page::parse("/bug-reports/12"), Some(Page::Report(12)));
         assert_eq!(Page::parse("#/bug-reports/x"), None);
         assert_eq!(Page::parse("#/library"), None);
+        assert_eq!(Page::parse("/#/bug-reports"), Some(Page::BugReports), "a suite section's path");
+        assert_eq!(Page::parse("/#/"), Some(Page::Home));
     }
 
     #[test]
     fn the_sidebar() {
-        assert_eq!(Page::NAV.map(Page::title), ["Home", "Bug reports", "Settings", "Sign-up", "Diagnostics", "What's new"]);
+        assert_eq!(Page::OWN.map(Page::title), ["Home", "Bug reports"]);
+        assert_eq!(Page::NAV.map(Page::title), ["Search", "Settings", "Sign-up", "Diagnostics", "What's new"]);
         assert!(Page::Settings.admin_only() && Page::Signup.admin_only() && Page::Diagnostics.admin_only() && !Page::WhatsNew.admin_only());
         assert_eq!(Page::Report(3).nav(), Page::BugReports);
     }

@@ -20,6 +20,7 @@ release source an input the app gives (`KitApp.init`). Maven coordinates: `dev.k
 | [`signup`](src/main/java/dev/krifmaz/kit/compose/signup/README.md) | The sign-in page's sign-up line, the sign-up page, the admin's sign-up page (who can sign up, invites, waiting sign-ups) |
 | [`uploads`](src/main/java/dev/krifmaz/kit/compose/uploads/README.md) | Drag and drop and the file picker, with accept and size checks |
 | [`images`](src/main/java/dev/krifmaz/kit/compose/images/README.md) | Coil setup: memory + disk cache, de-duplicated requests, preloading |
+| [`suite`](src/main/java/dev/krifmaz/kit/compose/suite/README.md) | Linked apps: the shared sidebar (hide, show, reorder), one search across apps, "Related in …" |
 | [`perf`](src/main/java/dev/krifmaz/kit/compose/perf/README.md) | JankStats and StrictMode in debug builds; the smoothness rules |
 
 ## Start-up

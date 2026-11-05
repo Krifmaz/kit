@@ -97,6 +97,7 @@ kit_leptos::whats_new::start(navigate);   // after signing in
 | `signup` | `<SignInLine sign_up_href/>` (under the sign-in form: "Create an account", the invite hint, or where accounts are managed), `<SignUpPage app invite sign_in_href/>`, `<VerifyPage app token sign_in_href/>` and `<SignupAdmin/>` (who can sign up, waiting sign-ups, invites with the link shown once) on `paths.signup` |
 | `crash` | `install()` catches panics, uncaught errors and unhandled rejections and posts them to `paths.crash_reports` (`/crash-reports`), keeping them in `localStorage` until the server takes them; `report(kind, summary, text)`, `flush()` |
 | `offline` | `show_banner(grace_ended, on_retry)`, `set_trying`, `conn_banner(on, text)`, `watch_connection()`, `<OfflineBanner/>`, `<ConnBanner/>` |
+| `suite` | linked apps (`contracts/suite.md`): `<SuiteNav active/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related query/>` ("Related in …"), `<SsoButton next/>` ("Sign in with …"), `sso_error()`, `<LinkedApps/>` (the admin page: links and keys), `set_words(SuiteWords)` |
 | `api` | `get`/`post`/`post_empty`/`put`/`patch`/`del`/`post_form`, `Backend`, `HttpBackend` (`from_config`, `new(id)`, `with_base`, `with_headers(|method, path| …)` for the app's own headers, such as a CSRF token) |
 
 ## Tests

@@ -25,6 +25,7 @@ kit-iced = { git = "https://github.com/Krifmaz/kit", tag = "v0.1.0" }
 | `offline` | the offline banner |
 | `signup` | `SignUp` (the sign-up page: invite link or open sign-up, as the server allows) and `Admin` (who can sign up, waiting sign-ups, invites with the link dialog); no network code: `update` answers `Out::Send(requests)` for the app to run and feed back |
 | `confirm` | the confirm dialog: a question, Cancel and the action's button (red when it destroys something) |
+| `suite` | linked apps (`contracts/suite.md`): `Sidebar` (the shared sidebar, Edit sidebar: move, hide, show, reset), `Search` (every app at once), `related` ("Related in …"), `path_icon`; each says what to do next as `Out` (`Save`, `Local`, `Browse`, `Search`) and the app makes the request |
 
 Components hold no network code: each keeps its state, draws it, and its `update` returns what the app should
 do next (save this body, run this test, send this report, copy this text). The app makes the requests with its
