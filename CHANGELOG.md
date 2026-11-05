@@ -4,9 +4,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.3.1 — 2026-11-05
+## v0.3.2 — 2026-11-05
 
-Notes: [docs/releases/0.3.1.md](docs/releases/0.3.1.md).
+Notes: [docs/releases/0.3.2.md](docs/releases/0.3.2.md).
 
 ### Added
 - kit-leptos `palette`: a command palette. Ctrl+K / ⌘K (or `palette::open()`, say from a search button) opens it;
@@ -23,6 +23,13 @@ Notes: [docs/releases/0.3.1.md](docs/releases/0.3.1.md).
 - kit-leptos: the `search` icon.
 - Template: the web app installs the palette with its pages and Report a bug, and the sidebar has a search
   button; the browser walk opens it with Ctrl+K, runs a command and closes it with Escape.
+
+## v0.3.1 — 2026-11-05
+
+### Fixed
+- Postgres stores: a statement run with a null where a later call passes a number (a bug report file's
+  `message_id`, for one) no longer fails now and then with "invalid byte sequence for encoding UTF8: 0x00";
+  statements with a null parameter are no longer kept prepared on the connection.
 
 ## v0.3.0 — 2026-11-05
 
