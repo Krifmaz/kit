@@ -10,7 +10,7 @@ pub mod tabs;
 pub mod text_area;
 
 pub use badge::badge;
-pub use icons::{icon, logo, Icon, Logo};
+pub use icons::{icon, logo, AppIcon, Icon, Logo};
 pub use modal::{confirm, modal};
 pub use skeleton::{skeleton_rows, skeleton_tiles};
 pub use tabs::{seg, tabs, tabs_maybe};

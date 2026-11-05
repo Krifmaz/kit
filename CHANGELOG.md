@@ -4,6 +4,14 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+### Added
+- kit-iced: an app's own icons (`Icon::App(AppIcon::stroke(name, body))` or `AppIcon::filled`), drawn like the
+  kit's and accepted by every widget that takes an `Icon`; the demo shows one beside the kit's set.
+- kit-iced: `Details::with_button_icon` puts an icon on the details dialog's main button (e.g. Play).
+
+### Changed
+- kit-iced: `widgets::confirm` takes an owned title too (`impl Into<String>`), for titles that carry a name.
+
 ## v0.3.0 — 2026-11-05
 
 Notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md).
