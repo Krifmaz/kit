@@ -4,7 +4,23 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+Notes: [docs/releases/0.8.0.md](docs/releases/0.8.0.md).
+
 ### Added
+- First-run setup (`contracts/setup.md`): while a server has no owner, its clients show "Create your account"
+  (setup code, username, password twice, optional email) instead of the sign-in page, and sign in with the new
+  account once it is made.
+  - `kit-server-setup`: `GET`/`POST /api/setup`. A one-time setup code (`ABCD-EFGH-JKMN`, about 59 bits, kept in
+    memory) is printed in the server's log at start (`SetupCode::at_start`, `SetupCode::open`), stops working once
+    the owner exists, is put back when the app turns the name or password down, and wrong codes are limited (10 per
+    address, 50 in all, per 15 minutes). The app makes the owner through `SetupHost::create_owner`.
+  - kit-rules `setup` (`SetupWords`, `needed`, `check_form`, `body`); kit-leptos `setup` (`SetupPage`,
+    `setup_needed`, `Paths::setup`); kit-iced `setup` (`Setup`, `Out::SignIn`); kit-compose `setup` (`SetupForm`,
+    `setupNeeded`, `SetupRules`, `KitRoutes.setup`).
+  - The template: no more generated owner password (`initial_admin_password.txt` is gone); without
+    `APP_ADMIN_PASSWORD` the web, desktop and Android apps show "Create your account" on a new server.
+    `APP_ADMIN_USER`/`APP_ADMIN_PASSWORD` still make the owner at start for unattended installs. New apps pin
+    `v0.8.0`.
 - kit-leptos `outbox`: the web outbox store on kit-rules' `Outbox`. An app's actions are kept per account in
   `localStorage`, sent now or kept when the server can't take them (`send_or_keep`), sent in order and in chunks
   once it answers again (`flush`, `watch` on `online` and `<id>:server-up`), with "Back online – 3 stars sent",

@@ -31,6 +31,7 @@ pub fn view(app: &App) -> El<'_, Message> {
         Stage::Connect => connect(app),
         Stage::SignIn => sign_in(app),
         Stage::SignUp => sign_up(app),
+        Stage::Setup => setup(app),
         Stage::Shell => shell(app),
     };
     let mut layers = vec![container(base).width(Length::Fill).height(Length::Fill).style(theme::app_bg).into()];
@@ -127,6 +128,17 @@ pub fn sign_up(app: &App) -> El<'_, Message> {
         row![w::logo(&crate::LOGO, 32.0), w::h2(kit_rules::signup::SignupWords::default().title)].spacing(10).align_y(Alignment::Center),
         w::small_muted(app.client.base().to_string()),
         app.signup.view(Message::SignUp, Message::SignUpBack),
+    ]
+    .spacing(14);
+    centred(c)
+}
+
+/// The first-run page: "Create your account" with the setup code from the server's log (kit-iced's `setup::Setup`).
+pub fn setup(app: &App) -> El<'_, Message> {
+    let c = column![
+        row![w::logo(&crate::LOGO, 32.0), w::h2(crate::title())].spacing(10).align_y(Alignment::Center),
+        w::small_muted(app.client.base().to_string()),
+        app.setup.view(Message::Setup),
     ]
     .spacing(14);
     centred(c)
@@ -475,6 +487,22 @@ mod tests {
         a.signup.update(SignUpMsg::Answer(Kind::Policy, Ok(json!({ "who": "open" }))));
         assert!(shows(&a, "Password again"));
         assert!(matches!(clicked(&a, "Back to sign in")[..], [M::SignUpBack]));
+    }
+
+    #[test]
+    fn a_new_server_shows_create_your_account_and_signs_in_after() {
+        use kit_iced::setup::SetupMsg;
+        let mut a = App::new(Stored { server: "https://x.example".into(), ..Stored::default() }, None, None);
+        let _ = a.update(M::SetupChecked(Ok(json!({ "needed": false }))));
+        assert_eq!(a.stage, Stage::SignIn, "a server with its owner: sign in");
+        let _ = a.update(M::SetupChecked(Ok(json!({ "needed": true }))));
+        assert_eq!(a.stage, Stage::Setup);
+        assert!(shows(&a, "Create your account") && shows(&a, "Setup code") && shows(&a, "Password again"));
+        assert!(matches!(clicked(&a, "Create account")[..], [M::Setup(SetupMsg::Submit)]));
+        a.setup.username = "ana".into();
+        a.setup.password = "correct horse".into();
+        let _ = a.update(M::Setup(SetupMsg::Answer(Ok(json!({ "ok": true, "username": "ana" })))));
+        assert_eq!((a.stage, a.username.as_str(), a.busy), (Stage::SignIn, "ana", true), "signs in with the new account");
     }
 
     #[test]

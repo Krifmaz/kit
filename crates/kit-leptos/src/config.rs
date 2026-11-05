@@ -71,6 +71,8 @@ pub struct Paths {
     /// The sign-up routes' base (`/signup`): `GET` the policy, `POST` a sign-up, `/invite`, `/verify`, `/settings`,
     /// `/invites`, `/pending`.
     pub signup: String,
+    /// First-run setup (`/setup`): `GET` whether the "Create your account" page shows, `POST` the owner.
+    pub setup: String,
     /// The service worker's script, from the site's root (`/sw.js`).
     pub worker: String,
 }
@@ -95,6 +97,7 @@ impl Default for Paths {
             settings_schema: "/settings/schema".into(),
             settings_secret: "/settings/secret/{key}".into(),
             signup: "/signup".into(),
+            setup: "/setup".into(),
             worker: "/sw.js".into(),
         }
     }

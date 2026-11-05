@@ -16,8 +16,10 @@ ease-of-use features from the first commit.
 1. Make the lock files and commit them (CI and the Docker build use `--locked`):
    `(cd server && cargo generate-lockfile) && (cd web && cargo generate-lockfile)`.
 2. Push to GitHub. Every pull request runs the checks; every merge to main is a release.
-3. The first start makes the owner account: set `APP_ADMIN_PASSWORD` (and `APP_ADMIN_USER`, default `admin`),
-   or read the password it prints (also in `initial_admin_password.txt` in the data folder).
+3. The first start asks for the owner: open the app and fill in "Create your account" with the one-time setup
+   code the server prints in its log (`docker logs <container>`). The code stops working once your account
+   exists, and a restart before then prints a new one. For an unattended install, set `APP_ADMIN_PASSWORD` (and
+   `APP_ADMIN_USER`, default `admin`) instead: the owner is made at once and there is no setup screen.
 
 ## Run it
 
@@ -38,7 +40,7 @@ docker run --read-only -p 8080:8080 -v {{project-name}}-data:/data {{project-nam
 | `APP_PORT` | the port the server listens on | `8080` |
 | `APP_DATA_DIR` | where the database and uploads live (the only folder it writes to) | `/data` |
 | `APP_STATIC_DIR` | the built web app | `/app/static` |
-| `APP_ADMIN_USER`, `APP_ADMIN_PASSWORD` | the owner made at the first start | `admin`, a printed password |
+| `APP_ADMIN_USER`, `APP_ADMIN_PASSWORD` | the owner made at the first start (an unattended install) | `admin`; none: "Create your account" with the setup code from the log |
 | `APP_NAME`, `APP_SESSION_DAYS`, `APP_API_KEY` | settings (settings.toml); set here they are locked in Settings | |
 
 ## Linked apps

@@ -58,6 +58,8 @@ pub enum Stage {
     SignIn,
     /// Making an account: an invite link, or open sign-up.
     SignUp,
+    /// A new server with no owner yet: "Create your account" with the setup code from its log.
+    Setup,
     /// Signed in: the sidebar and the pages.
     Shell,
 }
@@ -130,6 +132,10 @@ pub enum Message {
     SignUpBack,
     /// The admin's sign-up page.
     SignupAdmin(kit_iced::signup::AdminMsg),
+    /// `GET /api/setup`'s answer: whether the server wants "Create your account" instead of the sign-in page.
+    SetupChecked(Result<Value, ApiError>),
+    /// The first-run "Create your account" page.
+    Setup(kit_iced::setup::SetupMsg),
     /// Ask before signing out or changing the server.
     Ask(Confirm),
     /// The confirm dialog's OK or Cancel (or its X, the backdrop, Escape).
@@ -303,6 +309,8 @@ pub struct App {
     pub signup: kit_iced::signup::SignUp,
     /// The admin's sign-up page.
     pub signup_admin: kit_iced::signup::Admin,
+    /// The first-run "Create your account" page.
+    pub setup: kit_iced::setup::Setup,
     /// The updater.
     pub phase: Phase,
     /// The newer release found.
@@ -371,6 +379,7 @@ impl App {
             diagnostics: diagnostics::State::default(),
             signup: kit_iced::signup::SignUp::default(),
             signup_admin: kit_iced::signup::Admin::default(),
+            setup: kit_iced::setup::Setup::default(),
             phase: Phase::Idle,
             found: None,
             told: String::new(),
@@ -386,7 +395,11 @@ impl App {
         let stored = path.as_deref().map(store::load_from).unwrap_or_default();
         let mut app = App::new(stored, path, store::server_override());
         app.save();
-        let task = if app.stage == Stage::Shell { app.start_shell() } else { Task::none() };
+        let task = match app.stage {
+            Stage::Shell => app.start_shell(),
+            Stage::SignIn => app.check_setup(),
+            _ => Task::none(),
+        };
         (app, task)
     }
 
@@ -579,6 +592,30 @@ impl App {
         }
     }
 
+    /// Asks the server whether it wants its owner made on "Create your account" (a new server, no owner yet).
+    fn check_setup(&self) -> Task<Message> {
+        let c = self.client.clone();
+        ask(async move { c.get(paths::SETUP.to_string()).await }, Message::SetupChecked)
+    }
+
+    /// Does what the setup page asks: sends its request, or signs in with the account it made.
+    fn setup_out(&mut self, out: kit_iced::setup::Out) -> Task<Message> {
+        use kit_iced::setup::{Out, SetupMsg};
+        match out {
+            Out::None => Task::none(),
+            Out::Send(r) => {
+                let c = self.client.clone();
+                ask(async move { c.post(r.path, r.body).await }, |res| Message::Setup(SetupMsg::Answer(res.map_err(|e| e.message))))
+            }
+            Out::SignIn { username, password } => {
+                self.stage = Stage::SignIn;
+                self.username = username;
+                self.password = password;
+                self.update(Message::SignIn)
+            }
+        }
+    }
+
     /// Does what a sign-up page asks: sends its requests (each answer goes back to the page: the admin's when
     /// `admin`), copies, or shows a toast.
     fn signup_out(&mut self, out: kit_iced::signup::Out, admin: bool) -> Task<Message> {
@@ -666,6 +703,7 @@ impl App {
                         self.save();
                         self.client = Client::new(&base, "");
                         self.stage = Stage::SignIn;
+                        return self.check_setup();
                     }
                     Err(e) => self.error = e,
                 }
@@ -732,6 +770,17 @@ impl App {
             Message::SignupAdmin(m) => {
                 let out = self.signup_admin.update(m);
                 return self.signup_out(out, true);
+            }
+            Message::SetupChecked(r) => {
+                // a server without setup, or one that doesn't answer: the sign-in page as before
+                if self.stage == Stage::SignIn && r.is_ok_and(|v| kit_rules::setup::needed(&v)) {
+                    self.setup = kit_iced::setup::Setup::default();
+                    self.stage = Stage::Setup;
+                }
+            }
+            Message::Setup(m) => {
+                let out = self.setup.update(m);
+                return self.setup_out(out);
             }
             Message::Ask(c) => self.confirm = Some(c.dialog()),
             Message::Dialog(m) => {

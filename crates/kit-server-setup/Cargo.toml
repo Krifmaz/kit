@@ -1,0 +1,23 @@
+[package]
+name = "kit-server-setup"
+description = "First-run setup: while an app has no owner, a \"Create your account\" screen makes it, guarded by a one-time setup code printed in the server's log at start."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kit-server-core.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+
+[lints]
+workspace = true
