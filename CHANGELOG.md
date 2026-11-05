@@ -4,6 +4,18 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
+## v0.2.2 — 2026-11-05
+
+Notes: [docs/releases/0.2.2.md](docs/releases/0.2.2.md).
+
+### Fixed
+- kit-leptos: `<id>:server-down` (the "server isn't answering" banner) is debounced: it goes out only after 2
+  failed calls in a row, or 5 s after a failure with no call answered since (`api::DownWatch`). A failed request
+  (no answer at all) counts the same way. Aborted calls, and calls cut off while the page is being left, count
+  for nothing and fail with `api::CANCELLED`.
+
+## v0.2.1 — 2026-11-05
+
 ### Fixed
 - kit-leptos: the connection banner ("The server isn't answering") shows only when the server can't be reached:
   a proxy's own page or an unmarked 502–504. A 502–504 the server itself sends (marked `x-<app id>`) is one

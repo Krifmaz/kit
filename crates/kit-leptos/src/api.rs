@@ -3,7 +3,14 @@
 //! The default, [`HttpBackend`], is a `fetch` client for the configured app ([`crate::config`]):
 //! `fetch(<api> + path)` with the session cookie and `X-Requested-With: <app id>`, JSON in and out, the server's
 //! sentence (`detail`) as the error, "Not connected to the server" when it can't be reached, and the window
-//! events `<id>:server-down`, `<id>:server-up` and `<id>:unauthorized` the shell listens for. An app with its own
+//! events `<id>:server-down`, `<id>:server-up` and `<id>:unauthorized` the shell listens for.
+//!
+//! `<id>:server-down` means the app's server gave no answer of its own: the request failed, or something in front
+//! of it (a proxy's page, without the server's `x-<id>` mark) answered. A 502–504 that carries the mark is the
+//! server's own answer about something behind it, so it is an error, not a down server. One failure is not
+//! enough ([`DownWatch`]): the event goes out after [`DOWN_AFTER_FAILURES`] failed calls in a row, or
+//! [`DOWN_AFTER_MS`] after a failure with no call answered since. A cancelled call (aborted, or cut off because
+//! the page is being left) counts for nothing. An app with its own
 //! API client passes it in with [`set_backend`]; the demo passes a fake one, so no server is needed.
 
 use serde_json::Value;
@@ -45,6 +52,15 @@ impl std::error::Error for ApiError {}
 
 /// What a failed call says when the server could not be reached.
 pub const NOT_CONNECTED: &str = "Not connected to the server";
+
+/// What a call says when it was cancelled before an answer came (aborted, or the page was being left).
+pub const CANCELLED: &str = "The request was cancelled";
+
+/// Failed calls in a row after which the server counts as down.
+pub const DOWN_AFTER_FAILURES: u32 = 2;
+
+/// Milliseconds after a failed call, with no call answered since, after which the server counts as down.
+pub const DOWN_AFTER_MS: u64 = 5_000;
 
 /// The server the components talk to. Paths are relative to `/api` (`/changelog/new`).
 pub trait Backend {
@@ -159,6 +175,47 @@ impl HttpBackend {
     fn event(&self, what: &str) {
         crate::rt::dispatch(&format!("{}:{what}", self.app));
     }
+
+    /// The server answered: `<id>:server-up`, and the run of failures ends.
+    fn up(&self) {
+        WATCH.with(|w| w.borrow_mut().entry(self.app.clone()).or_default().success());
+        self.event("server-up");
+    }
+
+    /// The server did not answer: `<id>:server-down` once [`DownWatch`] says so, else a check
+    /// [`DOWN_AFTER_MS`] later in case nothing is answered by then.
+    fn down(&self) {
+        let now = crate::rt::now_ms();
+        let (is_down, since) = WATCH.with(|w| {
+            let mut w = w.borrow_mut();
+            let d = w.entry(self.app.clone()).or_default();
+            (d.failure(now), d.since())
+        });
+        if is_down {
+            self.event("server-down");
+            return;
+        }
+        let me = self.clone();
+        crate::rt::after(DOWN_AFTER_MS, move || {
+            let still = WATCH.with(|w| w.borrow().get(&me.app).is_some_and(|d| d.since() == since && d.overdue(crate::rt::now_ms())));
+            if still {
+                me.event("server-down");
+            }
+        });
+    }
+
+    /// A call that failed before an answer came: cancelled ([`CANCELLED`], no event) or not connected.
+    fn failed(&self, e: &gloo_net::Error) -> ApiError {
+        let name = match e {
+            gloo_net::Error::JsError(j) => j.name.as_str(),
+            _ => "",
+        };
+        if cancelled(name, leaving()) {
+            return ApiError::new(CANCELLED);
+        }
+        self.down();
+        ApiError::new(NOT_CONNECTED)
+    }
 }
 
 /// Whether an answer came from something in front of the server, not the server: a kit server marks its answers
@@ -168,11 +225,74 @@ pub fn proxy_answer(status: u16, marked: bool, body: &str) -> bool {
     (status == 404 || status >= 500) && !marked && !serde_json::from_str::<Value>(body).is_ok_and(|v| v.is_object())
 }
 
-/// Whether an answer means the server is down (the connection banner): a proxy's own answer, or an unmarked
-/// 502–504. A 502–504 the server itself sends (marked with `x-<app id>`) is an error of one call, such as an
-/// upstream the server asked failing, and the server is up.
+/// Whether an answer means the app's server did not answer: something in front of it did ([`proxy_answer`]),
+/// or it is a 502–504 without the server's `x-<app id>` mark. A marked 502–504 is the server's own answer about
+/// something behind it, so the server is up.
 pub fn server_down(status: u16, marked: bool, body: &str) -> bool {
-    proxy_answer(status, marked, body) || (!marked && (502..=504).contains(&status))
+    proxy_answer(status, marked, body) || ((502..=504).contains(&status) && !marked)
+}
+
+/// Whether a call that failed was cancelled rather than unanswered: the browser's error is an `AbortError`, or
+/// the page was being left when it failed.
+pub fn cancelled(error_name: &str, leaving: bool) -> bool {
+    leaving || error_name == "AbortError"
+}
+
+/// Keeps one failure from raising the "server isn't answering" banner: the server counts as down after
+/// [`DOWN_AFTER_FAILURES`] failed calls in a row, or [`DOWN_AFTER_MS`] after the first failure of a run with no
+/// call answered since. Any answered call ends the run.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DownWatch {
+    /// Failed calls since the last answered one.
+    failures: u32,
+    /// When the first of them failed (milliseconds, [`crate::rt::now_ms`]).
+    since: Option<u64>,
+}
+
+impl DownWatch {
+    /// A call was answered: the run of failures ends.
+    pub fn success(&mut self) {
+        *self = DownWatch::default();
+    }
+
+    /// A call failed at `now`; answers whether the server now counts as down.
+    pub fn failure(&mut self, now: u64) -> bool {
+        self.failures += 1;
+        self.since.get_or_insert(now);
+        self.overdue(now)
+    }
+
+    /// Whether the server counts as down at `now` (no new failure needed: the timer after a first failure asks).
+    pub fn overdue(&self, now: u64) -> bool {
+        let Some(since) = self.since else { return false };
+        self.failures >= DOWN_AFTER_FAILURES || now.saturating_sub(since) >= DOWN_AFTER_MS
+    }
+
+    /// When the current run of failures started, if one runs.
+    pub fn since(&self) -> Option<u64> {
+        self.since
+    }
+}
+
+thread_local! {
+    /// Each app's run of failures, by app id (a backend is made per call, so the run can't live in it).
+    static WATCH: RefCell<std::collections::HashMap<String, DownWatch>> = RefCell::new(Default::default());
+    /// The page is being left (`pagehide` until `pageshow`): calls cut off now were cancelled.
+    static LEAVING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The `pagehide`/`pageshow` listeners are in place.
+    static PAGE_WATCHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn watch_page() {
+    if PAGE_WATCHED.with(|w| w.replace(true)) {
+        return;
+    }
+    crate::rt::on_window("pagehide", |_| LEAVING.with(|l| l.set(true)));
+    crate::rt::on_window("pageshow", |_| LEAVING.with(|l| l.set(false)));
+}
+
+fn leaving() -> bool {
+    LEAVING.with(std::cell::Cell::get)
 }
 
 /// The sentence of a failed answer: the server's `detail` (a string, or the `msg` of each entry), else its
@@ -198,11 +318,17 @@ pub fn error_message(data: &Value, status_text: &str) -> String {
 impl HttpBackend {
     async fn answer(self, res: gloo_net::http::Response, path: String) -> ApiResult {
         let status = res.status();
-        let text = res.text().await.unwrap_or_default();
+        let text = match res.text().await {
+            Ok(t) => t,
+            Err(e) => return Err(self.failed(&e)),
+        };
         let marked = res.headers().get(&format!("x-{}", self.app)).is_some();
-        let proxy = proxy_answer(status, marked, &text);
-        self.event(if server_down(status, marked, &text) { "server-down" } else { "server-up" });
-        if proxy {
+        if server_down(status, marked, &text) {
+            self.down();
+        } else {
+            self.up();
+        }
+        if proxy_answer(status, marked, &text) {
             return Err(ApiError::new(NOT_CONNECTED));
         }
         let data: Value = if text.is_empty() { Value::Null } else { serde_json::from_str(&text).unwrap_or(Value::String(text.clone())) };
@@ -243,12 +369,10 @@ impl Backend for HttpBackend {
                 None => req.build(),
             };
             let Ok(r) = built else { return Err(ApiError::new("Bad request")) };
+            watch_page();
             match r.send().await {
                 Ok(res) => me.answer(res, path).await,
-                Err(_) => {
-                    me.event("server-down");
-                    Err(ApiError::new(NOT_CONNECTED))
-                }
+                Err(e) => Err(me.failed(&e)),
             }
         })
     }
@@ -265,12 +389,10 @@ impl Backend for HttpBackend {
             }
             let built = req.body(form);
             let Ok(r) = built else { return Err(ApiError::new("Bad request")) };
+            watch_page();
             match r.send().await {
                 Ok(res) => me.answer(res, path).await,
-                Err(_) => {
-                    me.event("server-down");
-                    Err(ApiError::new(NOT_CONNECTED))
-                }
+                Err(e) => Err(me.failed(&e)),
             }
         })
     }
@@ -297,6 +419,75 @@ mod tests {
         assert!(!proxy_answer(502, true, "<html>"));
         assert!(!proxy_answer(500, false, r#"{"detail":"x"}"#));
         assert!(!proxy_answer(400, false, "<html>"));
+    }
+
+    #[test]
+    fn a_marked_502_to_504_is_the_servers_own_error_not_a_down_server() {
+        for code in 502..=504 {
+            // the app's own header: the server answered about something behind it
+            assert!(!server_down(code, true, r#"{"detail":"the search index is down"}"#), "{code}");
+            assert!(!server_down(code, true, "<html>Bad gateway</html>"), "{code}");
+            // no header: a proxy's page, or a proxy passing on a bare error
+            assert!(server_down(code, false, "<html>Bad gateway</html>"), "{code}");
+            assert!(server_down(code, false, r#"{"message":"upstream"}"#), "{code}");
+            assert!(server_down(code, false, ""), "{code}");
+        }
+        assert!(!server_down(500, true, r#"{"detail":"x"}"#));
+        assert!(!server_down(500, false, r#"{"detail":"x"}"#));
+        assert!(server_down(404, false, "<html>Not found</html>"));
+        assert!(!server_down(404, true, "<html>Not found</html>"));
+        assert!(!server_down(200, false, "{}"));
+        assert!(!server_down(401, false, ""));
+    }
+
+    #[test]
+    fn one_failure_is_not_a_down_server() {
+        let mut w = DownWatch::default();
+        assert!(!w.overdue(0));
+        assert!(!w.failure(1_000));
+        assert!(!w.overdue(1_000 + DOWN_AFTER_MS - 1));
+        assert_eq!(w.since(), Some(1_000));
+    }
+
+    #[test]
+    fn two_failures_in_a_row_are_a_down_server() {
+        let mut w = DownWatch::default();
+        assert!(!w.failure(1_000));
+        assert!(w.failure(1_100));
+        assert!(w.failure(1_200), "it stays down while calls keep failing");
+    }
+
+    #[test]
+    fn five_seconds_without_an_answer_after_a_failure_are_a_down_server() {
+        let mut w = DownWatch::default();
+        assert!(!w.failure(1_000));
+        // the timer after the first failure asks
+        assert!(w.overdue(1_000 + DOWN_AFTER_MS));
+        // or the next failure, however long after
+        let mut w = DownWatch::default();
+        w.failure(0);
+        w.success();
+        assert!(!w.failure(10_000), "a run starts at its own first failure, not at the last answer");
+    }
+
+    #[test]
+    fn an_answer_in_between_ends_the_run() {
+        let mut w = DownWatch::default();
+        assert!(!w.failure(1_000));
+        w.success();
+        assert!(!w.failure(1_100), "failures are counted in a row");
+        assert_eq!(w.since(), Some(1_100));
+        w.success();
+        assert_eq!(w, DownWatch::default());
+        assert!(!w.overdue(1_000 + DOWN_AFTER_MS), "the timer of an ended run finds nothing");
+    }
+
+    #[test]
+    fn cancelled_calls_count_for_nothing() {
+        assert!(cancelled("AbortError", false));
+        assert!(cancelled("TypeError", true), "cut off while the page is being left");
+        assert!(!cancelled("TypeError", false), "a failed fetch is a real failure");
+        assert!(!cancelled("", false));
     }
 
     #[test]

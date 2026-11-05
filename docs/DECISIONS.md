@@ -173,3 +173,4 @@ One line per non-obvious call (DESIGN.md first, then Encore's behaviour, then co
 - 2026-11-04 · docs/GOALS.md holds only the shared app block and the kit's own goal, with no app names; each app's goals live in that app's own repo.
 - 2026-11-04 · rusqlite 0.39 (libsqlite3-sys 0.37), not the newest 0.41: sqlx 0.9's SQLite driver accepts libsqlite3-sys below 0.38 only, and two versions can't link one sqlite3 in an app.
 - 2026-11-04 · The connection banner keys on whether the server marked its answer, not on the status: a server may answer 502–504 for an upstream of its own that failed, and that is not the server being down.
+- 2026-11-05 · kit-leptos server-down debounce: the 5 s count from the first failure of a run (not from the last success), checked by a timer, so one blip after a long quiet spell doesn't raise the banner; calls failing between `pagehide` and `pageshow` count as cancelled.
