@@ -23,6 +23,13 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
 ### Changed
 - Template: new apps pin the kit's `v0.4.0` (`kit_tag`).
 
+## v0.3.2 — 2026-11-05
+
+### Fixed
+- Template: the server, web and desktop manifests are `Cargo.toml.liquid`, so an app that takes the kit as a git
+  dependency no longer prints three `invalid character` errors about `{{project-name}}` on every build. The generated
+  app is the same; the template needs cargo-generate 0.23.4 or later.
+
 ## v0.3.1 — 2026-11-05
 
 ### Fixed

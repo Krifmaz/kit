@@ -1,7 +1,8 @@
 # cargo-generate settings for the kit's new-app template: `cargo generate krifmaz/kit template`.
 # The answers below become Liquid variables; hooks/init.rhai fills in the ones derived from the app's name.
 [template]
-cargo_generate_version = ">=0.23.0"
+# 0.23.4: drops the `.liquid` of Cargo.toml.liquid in git templates too
+cargo_generate_version = ">=0.23.4"
 # Files copied as they are: no Liquid in them (Rust and CSS use `{{`/`{%` of their own; the Gradle wrapper is
 # generated). Kotlin files are templated: they need the app's package (`package dev.krifmaz.<crate>`), so they
 # must not contain `{{` or `{%` anywhere else.
