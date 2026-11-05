@@ -115,23 +115,21 @@ pub fn sign_in(app: &App) -> El<'_, Message> {
 
 /// The sidebar and the open page, under the offline and notice banners.
 pub fn shell(app: &App) -> El<'_, Message> {
-    let p = theme::look();
     let mut nav =
         column![row![w::logo(&crate::LOGO, 26.0), w::h3(crate::title())].spacing(10).align_y(Alignment::Center), space().height(12)]
             .spacing(4);
+    // the shared sidebar: this app's sections and every linked app's, in the person's order (a suite section's
+    // path is the web app's `/#/…`); the app's own pages until it has come
+    if app.sidebar.items.is_empty() {
+        for page in Page::OWN {
+            nav = nav.push(nav_button(app, page));
+        }
+    } else {
+        nav = nav.push(app.sidebar.view(&format!("/{}", app.page.nav().path()), Message::Sidebar));
+    }
+    nav = nav.push(space().height(8));
     for page in Page::NAV.into_iter().filter(|pg| app.admin() || !pg.admin_only()) {
-        let on = app.page.nav() == page;
-        nav = nav.push(
-            button(
-                row![w::icon(page.icon(), 16.0, if on { p.text } else { p.muted }), w::t(page.title()).size(14)]
-                    .spacing(10)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::Fill)
-            .padding([8, 12])
-            .style(theme::btn(if on { Btn::NavOn } else { Btn::Nav }))
-            .on_press(Message::Open(page)),
-        );
+        nav = nav.push(nav_button(app, page));
     }
     let who = js(&app.me, "username");
     nav = nav.push(space().height(Length::Fill));
@@ -151,6 +149,27 @@ pub fn shell(app: &App) -> El<'_, Message> {
     let body = container(page(app)).padding(28).max_width(1040).width(Length::Fill);
     main = main.push(scrollable(container(body).center_x(Length::Fill)).height(Length::Fill).style(theme::scroll));
     row![sidebar, main].into()
+}
+
+/// A sidebar button that opens `page` (lit while it or one of its pages is open).
+fn nav_button(app: &App, page: Page) -> El<'_, Message> {
+    let p = theme::look();
+    let on = app.page.nav() == page;
+    button(
+        row![w::icon(page.icon(), 16.0, if on { p.text } else { p.muted }), w::t(page.title()).size(14)]
+            .spacing(10)
+            .align_y(Alignment::Center),
+    )
+    .width(Length::Fill)
+    .padding([8, 12])
+    .style(theme::btn(if on { Btn::NavOn } else { Btn::Nav }))
+    .on_press(Message::Open(page))
+    .into()
+}
+
+/// The Search page: one search across this app and every linked app.
+pub fn search(app: &App) -> El<'_, Message> {
+    column![w::h1("Search"), w::small_muted("This app and every linked app, at once."), app.search.view(Message::Search)].spacing(14).into()
 }
 
 /// The offline banner while the server can't be reached: Details (why) and Retry.
@@ -178,6 +197,7 @@ pub fn page(app: &App) -> El<'_, Message> {
         Page::Diagnostics => diagnostics::view(&app.diagnostics, DIAGNOSTICS_HELP, format!("{} {}", crate::title(), app.server_version))
             .map(Message::Diagnostics),
         Page::WhatsNew => whats_new::changelog(&app.changelog, crate::title()).map(Message::Changelog),
+        Page::Search => search(app),
     }
 }
 
@@ -434,6 +454,23 @@ mod tests {
         assert!(shows(&app(true), "Diagnostics"));
         assert!(!shows(&app(false), "Diagnostics"));
         assert!(matches!(clicked(&app(false), "What's new")[..], [M::Open(Page::WhatsNew)]));
+    }
+
+    #[test]
+    fn the_sidebar_shows_every_linked_app() {
+        let mut a = app(false);
+        assert!(matches!(clicked(&a, "Bug reports")[..], [M::Open(Page::BugReports)]), "the app's own pages first");
+        let item = |key: &str, title: &str, local: bool| {
+            json!({ "key": key, "app": key.split('/').next(), "app_name": if local { "Here" } else { "Other" }, "section": "s",
+                    "title": title, "icon": "M4 4h16v16H4z", "url": format!("https://x.example/{title}"),
+                    "path": if local { "/#/bug-reports" } else { "/x" }, "hidden": false, "local": local })
+        };
+        a.sidebar.load(&json!({ "items": [item("here/b", "Reports here", true), item("other/m", "Music", false)] }));
+        assert!(shows(&a, "Music") && shows(&a, "Other"), "a linked app's section, with its app's name");
+        assert!(matches!(&clicked(&a, "Music")[..], [M::Sidebar(kit_iced::suite::SidebarMsg::Open(k))] if k == "other/m"));
+        assert!(matches!(clicked(&a, "Search")[..], [M::Open(Page::Search)]));
+        a.page = Page::Search;
+        assert!(shows(&a, "This app and every linked app, at once."));
     }
 
     #[test]

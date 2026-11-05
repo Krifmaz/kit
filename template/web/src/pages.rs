@@ -1,4 +1,5 @@
-//! The app's pages: sign-in, Home, Bug reports and Settings (the server's settings form, Diagnostics and
+//! The app's pages: sign-in (with "Sign in with …" when an account source is linked), Home, Search (every
+//! linked app at once), Bug reports and Settings (the server's settings form, Linked apps, Diagnostics and
 //! What's new). Words and markup are the kit's, so the kit's stylesheet (static/css/app.css) draws them.
 
 use crate::{app_name, navigate};
@@ -9,6 +10,7 @@ use kit_leptos::icons::icon;
 use kit_leptos::notice::NoticeSource;
 use kit_leptos::schema_form::schema::{visible_cards, Schema};
 use kit_leptos::schema_form::SettingsCards;
+use kit_leptos::suite::{LinkedApps, SsoButton, SuiteSearch};
 use kit_leptos::whats_new::ChangelogPage;
 use kit_rules::notices::CheckWords;
 use leptos::prelude::*;
@@ -51,10 +53,18 @@ pub fn SignIn() -> impl IntoView {
         set_error.set(None);
         kit_leptos::rt::spawn(async move {
             match api::post("/auth/login", json!({ "username": u, "password": p })).await {
-                Ok(_) => {
-                    navigate("/");
-                    kit_leptos::rt::reload();
-                }
+                Ok(_) => match next_path() {
+                    // back to where signing in started (another app's sign-in through this one)
+                    Some(next) => {
+                        if let Some(w) = kit_leptos::rt::window() {
+                            let _ = w.location().assign(&next);
+                        }
+                    }
+                    None => {
+                        navigate("/");
+                        kit_leptos::rt::reload();
+                    }
+                },
                 Err(ex) => {
                     set_busy.set(false);
                     set_error.set(Some(ex.message));
@@ -73,8 +83,46 @@ pub fn SignIn() -> impl IntoView {
                     <label class="field"><span>"Password"</span><input class="input" type="password" name="password" autocomplete="current-password" required node_ref=password/></label>
                     <button class="btn primary" type="submit" style="padding:12px" disabled=busy>"Sign in"</button>
                 </form>
+                <div class="row" style="justify-content:center;margin-top:12px"><SsoButton next=next_path().unwrap_or_else(|| "/".into())/></div>
             </div>
         </div>
+    }
+}
+
+/// Where to go after signing in: the address's `next` (a path in this app), if any.
+pub fn next_path() -> Option<String> {
+    let search = kit_leptos::rt::window()?.location().search().ok()?;
+    let raw = search.trim_start_matches('?').split('&').find_map(|p| p.strip_prefix("next="))?;
+    let next = js_sys_decode(raw);
+    (next.starts_with('/') && !next.starts_with("//") && !next.starts_with("/\\")).then_some(next)
+}
+
+/// A query value decoded (`%2F` → `/`), as it is when it can't be.
+fn js_sys_decode(s: &str) -> String {
+    let b = s.replace('+', " ");
+    let bytes = b.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(x) = u8::from_str_radix(&b[i + 1..i + 3], 16) {
+                out.push(x);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or(b)
+}
+
+/// `#/search?q=`: every linked app searched at once.
+#[component]
+pub fn Search(q: String) -> impl IntoView {
+    view! {
+        <h1>"Search"</h1>
+        <SuiteSearch initial=q/>
     }
 }
 
@@ -188,7 +236,9 @@ pub fn Settings(page: String) -> impl IntoView {
                 Some(Err(e)) => view! { <div class="error-box">{e}</div> }.into_any(),
                 Some(Ok((schema, values))) => {
                     let cards = schema.section(id).map(|s| visible_cards(&s.groups, &values)).unwrap_or_default();
-                    view! { <SettingsCards cards=cards values=values/> }.into_any()
+                    // the Linked apps page: its settings, then the links and keys
+                    let links = (id == "suite").then(|| view! { <div class="mt"><LinkedApps/></div> });
+                    view! { <SettingsCards cards=cards values=values/>{links} }.into_any()
                 }
             },
         }

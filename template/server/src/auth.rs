@@ -83,6 +83,80 @@ pub fn migrate(db: &SqliteDb) -> anyhow::Result<()> {
     .map_err(|e| anyhow::anyhow!("The database tables can't be made: {}", e.detail))
 }
 
+/// The columns that tie an account to the account source a linked app signs people in through
+/// (kit-server-suite): `sso_issuer` and `sso_subject`, added to an older database once.
+pub fn migrate_sso(db: &SqliteDb) -> anyhow::Result<()> {
+    let cols = db.query("PRAGMA table_info(users)", p![]).map_err(|e| anyhow::anyhow!(e.detail))?;
+    if !cols.iter().any(|c| c.s("name") == "sso_subject") {
+        db.execute_batch(
+            "ALTER TABLE users ADD COLUMN sso_issuer TEXT;
+             ALTER TABLE users ADD COLUMN sso_subject TEXT;
+             CREATE UNIQUE INDEX IF NOT EXISTS users_sso ON users (sso_issuer, sso_subject);",
+        )
+        .map_err(|e| anyhow::anyhow!("The database tables can't be made: {}", e.detail))?;
+    }
+    Ok(())
+}
+
+/// A free user name for someone the account source vouched for: theirs when it is free and valid here, else
+/// with `-2`, `-3` … after it.
+fn free_username(db: &SqliteDb, wanted: &str) -> Result<String> {
+    let base: String = wanted.chars().filter(|c| c.is_alphanumeric() || "_-.".contains(*c)).take(28).collect();
+    let base = if base.chars().count() < 3 { format!("user-{base}") } else { base };
+    for n in 1..1000 {
+        let name = if n == 1 { base.clone() } else { format!("{base}-{n}") };
+        if db.one("SELECT id FROM users WHERE username=? COLLATE NOCASE", p![name])?.is_none() {
+            return Ok(name);
+        }
+    }
+    Err(err(409, "No free user name is left for this account"))
+}
+
+/// Sign in someone the account source vouched for (kit-server-suite): their account here (made the first time,
+/// an admin when they are one there, never the owner), a web session, and a redirect to `next`.
+pub fn sso_sign_in(st: &AppState, user: kit_server_suite::SsoUser, next: String) -> Result<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let found = st.db.one("SELECT * FROM users WHERE sso_issuer=? AND sso_subject=?", p![user.issuer, user.subject])?;
+    let row = match found {
+        Some(u) => u,
+        None => {
+            let name = free_username(&st.db, &user.username)?;
+            let role = if user.admin { "admin" } else { "user" };
+            let id = st.db.execute(
+                "INSERT INTO users (username, email, password_hash, role, created_at, sso_issuer, sso_subject) VALUES (?,?,?,?,?,?,?)",
+                // no password: this account signs in through the account source only
+                p![name, user.email, "!", role, now(), user.issuer, user.subject],
+            )?;
+            st.db.one("SELECT * FROM users WHERE id=?", p![id])?.ok_or_else(|| err(500, "The new account can't be read"))?
+        }
+    };
+    if row.b("disabled") {
+        return Err(err(403, "This account is disabled"));
+    }
+    let https = st.suite.config().base_url.as_deref().is_some_and(|u| u.starts_with("https://"));
+    let cookie = web_session(st, row.i("id"), https)?;
+    let jar = CookieJar::new().add(cookie);
+    Ok((jar, axum::response::Redirect::to(&next)).into_response())
+}
+
+/// A new web session for account `user_id`: its cookie (`secure` behind HTTPS).
+fn web_session(st: &AppState, user_id: i64, secure: bool) -> Result<Cookie<'static>> {
+    let days = st.settings.int("session_days").max(1);
+    let max_age = days * 86400;
+    let token = random_token(32);
+    st.db.execute(
+        "INSERT INTO sessions (token, user_id, kind, created_at, expires_at) VALUES (?,?,'web',?,?)",
+        p![token, user_id, now(), now() + max_age as f64],
+    )?;
+    Ok(Cookie::build((cookie_name(), token))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(secure)
+        .max_age(cookie::time::Duration::seconds(max_age))
+        .build())
+}
+
 /// A bcrypt hash of `pw` (its first 72 bytes, as bcrypt reads them).
 pub fn hash_password(pw: &str) -> String {
     let b = &pw.as_bytes()[..pw.len().min(72)];
@@ -235,10 +309,7 @@ pub async fn public_user(st: &AppState, u: &Row) -> Result<Value> {
 
 /// The sign-in routes.
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/auth/login", post(login))
-        .route("/api/auth/logout", post(logout))
-        .route("/api/auth/me", get(me))
+    Router::new().route("/api/auth/login", post(login)).route("/api/auth/logout", post(logout)).route("/api/auth/me", get(me))
 }
 
 /// `POST /api/auth/login` body.
@@ -304,21 +375,8 @@ async fn login(State(st): State<AppState>, headers: HeaderMap, jar: CookieJar, J
         )?;
         return Ok((jar, Json(json!({ "user": public_user(&st, &user).await?, "token": token }))));
     }
-    let days = st.settings.int("session_days").max(1);
-    let max_age = days * 86400;
-    let token = random_token(32);
-    st.db.execute(
-        "INSERT INTO sessions (token, user_id, kind, created_at, expires_at) VALUES (?,?,'web',?,?)",
-        p![token, user.i("id"), now(), now() + max_age as f64],
-    )?;
     let https = headers.get("x-forwarded-proto").and_then(|v| v.to_str().ok()) == Some("https");
-    let cookie = Cookie::build((cookie_name(), token))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .secure(https)
-        .max_age(cookie::time::Duration::seconds(max_age))
-        .build();
+    let cookie = web_session(&st, user.i("id"), https)?;
     Ok((jar.add(cookie), Json(public_user(&st, &user).await?)))
 }
 
@@ -339,4 +397,3 @@ async fn me(State(st): State<AppState>, headers: HeaderMap) -> Result<Json<Value
     let (u, _) = user_of(&st, &headers)?.ok_or_else(|| err(401, "Not authenticated"))?;
     Ok(Json(public_user(&st, &u).await?))
 }
-

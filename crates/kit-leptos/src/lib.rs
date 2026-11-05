@@ -21,6 +21,7 @@
 //! | [`bug_report`] | the New report sheet |
 //! | [`diagnostics`] | the Diagnostics page |
 //! | [`offline`] | the offline and connection banners |
+//! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
 //! An app sets its configuration once ([`config::set`]); the global functions ([`toasts::toast`],
 //! [`toasts::toast_action`], [`modal::open`], [`modal::confirm`], [`details::show`], [`clipboard::copy_text`])
@@ -48,6 +49,7 @@ pub mod notice;
 pub mod offline;
 pub mod rt;
 pub mod schema_form;
+pub mod suite;
 pub mod toasts;
 pub mod update;
 pub mod whats_new;

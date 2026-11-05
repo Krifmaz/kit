@@ -4,9 +4,9 @@ All notable changes to the kit. Versions are `vMAJOR.MINOR.PATCH` git tags; apps
 
 ## Unreleased
 
-## v0.4.0 — 2026-11-05
+## v0.5.0 — 2026-11-05
 
-Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+Notes: [docs/releases/0.5.0.md](docs/releases/0.5.0.md).
 
 ### Added
 - `kit-icons` (design/icons): an app's glyph (one 24 × 24 SVG in `currentColor` and `{accent-2}`) becomes its whole
@@ -14,7 +14,26 @@ Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
   `icon-maskable-512.png`, `apple-touch-icon.png`, `manifest.webmanifest` and `head.html`. `--check` for CI.
   DESIGN.md §5 "App icons" gives the rules for the glyph.
 
-## v0.3.2 – v0.3.3 — 2026-11-05
+## v0.4.0 — 2026-11-05
+
+Notes: [docs/releases/0.4.0.md](docs/releases/0.4.0.md).
+
+### Added
+- Suite screens (`contracts/suite.md`) on every client:
+  - kit-leptos `suite`: `<SuiteNav/>` (the shared sidebar with Edit sidebar), `<SuiteSearch/>`, `<Related/>`,
+    `<SsoButton/>` and `<LinkedApps/>` (the admin page for links and keys).
+  - kit-iced `suite`: `Sidebar`, `Search`, `related`, `path_icon`.
+  - kit-compose `suite`: `SuiteNav`, `SuiteSearch`, `Related`, `SuiteRules`.
+  - The demos show a shared sidebar and a search across apps.
+- Template: the app is a suite member. It has a manifest of its pages, its pages in search and single sign-on
+  (as the account source, or through one). The settings are `public_url`, `suite_id` and `account_source`, with
+  Settings → Linked apps. The web, desktop and Android apps show the shared sidebar and Search. A test runs two
+  linked copies side by side.
+
+### Changed
+- Template: new apps pin the kit's `v0.4.0` (`kit_tag`).
+
+## v0.3.2 to v0.3.4 — 2026-11-05
 
 ### Added
 - kit-compose `theme`: `KitPaletteSet`, an app's own palette for any of the four themes, taken by `basePaletteOf`,

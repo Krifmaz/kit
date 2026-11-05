@@ -29,6 +29,14 @@ pub const DIAGNOSTICS: &str = "/api/diagnostics";
 pub const SETTINGS: &str = "/api/settings";
 /// `GET`: the settings form's schema (admins).
 pub const SETTINGS_SCHEMA: &str = "/api/settings/schema";
+/// `GET`: the shared sidebar (this app's sections and every linked app's, in the person's order); `PUT {order,
+/// hidden}`: keeps the person's order.
+pub const SUITE_SIDEBAR: &str = "/api/kit/suite/sidebar";
+
+/// `GET`: one search across this app and every linked app (`rel` is kit-iced's `suite::search_path`, under `/api`).
+pub fn suite_search(rel: &str) -> String {
+    format!("/api{rel}")
+}
 
 /// `GET`: one report with its thread.
 pub fn bug_report(id: i64) -> String {
@@ -60,5 +68,6 @@ mod tests {
         assert_eq!(bug_report_messages(12), "/api/bug-reports/12/messages");
         assert_eq!(settings_secret("api_key"), "/api/settings/secret/api_key");
         assert_eq!(settings_test("smtp"), "/api/diagnostics/smtp/test");
+        assert_eq!(suite_search(&kit_iced::suite::search_path("a b", "all")), "/api/kit/suite/search?scope=all&q=a%20b");
     }
 }

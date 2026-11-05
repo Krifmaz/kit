@@ -16,6 +16,7 @@ use kit_iced::diagnostics;
 use kit_iced::drop_zone;
 use kit_iced::form::{self, Form, Schema};
 use kit_iced::notice::{self, Notice, NoticePoll};
+use kit_iced::suite::{self, SearchMsg, SidebarMsg};
 use kit_iced::theme;
 use kit_iced::toast::{ToastKind, Toasts};
 use kit_iced::update::{Phase, Release, UpdateMsg};
@@ -213,6 +214,14 @@ pub enum Message {
     Verified(Result<PathBuf, String>),
     /// Open a file or folder with the system (a checked download's folder).
     OpenPath(PathBuf),
+    /// The shared sidebar (open an entry, edit it).
+    Sidebar(SidebarMsg),
+    /// The shared sidebar's answer (`GET`, or `PUT` after editing).
+    SidebarLoaded(Result<Value, ApiError>),
+    /// The Search page.
+    Search(SearchMsg),
+    /// The search's answer.
+    Found(Result<Value, ApiError>),
 }
 
 /// The app's state.
@@ -287,6 +296,10 @@ pub struct App {
     told: String,
     /// The window's size.
     pub window: Size,
+    /// The shared sidebar: this app's sections and every linked app's (empty: [`Page::OWN`] show instead).
+    pub sidebar: suite::Sidebar,
+    /// The Search page.
+    pub search: suite::Search,
 }
 
 /// Turns a request's answer into a message.
@@ -346,6 +359,8 @@ impl App {
             found: None,
             told: String::new(),
             window: Size::new(1200.0, 800.0),
+            sidebar: suite::Sidebar::default(),
+            search: suite::Search::default(),
         }
     }
 
@@ -448,6 +463,7 @@ impl App {
             self.get(paths::ME, Message::Me),
             self.get(paths::CHANGELOG_NEW, Message::WhatsNewNew),
             self.get(paths::STORAGE, Message::Notice),
+            self.get(paths::SUITE_SIDEBAR, Message::SidebarLoaded),
         ];
         if self.stored.check_updates {
             self.phase = Phase::Checking;
@@ -516,6 +532,30 @@ impl App {
                 self.changelog.reset();
                 self.get(paths::CHANGELOG, Message::ChangelogLoaded)
             }
+            Page::Search => Task::none(),
+        }
+    }
+
+    /// Does what the shared sidebar or the search asks: open a page here, another app in the browser, save the
+    /// sidebar, search.
+    fn suite_out(&mut self, out: suite::Out) -> Task<Message> {
+        match out {
+            suite::Out::Local(path) => match Page::parse(&path) {
+                Some(page) => self.open(page),
+                None => Task::none(),
+            },
+            suite::Out::Browse(url) => {
+                // a hit of this app's own opens its page here; anything else (another app) in the browser
+                if let Some(page) = url.split_once('#').and_then(|(base, frag)| {
+                    let here = base.trim_end_matches('/') == self.client.base().trim_end_matches('/');
+                    here.then(|| Page::parse(&format!("#{frag}"))).flatten()
+                }) {
+                    return self.open(page);
+                }
+                self.update(Message::OpenPath(PathBuf::from(url)))
+            }
+            suite::Out::Save(body) => self.put(paths::SUITE_SIDEBAR, body, Message::SidebarLoaded),
+            suite::Out::Search(rel) => self.get(paths::suite_search(&rel), Message::Found),
         }
     }
 
@@ -636,6 +676,29 @@ impl App {
             Message::Me(Ok(me)) => self.me = me,
             Message::Me(Err(e)) => return self.failed(e),
             Message::Open(p) => return self.open(p),
+            Message::Sidebar(m) => {
+                if let Some(out) = self.sidebar.update(m) {
+                    return self.suite_out(out);
+                }
+            }
+            Message::SidebarLoaded(Ok(v)) => self.sidebar.load(&v),
+            Message::SidebarLoaded(Err(e)) => {
+                // without the shared sidebar the app's own pages show; only a lost sign-in or server matters here
+                self.sidebar.draft = None;
+                if e.signed_out() || e.unreachable() || !self.sidebar.items.is_empty() {
+                    return self.failed(e);
+                }
+            }
+            Message::Search(m) => {
+                if let Some(out) = self.search.update(m) {
+                    return self.suite_out(out);
+                }
+            }
+            Message::Found(Ok(v)) => self.search.load(&v),
+            Message::Found(Err(e)) => {
+                self.search.busy = false;
+                return self.failed(e);
+            }
             Message::Tick => return self.tick(),
             Message::Resized(s) => self.window = s,
             Message::Toast(text, kind) => self.toasts.push(text, kind),
@@ -1036,6 +1099,31 @@ mod tests {
         assert!(a.offline.is_none());
         assert_eq!(a.server_version, "1.2.3");
         assert_eq!(a.toasts.list().last().map(|t| t.text.as_str()), Some("Back online"));
+    }
+
+    #[test]
+    fn the_shared_sidebar_opens_pages_here_and_other_apps_elsewhere() {
+        let mut a = app(Some("https://x.example"), "t");
+        let item = |key: &str, local: bool, path: &str| {
+            json!({ "key": key, "app": "a", "app_name": "A", "section": "s", "title": key, "icon": "",
+                    "url": format!("https://other.example{path}"), "path": path, "hidden": false, "local": local })
+        };
+        let _ = a.update(Message::SidebarLoaded(Ok(json!({ "items": [item("a/b", true, "/#/bug-reports"), item("o/m", false, "/m")] }))));
+        assert_eq!(a.sidebar.items.len(), 2);
+        let _ = a.update(Message::Sidebar(SidebarMsg::Open("a/b".into())));
+        assert_eq!(a.page, Page::BugReports);
+        // this app's own search hit opens its page here
+        let _ = a.update(Message::Search(SearchMsg::Open("https://x.example/#/search".into(), true)));
+        assert_eq!(a.page, Page::Search);
+        // an old server without the suite: the app's own pages stay, with no error
+        let mut old = app(Some("https://x.example"), "t");
+        let _ = old.update(Message::SidebarLoaded(Err(ApiError { status: 404, message: "Not found".into(), failure: None })));
+        assert!(old.toasts.list().is_empty() && old.sidebar.items.is_empty());
+        let _ = a.update(Message::Search(SearchMsg::Text("bug".into())));
+        let _ = a.update(Message::Search(SearchMsg::Submit));
+        assert!(a.search.busy);
+        let _ = a.update(Message::Found(Ok(json!({ "query": "bug", "groups": [] }))));
+        assert_eq!((a.search.busy, a.search.groups.as_ref().map(Vec::len)), (false, Some(0)));
     }
 
     #[test]
