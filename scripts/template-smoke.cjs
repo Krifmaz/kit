@@ -85,6 +85,25 @@ await step('details-dialog-with-copy', async () => {
   await page.click('#details-probe');
   await see('.modal-bg .modal');
 });
+await step('command-palette', async () => {
+  await page.keyboard.press('Escape');
+  await page.goto(`${base}/#/`);
+  await see('.hero');
+  await page.keyboard.press('Control+k');
+  await see('.palette-bg .palette[role=dialog]');
+  await page.locator('.palette-input:focus').waitFor();
+  await page.keyboard.type('bug rep');
+  // only "Bug reports" holds "bug rep": the one result, selected
+  await page.locator('.palette-item[aria-selected="true"]', { hasText: 'Bug reports' }).waitFor();
+  await page.keyboard.press('Enter');
+  await page.locator('.palette-bg').waitFor({ state: 'detached' });
+  await see('#bugs-list');
+  // the search button opens it too, and Escape closes it
+  await page.click('#search-btn');
+  await see('.palette-bg .palette');
+  await page.keyboard.press('Escape');
+  await page.locator('.palette-bg').waitFor({ state: 'detached' });
+});
 await step('sign-out-asks-first', async () => {
   await page.keyboard.press('Escape');
   await page.click('#logout-btn');

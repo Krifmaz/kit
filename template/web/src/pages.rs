@@ -79,10 +79,11 @@ pub fn SignIn() -> impl IntoView {
 }
 
 /// Opens the New report sheet for the page `from`, with the server's version.
-fn new_report(from: &'static str) {
+pub fn new_report(from: impl Into<String>) {
+    let from = from.into();
     kit_leptos::rt::spawn(async move {
         let version = api::get("/health").await.ok().map(|h| s(&h, "version")).unwrap_or_default();
-        let mut o = SheetOpts::new(&app_name(), from, &version);
+        let mut o = SheetOpts::new(&app_name(), &from, &version);
         o.on_sent = Some(Rc::new(|_| navigate("/bug-reports")));
         bug_report::open(o);
     });

@@ -2,7 +2,7 @@
 //!
 //! | Where | What |
 //! | --- | --- |
-//! | everywhere | toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build |
+//! | everywhere | the command palette (Ctrl+K, ⌘K or the sidebar's search button), toasts with Copy, the details dialog, the data folder notice with Check again, the offline and connection banners, self-update after a new server build |
 //! | after signing in | the What's new popup, once per release |
 //! | `#/` | Home: the app's own start page (a bug report button to begin with) |
 //! | `#/bug-reports` | the account's bug reports and the New report sheet |
@@ -13,6 +13,7 @@
 mod pages;
 
 use kit_leptos::api::{self, HttpBackend};
+use kit_leptos::palette::{self, Command, Palette, ACTIONS, GO_TO};
 use kit_leptos::{details, dropzone, notice, offline, rt, toasts, update, whats_new};
 use leptos::prelude::*;
 use serde_json::Value;
@@ -117,6 +118,7 @@ fn main() {
             Some(me) => {
                 let admin = me.get("is_admin").and_then(Value::as_bool).unwrap_or(false);
                 leptos::mount::mount_to(root, move || view! { <Shell me=me.clone()/> }).forget();
+                palette::install(commands());
                 // the notice slot is part of the shell: start once it is drawn
                 notice::start(pages::data_notice(), admin);
                 notice::mount();
@@ -125,6 +127,27 @@ fn main() {
             None => leptos::mount::mount_to(root, pages::SignIn).forget(),
         }
     });
+}
+
+/// The page on screen, as its hash (`#/bug-reports`).
+fn current_page() -> String {
+    rt::window().and_then(|w| w.location().hash().ok()).filter(|h| !h.is_empty()).unwrap_or_else(|| "#/".into())
+}
+
+/// The command palette's commands: the app's pages, and what it does. Add the app's own here; records it loads
+/// go in a source (`Palette::source(|| async { … })`), searched with them.
+fn commands() -> Palette {
+    let go = |label: &'static str, path: &'static str, icon: &'static str| {
+        Command::new(GO_TO, label, move || navigate(path)).hint(format!("#{path}")).icon(icon)
+    };
+    Palette::new(vec![
+        Command::new(ACTIONS, "Report a bug", || pages::new_report(current_page())).icon("bug"),
+        go("Home", "/", ""),
+        go("Bug reports", "/bug-reports", "bug"),
+        go("Settings", "/settings?s=general", "settings"),
+        go("Diagnostics", "/settings?s=diagnostics", "alert"),
+        go("What's new", "/settings?s=whats-new", ""),
+    ])
 }
 
 /// Panics go to the browser console with their message.
@@ -190,6 +213,7 @@ fn Shell(me: Value) -> impl IntoView {
                         <div class="ellipsis" style="font-weight:650">{username}</div>
                         <div class="small faint">{role}</div>
                     </div>
+                    <button class="btn ghost icon" id="search-btn" title="Search (Ctrl+K)" aria-label="Search" on:click=|_| palette::open() inner_html=kit_leptos::icons::icon("search")></button>
                     <a class="btn ghost icon" href="#/settings" title="Settings" aria-label="Settings" inner_html=kit_leptos::icons::icon("settings")></a>
                     <button class="btn ghost" id="logout-btn" title="Sign out" on:click=sign_out>"Sign out"</button>
                 </div>
