@@ -5,7 +5,7 @@ info:
   license: { name: MIT }
   description: >
     The endpoints every kit server speaks. Every path is a default an app can move (each crate's `XPaths`). The prose files next to this one
-    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md, suite.md, signup.md)
+    (health.md, changelog.md, notices.md, bug-reports.md, diagnostics.md, settings-schema.md, update-feed.md, suite.md, signup.md, setup.md)
     say what the fields mean. Apps may add fields; clients ignore fields they do not know.
 components:
   schemas:
@@ -446,6 +446,14 @@ paths:
     post:
       summary: Restart gracefully, exit code 75 (admin)
       responses: { "202": { description: restarting, content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } } } }
+  /api/setup:
+    get:
+      summary: Whether the first-run "Create your account" screen shows (public); see setup.md
+      responses: { "200": { description: whether to show it, content: { application/json: { schema: { type: object, required: [needed], properties: { needed: { type: boolean } } } } } } }
+    post:
+      summary: Make the owner with the one-time setup code from the server's log (public)
+      requestBody: { content: { application/json: { schema: { type: object, required: [code, username, password], properties: { code: { type: string }, username: { type: string }, password: { type: string }, email: { type: string } } } } } }
+      responses: { "200": { description: the owner is made; sign in with it, content: { application/json: { schema: { type: object, properties: { ok: { type: boolean }, username: { type: string } } } } } }, "400": { description: no code, a bad email, or a name or password the app doesn't take (the code still works) }, "403": { description: a wrong setup code }, "409": { description: the server already has its owner, or takes no setup code }, "429": { description: too many wrong codes } }
   /api/signup:
     get:
       summary: Who can sign up (public); see signup.md

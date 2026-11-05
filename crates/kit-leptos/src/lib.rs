@@ -23,6 +23,7 @@
 //! | [`offline`] | the offline and connection banners |
 //! | [`outbox`] | the outbox store: actions kept on the device per account, sent once the server is back |
 //! | [`palette`] | the command palette (Ctrl+K / ⌘K): the app's commands and the ones it loads on opening |
+//! | [`setup`] | the first-run "Create your account" page (setup code from the server's log) |
 //! | [`signup`] | the sign-in page's sign-up line, the sign-up and confirmation pages, the admin's sign-up page |
 //! | [`suite`] | the shared sidebar of linked apps, search across apps, related links, Sign in with …, Linked apps |
 //!
@@ -54,6 +55,7 @@ pub mod outbox;
 pub mod palette;
 pub mod rt;
 pub mod schema_form;
+pub mod setup;
 pub mod signup;
 pub mod suite;
 pub mod toasts;

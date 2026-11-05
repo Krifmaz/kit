@@ -10,6 +10,7 @@
 //! | `/api/settings`, `/api/settings/schema`, `/api/settings/secret/{key}` | kit-server-settings |
 //! | `/api/signup`, `/api/signup/invite`, `/api/signup/verify`, `/api/signup/settings`, `/api/signup/invites/*`, `/api/signup/pending/*` | kit-server-signup |
 //! | `/api/kit/manifest`, `/api/kit/suite/*`, `/api/kit/search`, `/api/kit/sso/*`, OIDC (`/.well-known/openid-configuration`, `/api/kit/oidc/*`) | kit-server-suite ([`suite`]) |
+//! | `GET`/`POST /api/setup` (first-run "Create your account" with the setup code from the log) | kit-server-setup |
 //! | `/api/auth/login`, `/api/auth/logout`, `/api/auth/me` | [`auth`] |
 //!
 //! Everything the app adds of its own goes into [`app`] next to them.
@@ -86,6 +87,8 @@ pub struct AppState {
     pub suite: kit_server_suite::Suite,
     /// The links to other apps and the keys made for them, in the kit's `kit_suite_*` tables.
     pub links: kit_server_suite::SqliteSuite,
+    /// First-run setup's one-time code: open while there is no owner ([`auth::ensure_owner`]), closed after.
+    pub setup: Arc<kit_server_setup::SetupCode>,
 }
 
 impl AppState {
@@ -135,12 +138,32 @@ impl AppState {
             signup,
             suite,
             links,
+            setup: Arc::new(kit_server_setup::SetupCode::closed()),
         })
     }
 
     /// The app's name as people see it (the `app_name` setting).
     pub fn app_name(&self) -> String {
         self.settings.str("app_name")
+    }
+}
+
+impl kit_server_setup::SetupHost for AppState {
+    fn setup_code(&self) -> &kit_server_setup::SetupCode {
+        &self.setup
+    }
+
+    async fn has_owner(&self) -> kit_server_core::Result<bool> {
+        use kit_server_core::Db;
+        Ok(self.db.one("SELECT id FROM users WHERE role='owner'", kit_server_core::p![])?.is_some())
+    }
+
+    async fn create_owner(&self, o: kit_server_setup::NewOwner) -> kit_server_core::Result<()> {
+        auth::validate_credentials(&o.username, &o.password)?;
+        let pw = o.password.clone();
+        let hash = tokio::task::spawn_blocking(move || auth::hash_password(&pw)).await.unwrap_or_default();
+        auth::insert_user(&self.db, &o.username, &o.password, &hash, "owner", &o.email, false)?;
+        Ok(())
     }
 }
 
@@ -297,6 +320,7 @@ pub fn app(st: AppState) -> Router {
         .merge(kit_server_diagnostics::router())
         .merge(kit_server_settings::router())
         .merge(kit_server_signup::router())
+        .merge(kit_server_setup::router())
         .merge(kit_server_suite::router())
         .merge(auth::router())
         .with_state(st)

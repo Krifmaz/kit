@@ -129,9 +129,27 @@ fn main() {
                 notice::mount();
                 whats_new::start(Rc::new(navigate));
             }
+            // a new server with no owner yet: "Create your account" with the setup code from its log
+            None if kit_leptos::setup::setup_needed().await => leptos::mount::mount_to(root, FirstRun).forget(),
             None => leptos::mount::mount_to(root, SignedOut).forget(),
         }
     });
+}
+
+/// First-run setup: the kit's "Create your account" page; once the owner is made, signed in with it.
+#[component]
+fn FirstRun() -> impl IntoView {
+    let done = Callback::new(|(username, password): (String, String)| {
+        rt::spawn(async move {
+            // signed in or not, the reload shows the app (or the sign-in page, with the server's words in a toast)
+            if let Err(e) = api::post("/auth/login", serde_json::json!({ "username": username, "password": password })).await {
+                toasts::toast(&e.message, "err");
+            }
+            navigate("/");
+            rt::reload();
+        });
+    });
+    view! { <kit_leptos::setup::SetupPage app=app_name() on_done=done/> }
 }
 
 /// Signed out: the sign-in page, or the sign-up and email confirmation pages their links open.
